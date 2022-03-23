@@ -111,12 +111,7 @@ function JuMP.build_constraint(_error::Function, func, ::CustomType)
     return JuMP.build_constraint(_error, func, CustomSet())
 end
 
-function JuMP.parse_one_operator_constraint(
-    _error::Function,
-    ::Bool,
-    ::Val{:f},
-    x,
-)
+function JuMP.parse_constraint_call(_error::Function, ::Bool, ::Val{:f}, x)
     return :(), :(build_constraint($_error, $(esc(x)), $(esc(CustomType()))))
 end
 
@@ -767,8 +762,8 @@ function test_Nonliteral_exponents_in_constraint()
     foo() = 2
     con1 = @build_constraint(x^(foo()) + x^(foo() - 1) + x^(foo() - 2) == 0)
     # TODO(odow): `con2` fails to build due to a bug in MutableArithmetics. To
-    # fix, we need MA in the current scope.
-    MA = JuMP._MA
+    # fix, we need MutableArithmetics in the current scope.
+    MutableArithmetics = JuMP._MA
     con2 = @build_constraint(
         (x - 1)^(foo()) + (x - 1)^2 + (x - 1)^1 + (x - 1)^0 == 0
     )
@@ -782,8 +777,8 @@ function test_Nonliteral_exponents_in_constraint()
 end
 
 function test_AffExpr_in_macros()
-    eq = JuMP._math_symbol(REPLMode, :eq)
-    ge = JuMP._math_symbol(REPLMode, :geq)
+    eq = JuMP._math_symbol(MIME("text/plain"), :eq)
+    ge = JuMP._math_symbol(MIME("text/plain"), :geq)
 
     model = Model()
     @variable(model, x)
@@ -800,8 +795,8 @@ function test_AffExpr_in_macros()
 end
 
 function test_constraints()
-    eq = JuMP._math_symbol(REPLMode, :eq)
-    ge = JuMP._math_symbol(REPLMode, :geq)
+    eq = JuMP._math_symbol(MIME("text/plain"), :eq)
+    ge = JuMP._math_symbol(MIME("text/plain"), :geq)
     model = Model()
     @variable(model, x)
     @variable(model, y[1:3])
@@ -854,6 +849,21 @@ function test_Plural_failures()
         @variables(model, x >= 0),
     )
     @test_macro_throws MethodError @variables(model, x >= 0, Bin)
+    return
+end
+
+function test_Plural_returns()
+    model = Model()
+    vars = @variables(model, begin
+        x
+        y[1:2]
+    end)
+    @test vars == (x, y)
+    eqs = @constraints(model, begin
+        E_x, x == 0
+        E_y[i = 1:2], y[i] == 0
+    end)
+    @test eqs == (E_x, E_y)
     return
 end
 
@@ -1090,7 +1100,7 @@ function test_singular_plural_error()
     @test_macro_throws(
         ErrorException(
             "In `@NLparameter(model, begin\n    x == 1\nend)`: " *
-            "Invalid syntax. Did you mean to use `@NLparameters`?",
+            "Invalid syntax: did you mean to use `@NLparameters`?",
         ),
         @NLparameter(model, begin
             x == 1
@@ -1222,7 +1232,7 @@ function test_nlparameter_unsupported_keyword_args()
 end
 
 function test_nlparameter_invalid_syntax()
-    msg = "Invalid syntax: expected argument of form `param == value`."
+    msg = "Invalid syntax: expected syntax of form `param == value`."
     model = Model()
     @test_macro_throws(
         ErrorException("In `@NLparameter(model, p)`: $(msg)"),
@@ -1232,11 +1242,21 @@ function test_nlparameter_invalid_syntax()
 end
 
 function test_nlparameter_anonymous()
-    msg = "Anonymous nonlinear parameter syntax is not currently supported."
+    model = Model()
+    p = @NLparameter(model, [i = 1:2] == i)
+    @test p isa Vector{NonlinearParameter}
+    @test length(p) == 2
+    q = @NLparameter(model, value = 1)
+    @test q isa NonlinearParameter
+    return
+end
+
+function test_nlparameter_anonymous_error()
+    msg = "Invalid syntax: no positional args allowed for anonymous parameters."
     model = Model()
     @test_macro_throws(
-        ErrorException("In `@NLparameter(model, [i = 1:2] == i)`: $(msg)"),
-        @NLparameter(model, [i = 1:2] == i),
+        ErrorException("In `@NLparameter(model, p, value = 1)`: $(msg)"),
+        @NLparameter(model, p, value = 1),
     )
     return
 end
@@ -1248,6 +1268,280 @@ function test_nlparameter_invalid_number()
         ErrorException("In `@NLparameter(model, p == :a)`: $(msg)"),
         @NLparameter(model, p == :a),
     )
+    return
+end
+
+function test_nlparameter_register()
+    model = Model()
+    @NLparameter(model, p == 1)
+    @test model[:p] === p
+    @NLparameter(model, q[i = 1:3; isodd(i)] == i)
+    @test model[:q] === q
+    @test_throws ErrorException @NLparameter(model, p == 1)
+    r = @NLparameter(model, value = 1)
+    @test_throws KeyError model[:r]
+    return
+end
+
+function test_variable_vector_lowerbound()
+    msg =
+        "Passing arrays as variable bounds is not supported. Instead of " *
+        "`@variable(model, x[1:2] >= lb)`, do " *
+        "`@variable(model, x[i=1:2] >= lb[i])`. Alternatively, create " *
+        "the variable without bounds, then call `set_lower_bound.(x, lb)`"
+    model = Model()
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] >= [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] >= [1, 2]),
+    )
+    return
+end
+
+function test_variable_vector_upperbound()
+    msg =
+        "Passing arrays as variable bounds is not supported. Instead of " *
+        "`@variable(model, x[1:2] <= ub)`, do " *
+        "`@variable(model, x[i=1:2] <= ub[i])`. Alternatively, create " *
+        "the variable without bounds, then call `set_upper_bound.(x, ub)`"
+    model = Model()
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] <= [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] <= [1, 2]),
+    )
+    return
+end
+
+function test_variable_vector_fixed()
+    msg =
+        "Passing arrays as variable bounds is not supported. Instead of " *
+        "`@variable(model, x[1:2] == fx)`, do " *
+        "`@variable(model, x[i=1:2] == fx[i])`. Alternatively, create " *
+        "the variable without bounds, then call `fix.(x, fx)`"
+    model = Model()
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] == [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] == [1, 2]),
+    )
+    return
+end
+
+function test_variable_vector_start()
+    msg =
+        "Passing arrays as variable starts is not supported. Instead of " *
+        "`@variable(model, x[1:2], start = x0)`, do " *
+        "`@variable(model, x[i=1:2], start = x0[i])`. Alternatively, " *
+        "create the variable without starting values, then call " *
+        "`set_start_value.(x, x0)`."
+    model = Model()
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2], start = [1, 2])`: $(msg)"),
+        @variable(model, x[1:2], start = [1, 2]),
+    )
+    return
+end
+
+function test_variable_vector_interval()
+    msg =
+        "Passing arrays as variable bounds is not supported. Instead of " *
+        "`@variable(model, x[1:2] <= ub)`, do " *
+        "`@variable(model, x[i=1:2] <= ub[i])`. Alternatively, create " *
+        "the variable without bounds, then call `set_upper_bound.(x, ub)`"
+    model = Model()
+    @test_throws_strip(
+        ErrorException(
+            "In `@variable(model, 0 <= x[2:3, 3:4] <= rand(2, 2))`: $(msg)",
+        ),
+        @variable(model, 0 <= x[2:3, 3:4] <= rand(2, 2)),
+    )
+    return
+end
+
+function test_invalid_name_errors()
+    model = Model()
+    @test_macro_throws(
+        ErrorException("Expression x.y cannot be used as a name."),
+        @variable(model, x.y),
+    )
+    return
+end
+
+function test_invalid_name_errors_denseaxisarray()
+    model = Model()
+    @test_macro_throws(
+        ErrorException("Expression x.y cannot be used as a name."),
+        @variable(model, x.y[2:3, 1:2]),
+    )
+    return
+end
+
+function test_invalid_name_errors_sparseaxisarray()
+    model = Model()
+    @test_macro_throws(
+        ErrorException("Expression x.y cannot be used as a name."),
+        @variable(model, x.y[i = 1:3; isodd(i)]),
+    )
+    return
+end
+
+function test_invalid_variable_syntax()
+    model = Model()
+    @test_macro_throws(
+        ErrorException(
+            "In `@variable(model, MyInfo(1))`: Invalid syntax: your syntax " *
+            "is wrong, but we don't know why. Consult the documentation for " *
+            "various ways to create variables in JuMP.",
+        ),
+        @variable(model, MyInfo(1)),
+    )
+    return
+end
+
+function test_broadcasting_variable_in_set()
+    model = Model()
+    @variable(model, z[1:2] in MOI.GreaterThan.([3.0, 2.0]))
+    @test num_variables(model) == 2
+    @test lower_bound.(z) == [3.0, 2.0]
+    @test has_upper_bound.(z) == [false, false]
+    @variable(model, w[1:2] in MOI.GreaterThan(3.0))
+    @test num_variables(model) == 4
+    @test lower_bound.(w) == [3.0, 3.0]
+    @test has_upper_bound.(w) == [false, false]
+    @variable(model, v[1:2] in [MOI.GreaterThan(3.0), MOI.LessThan(3.0)])
+    @test num_variables(model) == 6
+    @test lower_bound(v[1]) == 3.0
+    @test has_upper_bound(v[1]) == false
+    @test upper_bound(v[2]) == 3.0
+    @test has_lower_bound(v[2]) == false
+    @test_throws(
+        ErrorException,
+        @variable(model, k in MOI.GreaterThan.([3.0, 2.0])),
+    )
+    @test_throws(
+        ErrorException,
+        @variable(model, u[1:3] in MOI.GreaterThan.([3.0, 2.0])),
+    )
+    @test num_variables(model) == 6
+    # SparseAxisArray
+    @variable(model, b[i = 1:2, j = 1:2; i + j == 3] in MOI.GreaterThan(3.0))
+    @test num_variables(model) == 8
+    @variable(
+        model,
+        a[i = 1:2, j = 1:2; i + j == 3] in JuMP.Containers.SparseAxisArray(
+            Dict(
+                (1, 2) => MOI.GreaterThan(3.0),
+                (2, 1) => MOI.GreaterThan(3.0),
+            ),
+        )
+    )
+    @test num_variables(model) == 10
+    # DenseAxisArray
+    @variable(model, dense_a[i = ["x", "xx"]] in MOI.GreaterThan(3.0))
+    @test num_variables(model) == 12
+    @variable(model, dense_b[1:2, 2:4] in MOI.GreaterThan(3.0))
+    @test num_variables(model) == 18
+    return
+end
+
+function test_parse_constraint_head_error()
+    model = Model()
+    @variable(model, x)
+    err = ErrorException(
+        "In `@constraint(model, {x == 0})`: " *
+        "Unsupported constraint expression: we don't know how to parse " *
+        "constraints containing expressions of type :braces.\n\nIf you are " *
+        "writing a JuMP extension, implement " *
+        "`parse_constraint_head(::Function, ::Val{:braces}, args...)",
+    )
+    @test_macro_throws(err, @constraint(model, {x == 0}))
+    return
+end
+
+function test_parse_constraint_head_inconsistent_vectorize()
+    model = Model()
+    @variable(model, x)
+    err = ErrorException(
+        "In `@constraint(model, 1 .<= [x, x] <= 2)`: " *
+        "Operators are inconsistently vectorized.",
+    )
+    @test_macro_throws(err, @constraint(model, 1 .<= [x, x] <= 2))
+    return
+end
+
+function test_parse_constraint_head_inconsistent_signs()
+    model = Model()
+    @variable(model, x)
+    err = ErrorException(
+        "In `@constraint(model, 1 >= x <= 2)`: " *
+        "Only two-sided rows of the form `lb <= expr <= ub` or " *
+        "`ub >= expr >= lb` are supported.",
+    )
+    @test_macro_throws(err, @constraint(model, 1 >= x <= 2))
+    return
+end
+
+function test_MA_Zero_objective()
+    model = Model()
+    @test @objective(model, Min, sum(i for i in 1:0)) === 0.0
+    return
+end
+
+function test_MA_Zero_expression()
+    model = Model()
+    @test @expression(model, sum(i for i in 1:0)) === 0.0
+    @expression(model, expr[j = 1:2], sum(i for i in j:0))
+    @test expr == [0.0, 0.0]
+    @test expr isa Vector{Float64}
+    return
+end
+
+function test_reorder_keyword_arguments()
+    model = Model()
+    @variable(model, integer = true, x)
+    @test is_integer(x)
+    c = @constraint(model, base_name = "my_c", x <= 1)
+    @test name(c) == "my_c"
+    return
+end
+
+function test_vectorized_constraint_name()
+    model = Model()
+    @variable(model, x)
+    c = @constraint(model, [i = 1:2], [x, x] .>= [i, i + 1], base_name = "my_c")
+    @test name(c[1][1]) == "my_c[1]"
+    @test name(c[1][2]) == "my_c[1]"
+    @test name(c[2][1]) == "my_c[2]"
+    @test name(c[2][2]) == "my_c[2]"
+    return
+end
+
+function test_expr_index_vars()
+    model = Model()
+    S = [(1, 2), (3, 4)]
+    @variable(model, x[(i, j) in S])
+    @test x[(1, 2)] isa VariableRef
+    @test x[(3, 4)] isa VariableRef
+    @test length(x) == 2
+    return
+end
+
+function test_broadcasted_SparseAxisArray_constraint()
+    model = Model()
+    @variable(model, u[i = 1:2, i:3])
+    Containers.@container(c[i = 1:2, i:3], rand())
+    cons = @constraint(model, u .<= c)
+    @test cons isa Containers.SparseAxisArray
+    @test length(cons) == 5
+    return
+end
+
+function test_broadcasted_DenseAxisArray_constraint()
+    model = Model()
+    S = 1:2
+    @variable(model, u[S])
+    Containers.@container(c[S], rand())
+    cons = @constraint(model, u .<= c)
+    @test cons isa Containers.DenseAxisArray
+    @test length(cons) == 2
     return
 end
 

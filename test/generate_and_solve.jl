@@ -193,8 +193,6 @@ using JuMP
         @test 1 == JuMP.node_count(m)
     end
 
-    # TODO: test Manual mode
-
     @testset "IP" begin
         # Tests the solver= keyword.
         m = Model(
@@ -202,7 +200,6 @@ using JuMP
                 MOIU.Model{Float64}(),
                 eval_objective_value = false,
             ),
-            caching_mode = MOIU.AUTOMATIC,
         )
         @variable(m, x == 1.0, Int)
         @variable(m, y, Bin)
@@ -486,7 +483,7 @@ using JuMP
         set_name(var_psd, "var_psd")
         sym_psd = @constraint(m, Symmetric(x - [1.0 0.0; 0.0 1.0]) in PSDCone())
         set_name(sym_psd, "sym_psd")
-        con_psd = @SDconstraint(m, x ⪰ [1.0 0.0; 0.0 1.0])
+        con_psd = @constraint(m, x >= [1.0 0.0; 0.0 1.0], PSDCone())
         set_name(con_psd, "con_psd")
 
         modelstring = """
@@ -567,6 +564,8 @@ using JuMP
 
         @test JuMP.has_values(m)
         @test [1.0 2.0; 2.0 4.0] == JuMP.value.(x)
+        @test JuMP.value(x) isa Symmetric
+        @test [1.0 2.0; 2.0 4.0] == @inferred JuMP.value(x)
         @test JuMP.value(var_psd) isa Symmetric
         @test [1.0 2.0; 2.0 4.0] == @inferred JuMP.value(var_psd)
         @test JuMP.value(sym_psd) isa Symmetric

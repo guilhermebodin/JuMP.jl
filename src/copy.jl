@@ -59,8 +59,10 @@ end
 
 function Base.getindex(map::ReferenceMap, expr::GenericQuadExpr)
     aff = map[expr.aff]
-    terms = [UnorderedPair(map[key.a], map[key.b]) => val for
-     (key, val) in expr.terms]
+    terms = [
+        UnorderedPair(map[key.a], map[key.b]) => val for
+        (key, val) in expr.terms
+    ]
     return GenericQuadExpr(aff, terms)
 end
 
@@ -131,8 +133,7 @@ function copy_model(
             "able to copy the constructed model.",
         )
     end
-    caching_mode = backend(model).mode
-    new_model = Model(caching_mode = caching_mode)
+    new_model = Model()
 
     # At JuMP's level, filter_constraints should work with JuMP.ConstraintRef,
     # whereas MOI.copy_to's filter_constraints works with MOI.ConstraintIndex.

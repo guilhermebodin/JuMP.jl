@@ -8,8 +8,6 @@ section of the manual.
 ```@docs
 @constraint
 @constraints
-@SDconstraint
-@SDconstraints
 ConstraintRef
 AbstractConstraint
 ScalarConstraint
@@ -72,6 +70,7 @@ SOS1
 SOS2
 SkewSymmetricMatrixSpace
 SkewSymmetricMatrixShape
+SymmetricMatrixSpace
 moi_set
 ```
 

@@ -176,28 +176,45 @@ function _init_NLP(m::Model)
     end
 end
 
+const NonlinearConstraintRef = ConstraintRef{Model,NonlinearConstraintIndex}
+
 """
-    is_valid(model::Model, c::ConstraintRef{Model,NonlinearConstraintIndex})
+    all_nonlinear_constraints(model::Model)
+
+Return a vector of all nonlinear constraint references in the model in the
+order they were added to the model.
+"""
+function all_nonlinear_constraints(model::Model)
+    return map(1:num_nonlinear_constraints(model)) do i
+        return ConstraintRef(model, NonlinearConstraintIndex(i), ScalarShape())
+    end
+end
+
+function all_nl_constraints(::Model)
+    return error(
+        "`all_nl_constraints`` has been renamed `all_nonlinear_constraints`",
+    )
+end
+
+"""
+    is_valid(model::Model, c::NonlinearConstraintRef)
 
 Return `true` if `c` refers to a valid nonlinear constraint in `model`.
 """
-function is_valid(
-    model::Model,
-    c::ConstraintRef{Model,NonlinearConstraintIndex},
-)
+function is_valid(model::Model, c::NonlinearConstraintRef)
     if model !== c.model
         return false
     end
     _init_NLP(model)
-    return 1 <= c.index.value <= num_nl_constraints(model)
+    return 1 <= c.index.value <= num_nonlinear_constraints(model)
 end
 
 """
-    dual(c::ConstraintRef{Model,NonlinearConstraintIndex})
+    dual(c::NonlinearConstraintRef)
 
 Return the dual of the nonlinear constraint `c`.
 """
-function dual(c::ConstraintRef{Model,NonlinearConstraintIndex})
+function dual(c::NonlinearConstraintRef)
     _init_NLP(c.model)
     nldata::_NLPData = c.model.nlp_data
     # The array is cleared on every solve.
@@ -205,6 +222,79 @@ function dual(c::ConstraintRef{Model,NonlinearConstraintIndex})
         nldata.nlconstr_duals = MOI.get(c.model, MOI.NLPBlockDual())
     end
     return nldata.nlconstr_duals[c.index.value]
+end
+
+"""
+    nonlinear_dual_start_value(model::Model)
+
+Return the current value of the MOI attribute [`MOI.NLPBlockDualStart`](@ref).
+"""
+function nonlinear_dual_start_value(model::Model)
+    return MOI.get(model, MOI.NLPBlockDualStart())
+end
+
+"""
+    set_nonlinear_dual_start_value(
+        model::Model,
+        start::Union{Nothing,Vector{Float64}},
+    )
+
+Set the value of the MOI attribute [`MOI.NLPBlockDualStart`](@ref).
+
+The start vector corresponds to the Lagrangian duals of the nonlinear
+constraints, in the order given by [`all_nonlinear_constraints`](@ref). That is, you
+must pass a single start vector corresponding to all of the nonlinear
+constraints in a single function call; you cannot set the dual start value of
+nonlinear constraints one-by-one. The example below demonstrates how to use
+[`all_nonlinear_constraints`](@ref) to create a mapping between the nonlinear
+constraint references and the start vector.
+
+Pass `nothing` to unset a previous start.
+
+## Examples
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
+julia> nl1 = @NLconstraint(model, x[1] <= sqrt(x[2]));
+
+julia> nl2 = @NLconstraint(model, x[1] >= exp(x[2]));
+
+julia> start = Dict(nl1 => -1.0, nl2 => 1.0);
+
+julia> start_vector = [start[con] for con in all_nonlinear_constraints(model)]
+2-element Vector{Float64}:
+ -1.0
+  1.0
+
+julia> set_nonlinear_dual_start_value(model, start_vector)
+
+julia> nonlinear_dual_start_value(model)
+2-element Vector{Float64}:
+ -1.0
+  1.0
+```
+"""
+function set_nonlinear_dual_start_value(model::Model, start::Vector{Float64})
+    _init_NLP(model)
+    nldata::_NLPData = model.nlp_data
+    if length(nldata.nlconstr) != length(start)
+        throw(
+            ArgumentError(
+                "length start vector ($(length(start))) does not match the " *
+                "number of nonlinear constraints ($(length(nldata.nlconstr))).",
+            ),
+        )
+    end
+    MOI.set(model, MOI.NLPBlockDualStart(), start)
+    return
+end
+
+function set_nonlinear_dual_start_value(model::Model, start::Nothing)
+    MOI.set(model, MOI.NLPBlockDualStart(), start)
+    return
 end
 
 mutable struct _FunctionStorage
@@ -1372,36 +1462,41 @@ mutable struct _VariablePrintWrapper
     v::VariableRef
     mode::Any
 end
+
 function Base.show(io::IO, v::_VariablePrintWrapper)
     return print(io, function_string(v.mode, v.v))
 end
+
 mutable struct _ParameterPrintWrapper
     model::Model
     idx::Int
     mode::Any
 end
-function Base.show(io::IO, p::_ParameterPrintWrapper)
-    relevant_parameters = filter(
-        i -> i[2] isa NonlinearParameter && i[2].index == p.idx,
-        p.model.obj_dict,
-    )
-    if length(relevant_parameters) == 1
-        par_name = first(relevant_parameters)[1]
-        print(io, par_name)
-    else
-        if p.mode == IJuliaMode
-            print(io, "parameter_{$(p.idx)}")
-        else
-            print(io, "parameter[$(p.idx)]")
+
+function Base.show(io::IO, wrapper::_ParameterPrintWrapper)
+    p = NonlinearParameter(wrapper.model, wrapper.idx)
+    for (k, v) in object_dictionary(p.model)
+        if v == p
+            print(io, k)
+            return
         end
     end
+    # No named parameter; use a generic name.
+    if wrapper.mode == MIME("text/latex")
+        print(io, "parameter_{$(p.index)}")
+    else
+        print(io, "parameter[$(p.index)]")
+    end
+    return
 end
+
 mutable struct _SubexpressionPrintWrapper
     idx::Int
     mode::Any
 end
+
 function Base.show(io::IO, s::_SubexpressionPrintWrapper)
-    if s.mode == IJuliaMode
+    if s.mode == MIME("text/latex")
         print(io, "subexpression_{$(s.idx)}")
     else
         print(io, "subexpression[$(s.idx)]")
@@ -1420,7 +1515,7 @@ function _tape_to_expr(
     user_operators::_Derivatives.UserOperatorRegistry,
     generic_variable_names::Bool,
     splat_subexpressions::Bool,
-    print_mode = REPLMode,
+    print_mode = MIME("text/plain"),
 )
     children_arr = rowvals(adj)
 
@@ -1766,15 +1861,148 @@ function MOI.eval_objective_gradient(d::_UserFunctionEvaluator, grad, x)
     return nothing
 end
 
+const _FORWARD_DIFF_METHOD_ERROR_HELPER = raw"""
+Common reasons for this include:
+
+ * the function assumes `Float64` will be passed as input, it must work for any
+   generic `Real` type.
+ * the function allocates temporary storage using `zeros(3)` or similar. This
+   defaults to `Float64`, so use `zeros(T, 3)` instead.
+
+As an example, instead of:
+```julia
+function my_function(x::Float64...)
+    y = zeros(length(x))
+    for i in 1:length(x)
+        y[i] = x[i]^2
+    end
+    return sum(y)
+end
+```
+use:
+```julia
+function my_function(x::T...) where {T<:Real}
+    y = zeros(T, length(x))
+    for i in 1:length(x)
+        y[i] = x[i]^2
+    end
+    return sum(y)
+end
+```
+
+Review the stacktrace below for more information, but it can often be hard to
+understand why and where your function is failing. You can also debug this
+outside of JuMP as follows:
+```julia
+import ForwardDiff
+
+# If the input dimension is 1
+x = 1.0
+my_function(a) = a^2
+ForwardDiff.derivative(my_function, x)
+
+# If the input dimension is more than 1
+x = [1.0, 2.0]
+my_function(a, b) = a^2 + b^2
+ForwardDiff.gradient(x -> my_function(x...), x)
+```
+"""
+
+_intercept_ForwardDiff_MethodError(err, ::Any) = rethrow(err)
+
+function _intercept_ForwardDiff_MethodError(::MethodError, s)
+    return error(
+        "JuMP's autodiff of the user-defined function $(s) failed with a " *
+        "MethodError.\n\n$(_FORWARD_DIFF_METHOD_ERROR_HELPER)",
+    )
+end
+
 function _UserFunctionEvaluator(
     dimension::Integer,
     f::Function,
-    ::Type{T} = Float64,
+    ::Type{T} = Float64;
+    name = "",
 ) where {T}
     g = x -> f(x...)
     cfg = ForwardDiff.GradientConfig(g, zeros(T, dimension))
-    ∇f = (out, y) -> ForwardDiff.gradient!(out, g, y, cfg)
+    ∇f = function (out, y)
+        try
+            ForwardDiff.gradient!(out, g, y, cfg)
+        catch err
+            _intercept_ForwardDiff_MethodError(err, name)
+        end
+    end
     return _UserFunctionEvaluator(g, ∇f, dimension)
+end
+
+"""
+    _validate_register_assumptions(
+        f::Function,
+        name::Symbol,
+        dimension::Integer,
+    )
+
+A function that attempts to check if `f` is suitable for registration via
+[`register`](@ref) and throws an informative error if it is not.
+
+Because we don't know the domain of `f`, this function may encounter false
+negatives. But it should catch the majority of cases in which users supply
+non-differentiable functions that rely on `::Float64` assumptions.
+"""
+function _validate_register_assumptions(
+    f::Function,
+    name::Symbol,
+    dimension::Integer,
+)
+    # Assumption 1: check that `f` can be called with `Float64` arguments.
+    y = 0.0
+    try
+        if dimension == 1
+            y = f(0.0)
+        else
+            y = f(zeros(dimension))
+        end
+    catch
+        # We hit some other error, perhaps we called a function like log(0).
+        # Ignore for now, and hope that a useful error is shown to the user
+        # during the solve.
+    end
+    if !(y isa Real)
+        error(
+            "Expected return type of `Float64` from the user-defined " *
+            "function :$(name), but got `$(typeof(y))`.",
+        )
+    end
+    # Assumption 2: check that `f` can be differentiated using `ForwardDiff`.
+    try
+        if dimension == 1
+            ForwardDiff.derivative(f, 0.0)
+        else
+            ForwardDiff.gradient(x -> f(x...), zeros(dimension))
+        end
+    catch err
+        if err isa MethodError
+            error(
+                "Unable to register the function :$name because it does not " *
+                "support differentiation via ForwardDiff.\n\n" *
+                _FORWARD_DIFF_METHOD_ERROR_HELPER,
+            )
+        end
+        # We hit some other error, perhaps we called a function like log(0).
+        # Ignore for now, and hope that a useful error is shown to the user
+        # during the solve.
+    end
+    return
+end
+
+function _checked_derivative(f::F, s) where {F}
+    return function (x)
+        try
+            return ForwardDiff.derivative(f, x)
+        catch err
+            _intercept_ForwardDiff_MethodError(err, s)
+        end
+    end
 end
 
 """
@@ -1827,10 +2055,10 @@ function register(
 )
     autodiff == true ||
         error("If only the function is provided, must set autodiff=true")
+    _validate_register_assumptions(f, s, dimension)
     _init_NLP(m)
-
     if dimension == 1
-        fprime = x -> ForwardDiff.derivative(f, x)
+        fprime = _checked_derivative(f, s)
         fprimeprime = x -> ForwardDiff.derivative(fprime, x)
         _Derivatives.register_univariate_operator!(
             m.nlp_data.user_operators,
@@ -1845,9 +2073,10 @@ function register(
         _Derivatives.register_multivariate_operator!(
             m.nlp_data.user_operators,
             s,
-            _UserFunctionEvaluator(dimension, f),
+            _UserFunctionEvaluator(dimension, f; name = s),
         )
     end
+    return
 end
 
 """
@@ -1916,7 +2145,8 @@ function register(
         autodiff == true || error(
             "Currently must provide 2nd order derivatives of univariate functions. Try setting autodiff=true.",
         )
-        fprimeprime = x -> ForwardDiff.derivative(∇f, x)
+        _validate_register_assumptions(∇f, s, dimension)
+        fprimeprime = _checked_derivative(∇f, s)
         _Derivatives.register_univariate_operator!(
             m.nlp_data.user_operators,
             s,
@@ -1940,6 +2170,7 @@ function register(
             d,
         )
     end
+    return
 end
 
 """
@@ -2001,7 +2232,7 @@ function register(
 end
 
 """
-    add_NL_expression(model::Model, expr::Expr)
+    add_nonlinear_expression(model::Model, expr::Expr)
 
 Add a nonlinear expression `expr` to `model`.
 
@@ -2015,16 +2246,26 @@ programmatically, and you cannot use [`@NLexpression`](@ref).
 ## Examples
 
 ```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
-julia> add_NL_expression(model, :(\$(x) + \$(x)^2))
-"Reference to nonlinear expression #1"
+julia> add_nonlinear_expression(model, :(\$(x) + \$(x)^2))
+subexpression[1]: x + x ^ 2.0
 ```
 """
-function add_NL_expression(model::Model, ex)
+function add_nonlinear_expression(model::Model, ex)
     return NonlinearExpression(model, _NonlinearExprData(model, ex))
 end
 
+function add_NL_expression(::Model, ::Expr)
+    return error(
+        "`add_NL_expression` has been renamed to `add_nonlinear_expression`",
+    )
+end
+
 """
-    set_NL_objective(model::Model, sense::MOI.OptimizationSense, expr::Expr)
+    set_nonlinear_objective(
+        model::Model,
+        sense::MOI.OptimizationSense,
+        expr::Expr,
+    )
 
 Set the nonlinear objective of `model` to the expression `expr`, with the
 optimization sense `sense`.
@@ -2035,20 +2276,26 @@ programmatically, and you cannot use [`@NLobjective`](@ref).
 ## Notes
 
  * You must interpolate the variables directly into the expression `expr`.
- * You must use `MOI.MIN_SENSE` or `MOI.MAX_SENSE` instead of `Min` and `Max`.
+ * You must use `MIN_SENSE` or `MAX_SENSE` instead of `Min` and `Max`.
 
 ## Examples
 
 ```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
-julia> set_NL_objective(model, MOI.MIN_SENSE, :(\$(x) + \$(x)^2))
+julia> set_nonlinear_objective(model, MIN_SENSE, :(\$(x) + \$(x)^2))
 ```
 """
-function set_NL_objective(model::Model, sense::MOI.OptimizationSense, x)
+function set_nonlinear_objective(model::Model, sense::MOI.OptimizationSense, x)
     return set_objective(model, sense, _NonlinearExprData(model, x))
 end
 
+function set_NL_objective(::Model, ::MOI.OptimizationSense, ::Expr)
+    return error(
+        "`set_NL_objective` has been renamed to `set_nonlinear_objective`",
+    )
+end
+
 """
-    add_NL_constraint(model::Model, expr::Expr)
+    add_nonlinear_constraint(model::Model, expr::Expr)
 
 Add a nonlinear constraint described by the Julia expression `ex` to `model`.
 
@@ -2062,11 +2309,11 @@ programmatically, and you cannot use [`@NLconstraint`](@ref).
 ## Examples
 
 ```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
-julia> add_NL_constraint(model, :(\$(x) + \$(x)^2 <= 1))
+julia> add_nonlinear_constraint(model, :(\$(x) + \$(x)^2 <= 1))
 (x + x ^ 2.0) - 1.0 ≤ 0
 ```
 """
-function add_NL_constraint(model::Model, ex::Expr)
+function add_nonlinear_constraint(model::Model, ex::Expr)
     _init_NLP(model)
     nl_constraints = model.nlp_data.nlconstr
     if isexpr(ex, :call) # One-sided constraint.
@@ -2129,4 +2376,10 @@ function add_NL_constraint(model::Model, ex::Expr)
             "       expr1 == expr2",
         )
     end
+end
+
+function add_NL_constraint(::Model, ::Expr)
+    return error(
+        "`add_NL_constraint` has been renamed to `add_nonlinear_constraint`",
+    )
 end

@@ -667,7 +667,7 @@ function test_Model_get_variable_coefficient(::Any, ::Any)
 end
 
 function _mock_reduced_cost_util(
-    obj_sense::MOI.OptimizationSense,
+    obj_sense::OptimizationSense,
     #obj_value::Float64,
     var_obj_coeff::Float64,
     #var_value,
@@ -745,13 +745,13 @@ function _mock_reduced_cost_util(
         MOI.set(mockoptimizer, MOI.PrimalStatus(), MOI.FEASIBLE_POINT)
         MOI.set(mockoptimizer, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     end
-
+    optimize!(m)
     return x
 end
 
 function test_Model_reduced_cost(::Any, ::Any)
-    Min = MOI.MIN_SENSE
-    Max = MOI.MAX_SENSE
+    Min = MIN_SENSE
+    Max = MAX_SENSE
     # The method should always fail if duals are not available.
     x = _mock_reduced_cost_util(Min, 1.0, :none)
     @test_throws ErrorException reduced_cost(x)
@@ -999,6 +999,38 @@ function test_Model_unsupported_VariableName(::Any, ::Any)
     @variable(model, x)
     @test x isa VariableRef
     @test name(x) == ""
+    return
+end
+
+function test_Model_error_messages(::Any, ::Any)
+    model = Model()
+    @variable(model, x)
+    err = try
+        x >= 1
+    catch err
+        err
+    end
+    function f(s)
+        return ErrorException(
+            replace(replace(err.msg, ">= 1" => "$(s) 1"), "`>=`" => "`$(s)`"),
+        )
+    end
+    @test_throws err 1 >= x
+    @test_throws f("<=") x <= 1
+    @test_throws f("<=") 1 <= x
+    @test_throws f(">") x > 1
+    @test_throws f(">") 1 > x
+    @test_throws f("<") x < 1
+    @test_throws f("<") 1 < x
+    return
+end
+
+function test_rational_inf_bounds(ModelType, ::Any)
+    model = ModelType()
+    u = Rational{Int}(Inf)
+    @variable(model, -u <= x <= u)
+    @test has_lower_bound(x) == false
+    @test has_upper_bound(x) == false
     return
 end
 

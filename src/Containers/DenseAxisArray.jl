@@ -24,7 +24,9 @@ struct DenseAxisArray{T,N,Ax,L<:NTuple{N,_AxisLookup}} <: AbstractArray{T,N}
     lookup::L
 end
 
-Base.Array{T,N}(x::DenseAxisArray) where {T,N} = convert(Array{T,N}, x.data)
+function Base.Array{T,N}(x::DenseAxisArray) where {T,N}
+    return convert(Array{T,N}, copy(x.data))
+end
 
 function Base.hash(d::DenseAxisArray, h::UInt)
     return hash(d.data, hash(d.axes, hash(d.lookup, h)))
@@ -147,7 +149,27 @@ function Base.get(
 end
 
 _abstract_vector(x::AbstractVector) = x
-_abstract_vector(x) = [a for a in x]
+
+function _abstract_vector(x::AbstractVector{<:CartesianIndex})
+    return error(
+        "Unsupported index type `CartesianIndex` in axis: $x. Cartesian " *
+        "indices are restricted for indexing into and iterating over " *
+        "multidimensional arrays.",
+    )
+end
+
+_abstract_vector(x) = _abstract_vector([a for a in x])
+
+_abstract_vector(x::AbstractArray) = vec(x)
+
+function _abstract_vector(x::Number)
+    @warn(
+        "Axis contains one element: $x. If intended, you can safely " *
+        "ignore this warning. To explicitly pass the axis with one " *
+        "element, pass `[$x]` instead of `$x`.",
+    )
+    return _abstract_vector([x])
+end
 
 """
     DenseAxisArray(data::Array{T, N}, axes...) where {T, N}
@@ -377,8 +399,8 @@ end
 # https://docs.julialang.org/en/v1/manual/interfaces/#man-interfaces-broadcasting
 # for implementing broadcast.
 
-function Base.BroadcastStyle(::Type{T}) where {T<:DenseAxisArray}
-    return Broadcast.ArrayStyle{T}()
+function Base.BroadcastStyle(::Type{<:DenseAxisArray})
+    return Broadcast.ArrayStyle{DenseAxisArray}()
 end
 
 function _broadcast_axes_check(x::NTuple{N}) where {N}
@@ -406,7 +428,7 @@ _broadcast_args(x::Any, tail) = (x, _broadcast_args(tail)...)
 _broadcast_args(x::DenseAxisArray, tail) = (x.data, _broadcast_args(tail)...)
 
 function Base.Broadcast.broadcasted(
-    ::Broadcast.ArrayStyle{<:DenseAxisArray},
+    ::Broadcast.ArrayStyle{DenseAxisArray},
     f,
     args...,
 )

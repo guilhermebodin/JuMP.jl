@@ -346,7 +346,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test c.set == MOI.PositiveSemidefiniteConeTriangle(2)
     @test c.shape isa JuMP.SymmetricMatrixShape
 
-    @SDconstraint(m, cref, [x 1; 1 -y] ⪰ [1 x; x -2])
+    @constraint(m, cref, [x 1; 1 -y] >= [1 x; x -2], PSDCone())
     _test_constraint_name_util(
         cref,
         "cref",
@@ -361,7 +361,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test c.set == MOI.PositiveSemidefiniteConeSquare(2)
     @test c.shape isa JuMP.SquareMatrixShape
 
-    @SDconstraint(m, iref[i = 1:2], 0 ⪯ [x+i x+y; x+y -y])
+    @constraint(m, iref[i = 1:2], 0 <= [x+i x+y; x+y -y], PSDCone())
     for i in 1:2
         _test_constraint_name_util(
             iref[i],
@@ -378,7 +378,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
         @test c.shape isa JuMP.SquareMatrixShape
     end
 
-    @SDconstraint(m, con_d, 0 ⪯ Diagonal([x, y]))
+    @constraint(m, con_d, 0 <= Diagonal([x, y]), PSDCone())
     c = JuMP.constraint_object(con_d)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -387,7 +387,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test JuMP.isequal_canonical(c.func[4], 1y)
     @test c.set == MOI.PositiveSemidefiniteConeSquare(2)
 
-    @SDconstraint(m, con_d_sym, 0 ⪯ Symmetric(Diagonal([x, y])))
+    @constraint(m, con_d_sym, 0 <= Symmetric(Diagonal([x, y])), PSDCone())
     c = JuMP.constraint_object(con_d_sym)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -395,7 +395,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test JuMP.isequal_canonical(c.func[3], 1y)
     @test c.set == MOI.PositiveSemidefiniteConeTriangle(2)
 
-    @SDconstraint(m, con_td, Tridiagonal([z], [x, y], [w]) ⪰ 0)
+    @constraint(m, con_td, Tridiagonal([z], [x, y], [w]) >= 0, PSDCone())
     c = JuMP.constraint_object(con_td)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -404,7 +404,12 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test JuMP.isequal_canonical(c.func[4], 1y)
     @test c.set == MOI.PositiveSemidefiniteConeSquare(2)
 
-    @SDconstraint(m, con_td_sym, Symmetric(Tridiagonal([z], [x, y], [w])) ⪰ 0)
+    @constraint(
+        m,
+        con_td_sym,
+        Symmetric(Tridiagonal([z], [x, y], [w])) >= 0,
+        PSDCone(),
+    )
     c = JuMP.constraint_object(con_td_sym)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -412,7 +417,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test JuMP.isequal_canonical(c.func[3], 1y)
     @test c.set == MOI.PositiveSemidefiniteConeTriangle(2)
 
-    @SDconstraint(m, con_ut, UpperTriangular([x y; z w]) ⪰ 0)
+    @constraint(m, con_ut, UpperTriangular([x y; z w]) >= 0, PSDCone())
     c = JuMP.constraint_object(con_ut)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -421,7 +426,7 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test JuMP.isequal_canonical(c.func[4], 1w)
     @test c.set == MOI.PositiveSemidefiniteConeSquare(2)
 
-    @SDconstraint(m, con_lt, 0 ⪯ LowerTriangular([x y; z w]))
+    @constraint(m, con_lt, 0 <= LowerTriangular([x y; z w]), PSDCone())
     c = JuMP.constraint_object(con_lt)
     @test c.func isa Vector{GenericAffExpr{Float64,VariableRefType}}
     @test JuMP.isequal_canonical(c.func[1], 1x)
@@ -429,7 +434,15 @@ function test_SDP_constraint(ModelType, VariableRefType)
     @test iszero(c.func[3])
     @test JuMP.isequal_canonical(c.func[4], 1w)
     @test c.set == MOI.PositiveSemidefiniteConeSquare(2)
+    return
+end
 
+function test_SDP_errors(ModelType, VariableRefType)
+    model = ModelType()
+    @variable(model, x)
+    @variable(model, y)
+    @variable(model, z)
+    @variable(model, w)
     # Test fallback and account for different Julia version behavior
     if VariableRefType == VariableRef
         var_str = "VariableRef"
@@ -445,25 +458,30 @@ function test_SDP_constraint(ModelType, VariableRefType)
         aff_str = "GenericAffExpr{Float64,$(var_str)}"
     end
     err = ErrorException(
-        "In `@SDconstraint(m, [x 1; 1 -y] ⪰ [1 x; x -2], unknown_kw = 1)`:" *
+        "In `@constraint(model, [x 1; 1 -y] >= [1 x; x -2], PSDCone(), unknown_kw = 1)`:" *
         " Unrecognized constraint building format. Tried to invoke " *
         "`build_constraint(error, $(aff_str)[x - " *
-        "1 -x + 1; -x + 1 -y + 2], PSDCone(); unknown_kw = 1)`, but no " *
+        "1 -x + 1; -x + 1 -y + 2], $(MOI.GreaterThan(0.0)), PSDCone(); unknown_kw = 1)`, but no " *
         "such method exists. This is due to specifying an unrecognized " *
         "function, constraint set, and/or extra positional/keyword " *
         "arguments.\n\nIf you're trying to create a JuMP extension, you " *
         "need to implement `build_constraint` to accomodate these arguments.",
     )
-    @test_throws_strip err @SDconstraint(
-        m,
-        [x 1; 1 -y] ⪰ [1 x; x -2],
-        unknown_kw = 1
+    @test_throws_strip(
+        err,
+        @constraint(
+            model,
+            [x 1; 1 -y] >= [1 x; x -2],
+            PSDCone(),
+            unknown_kw = 1,
+        ),
     )
     # Invalid sense == in SDP constraint
-    @test_macro_throws ErrorException @SDconstraint(
-        m,
-        [x 1; 1 -y] == [1 x; x -2]
+    @test_throws(
+        ErrorException,
+        @constraint(model, [x 1; 1 -y] == [1 x; x -2], PSDCone()),
     )
+    return
 end
 
 function _test_constraint_name_util(ModelType, VariableRefType)
@@ -566,36 +584,33 @@ function test_nonsensical_SDP_constraint(ModelType, ::Any)
     @test_throws MethodError @variable(m, notone[1:5, 2:6], PSD)
     @test_throws MethodError @variable(m, oneD[1:5], PSD)
     @test_throws MethodError @variable(m, threeD[1:5, 1:5, 1:5], PSD)
-    @test_throws MethodError @variable(m, psd[2] <= rand(2, 2), PSD)
 
-    @test_throws_strip(
-        ErrorException(
-            "In `@variable(m, -(ones(3, 4)) <= foo[1:4, 1:4] <= ones(4, 4), PSD)`: Non-symmetric bounds, integrality or starting values for symmetric variable.",
-        ),
-        @variable(m, -ones(3, 4) <= foo[1:4, 1:4] <= ones(4, 4), PSD)
-    )
-    @test_throws_strip(
-        ErrorException(
-            "In `@variable(m, -(ones(3, 4)) <= foo[1:4, 1:4] <= ones(4, 4), Symmetric)`: Non-symmetric bounds, integrality or starting values for symmetric variable.",
-        ),
-        @variable(m, -ones(3, 4) <= foo[1:4, 1:4] <= ones(4, 4), Symmetric)
-    )
-    @test_throws_strip(
-        ErrorException(
-            "In `@variable(m, -(ones(4, 4)) <= foo[1:4, 1:4] <= ones(4, 5), Symmetric)`: Non-symmetric bounds, integrality or starting values for symmetric variable.",
-        ),
-        @variable(m, -ones(4, 4) <= foo[1:4, 1:4] <= ones(4, 5), Symmetric)
-    )
-    @test_throws_strip(
-        ErrorException(
-            "In `@variable(m, -(rand(5, 5)) <= nonsymmetric[1:5, 1:5] <= rand(5, 5), Symmetric)`: Non-symmetric bounds, integrality or starting values for symmetric variable.",
-        ),
-        @variable(
-            m,
-            -rand(5, 5) <= nonsymmetric[1:5, 1:5] <= rand(5, 5),
-            Symmetric
+    Y = [1.0 2.0; 2.1 3.0]
+    function _ErrorException(m)
+        return ErrorException(
+            "In `$m`: Non-symmetric bounds, integrality or starting values " *
+            "for symmetric variable.",
         )
+    end
+    # Hack to work around an annoying change in Julia expression printing.
+    index_set = VERSION < v"1.1" ? "i=1:2, j=1:2" : "i = 1:2, j = 1:2"
+    @test_throws_strip(
+        _ErrorException("@variable(m, foo[$index_set] >= Y[i, j], PSD)"),
+        @variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], PSD),
     )
+    @test_throws_strip(
+        _ErrorException("@variable(m, foo[$index_set] <= Y[i, j], PSD)"),
+        @variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], PSD),
+    )
+    @test_throws_strip(
+        _ErrorException("@variable(m, foo[$index_set] >= Y[i, j], Symmetric)"),
+        @variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], Symmetric),
+    )
+    @test_throws_strip(
+        _ErrorException("@variable(m, foo[$index_set] <= Y[i, j], Symmetric)"),
+        @variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], Symmetric),
+    )
+    return
 end
 
 function test_sum_constraint(ModelType, ::Any)
@@ -701,8 +716,11 @@ function test_Model_all_constraints_vector(::Any, ::Any)
     )
     @test isempty(aff_constraints)
     err = ErrorException(
-        "`$(GenericAffExpr{Float64})` is not a concrete type. Did you miss a " *
-        "type parameter?",
+        replace(
+            "`$(GenericAffExpr{Float64})` is not a concrete type. Did you " *
+            "miss a type parameter?",
+            "JuMP." => "",
+        ),
     )
     @test_throws err try
         num_constraints(
@@ -771,6 +789,30 @@ function test_Model_dual_start_vector(::Any, ::Any)
     @test dual_start_value(con_vec) == [1.0, 3.0]
     set_dual_start_value(con_vec, nothing)
     @test dual_start_value(con_vec) === nothing
+end
+
+function test_Model_primal_start(::Any, ::Any)
+    model = Model()
+    @variable(model, x)
+    con = @constraint(model, 2x <= 1)
+    @test start_value(con) === nothing
+    set_start_value(con, 2)
+    @test start_value(con) == 2.0
+    set_start_value(con, nothing)
+    @test start_value(con) === nothing
+    return
+end
+
+function test_Model_primal_start_vector(::Any, ::Any)
+    model = Model()
+    @variable(model, x)
+    con_vec = @constraint(model, [x, x] in SecondOrderCone())
+    @test start_value(con_vec) === nothing
+    set_start_value(con_vec, [1.0, 3.0])
+    @test start_value(con_vec) == [1.0, 3.0]
+    set_start_value(con_vec, nothing)
+    @test start_value(con_vec) === nothing
+    return
 end
 
 function test_Model_change_coefficient(::Any, ::Any)
@@ -1010,6 +1052,85 @@ function test_Model_unsupported_ConstraintName(::Any, ::Any)
     @constraint(model, c, [x, x] in SOS1())
     @test c isa ConstraintRef
     @test name(c) == ""
+    return
+end
+
+function test_PSDCone_constraints(::Any, ::Any)
+    model = Model()
+    @variable(model, X[1:2, 1:2])
+    Y = [1 1; 1 1]
+    f = reshape(X .- Y, 4)
+    c1 = @constraint(model, X >= Y, PSDCone())
+    obj = constraint_object(c1)
+    @test obj.func == f
+    @test obj.set == MOI.PositiveSemidefiniteConeSquare(2)
+    c2 = @constraint(model, Y <= X, PSDCone())
+    @test constraint_object(c2).func == f
+    c3 = @constraint(model, X - Y >= 0, PSDCone())
+    @test constraint_object(c3).func == f
+    c4 = @constraint(model, Y - X <= 0, PSDCone())
+    @test constraint_object(c4).func == f
+    @test_throws ErrorException @constraint(model, X >= 1, PSDCone())
+    return
+end
+
+function test_PSDCone_Symmetric_constraints(::Any, ::Any)
+    model = Model()
+    @variable(model, X[1:2, 1:2], Symmetric)
+    Y = Symmetric([1 1; 1 1])
+    f = reshape(X - Y, 4)
+    if VERSION >= v"1.6"
+        # Julia 1.0 doesn't maintain symmetry for X - Y, so only test this on
+        # Julia 1.6 and higher.
+        c1 = @constraint(model, X >= Y, PSDCone())
+        obj = constraint_object(c1)
+        @test obj.func == f[[1, 3, 4]]
+        @test obj.set == MOI.PositiveSemidefiniteConeTriangle(2)
+        c2 = @constraint(model, Y <= X, PSDCone())
+        @test constraint_object(c2).func == f[[1, 3, 4]]
+    end
+    c3 = @constraint(model, Symmetric(X - Y) >= 0, PSDCone())
+    @test constraint_object(c3).func == f[[1, 3, 4]]
+    c4 = @constraint(model, Symmetric(Y - X) <= 0, PSDCone())
+    @test constraint_object(c4).func == f[[1, 3, 4]]
+    c5 = @constraint(model, X >= 0, PSDCone())
+    @test constraint_object(c5).func == 1.0 .* X[[1, 3, 4]]
+    return
+end
+
+"""
+    test_set_inequalities(::Any, ::Any)
+
+Test the syntax `@constraint(model, X >= Y, Set())` is the same as
+`@constraint(model, X - Y in Set())`.
+"""
+function test_set_inequalities(::Any, ::Any)
+    model = Model()
+    @variable(model, X[1:2])
+    Y = [3.0, 4.0]
+    f1 = 1 .* X
+    f2 = X .- Y
+    f3 = X .- 1
+    c1 = @constraint(model, X >= 0, MOI.Nonnegatives(2))
+    c2 = @constraint(model, X >= Y, MOI.Nonnegatives(2))
+    c3 = @constraint(model, 0 <= X, MOI.Nonnegatives(2))
+    c4 = @constraint(model, Y <= X, MOI.Nonnegatives(2))
+    c5 = @constraint(model, 0 <= X .- 1, MOI.Nonnegatives(2))
+    c6 = @constraint(model, X .- 1 >= 0, MOI.Nonnegatives(2))
+    @test constraint_object(c1).func == f1
+    @test constraint_object(c2).func == f2
+    @test constraint_object(c3).func == f1
+    @test constraint_object(c4).func == f2
+    @test constraint_object(c5).func == f3
+    @test constraint_object(c6).func == f3
+    @test constraint_object(c1).set == MOI.Nonnegatives(2)
+    @test constraint_object(c2).set == MOI.Nonnegatives(2)
+    @test constraint_object(c3).set == MOI.Nonnegatives(2)
+    @test constraint_object(c4).set == MOI.Nonnegatives(2)
+    @test constraint_object(c5).set == MOI.Nonnegatives(2)
+    @test constraint_object(c6).set == MOI.Nonnegatives(2)
+    @test_throws ErrorException @constraint(model, X >= 1, MOI.Nonnegatives(2))
+    @test_throws ErrorException @constraint(model, 1 <= X, MOI.Nonnegatives(2))
     return
 end
 

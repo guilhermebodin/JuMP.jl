@@ -295,6 +295,9 @@ And data, a 0-dimensional $(Array{Int,0}):
         B = @inferred Array(A)
         @test B isa Vector{Int}
         @test B == [1, 3, 2]
+        # Test mutating B doesn't mutate A
+        B[2] = 4
+        @test A[2] == 3
         C = @inferred Array{Float64}(A)
         @test C isa Vector{Float64}
         @test C == [1.0, 3.0, 2.0]
@@ -339,5 +342,30 @@ And data, a 0-dimensional $(Array{Int,0}):
         @test isassigned(X, (:a, "a"), (:b, "b"))
         y = Array(X[:, (:a, "a")])
         @test all(y .== y[1])
+    end
+
+    @testset "Singular axis" begin
+        x = @test_logs (:warn,) DenseAxisArray([1.1 2.2], 1, 1:2)
+        @test x[1, 2] == 2.2
+        y = @test_logs DenseAxisArray([1.1 2.2], [1], 1:2)
+        @test y[1, 2] == 2.2
+    end
+
+    @testset "CartesianIndex error" begin
+        S = CartesianIndex.([2, 4])
+        err = ErrorException(
+            "Unsupported index type `CartesianIndex` in axis: $S. Cartesian " *
+            "indices are restricted for indexing into and iterating over " *
+            "multidimensional arrays.",
+        )
+        @test_throws(err, DenseAxisArray([1.1, 2.2], S))
+    end
+
+    @testset "Matrix indices" begin
+        sources = ["A", "B", "C"]
+        sinks = ["D", "E"]
+        S = [(source, sink) for source in sources, sink in sinks]
+        x = DenseAxisArray(1:6, S)
+        @test size(x) == (6,)
     end
 end

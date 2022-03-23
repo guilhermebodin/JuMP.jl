@@ -47,7 +47,9 @@ function _test_result_attributes(; test_empty = false)
     @objective(model, Max, x)
     if test_empty
         optimize!(model)
+        @test !isempty(model)
         empty!(model)
+        @test isempty(model)
     end
     @test_throws err JuMP.objective_value(model)
     @test_throws err JuMP.dual_objective_value(model)
@@ -87,9 +89,10 @@ function test_nooptimizer()
     cref = @constraint(model, x == 1)
     @test_throws err JuMP.optimizer_index(cref)
     @test_throws err JuMP.optimize!(model)
-    @test_throws err JuMP.value(x)
-    @test_throws err JuMP.value(cref)
-    @test_throws err JuMP.dual(cref)
+    @test_throws OptimizeNotCalled() JuMP.value(x)
+    @test_throws OptimizeNotCalled() JuMP.value(cref)
+    @test_throws OptimizeNotCalled() JuMP.dual(cref)
+    return
 end
 
 function test_empty!_model()
@@ -221,10 +224,10 @@ function test_bridges_automatic()
 end
 
 function test_bridges_automatic_disabled()
-    # Automatic bridging disabled with `bridge_constraints` keyword
+    # Automatic bridging disabled with `add_bridges` keyword
     model = Model(
         () -> MOIU.MockOptimizer(SimpleLPModel{Float64}()),
-        bridge_constraints = false,
+        add_bridges = false,
     )
     @test !JuMP.bridge_constraints(model)
     @test JuMP.backend(model) isa MOIU.CachingOptimizer
@@ -235,7 +238,7 @@ function test_bridges_automatic_disabled()
     err = ErrorException(
         "Constraints of type $(F)-in-$(S) are not supported by the " *
         "solver.\n\nIf you expected the solver to support your problem, " *
-        "you may have an error in our formulation. Otherwise, consider " *
+        "you may have an error in your formulation. Otherwise, consider " *
         "using a different solver.\n\nThe list of available solvers, " *
         "along with the problem types they support, is available at " *
         "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
@@ -254,7 +257,7 @@ function test_bridges_direct()
     err = ErrorException(
         "Constraints of type $(F)-in-$(S) are not supported by the " *
         "solver.\n\nIf you expected the solver to support your problem, " *
-        "you may have an error in our formulation. Otherwise, consider " *
+        "you may have an error in your formulation. Otherwise, consider " *
         "using a different solver.\n\nThe list of available solvers, " *
         "along with the problem types they support, is available at " *
         "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
@@ -365,18 +368,18 @@ function test_bridges_add_bridgeable_con_set_optimizer()
 end
 
 function test_bridge_graph_false()
-    model = Model(mock_factory, bridge_constraints = false)
+    model = Model(mock_factory, add_bridges = false)
     @variable(model, x)
     @test_throws(
         ErrorException(
-            "Cannot add bridge if `bridge_constraints` was set to `false` in " *
+            "Cannot add bridge if `add_bridges` was set to `false` in " *
             "the `Model` constructor.",
         ),
         add_bridge(model, NonnegativeBridge)
     )
     @test_throws(
         ErrorException(
-            "Cannot print bridge graph if `bridge_constraints` was set to " *
+            "Cannot print bridge graph if `add_bridges` was set to " *
             "`false` in the `Model` constructor.",
         ),
         print_bridge_graph(model)
@@ -469,6 +472,10 @@ function test_set_retrieve_time_limit()
     JuMP.set_time_limit_sec(model, 12.0)
     JuMP.unset_time_limit_sec(model)
     @test JuMP.time_limit_sec(model) === nothing
+    # Test setting something other than `Float64`.
+    JuMP.set_time_limit_sec(model, 0x0a)
+    @test JuMP.time_limit_sec(model) == 10.0
+    return
 end
 
 struct DummyExtensionData
@@ -484,8 +491,8 @@ function JuMP.copy_extension_data(
 end
 function dummy_optimizer_hook(::JuMP.AbstractModel) end
 
-function copy_model_style_mode(use_copy_model, caching_mode, filter_mode)
-    model = Model(caching_mode = caching_mode)
+function copy_model_style_mode(use_copy_model, filter_mode)
+    model = Model()
     model.optimize_hook = dummy_optimizer_hook
     data = DummyExtensionData(model)
     model.ext[:dummy] = data
@@ -519,7 +526,6 @@ function copy_model_style_mode(use_copy_model, caching_mode, filter_mode)
         reference_map[cref2[1]] = new_model[:cref2][1]
         reference_map[cref2[2]] = new_model[:cref2][2]
     end
-    @test caching_mode == @inferred MOIU.mode(JuMP.backend(new_model))
     @test new_model.optimize_hook === dummy_optimizer_hook
     @test new_model.ext[:dummy].model === new_model
     x_new = reference_map[x]
@@ -560,7 +566,7 @@ function copy_model_style_mode(use_copy_model, caching_mode, filter_mode)
 end
 
 function test_copy_model_jump_auto()
-    return copy_model_style_mode(true, MOIU.AUTOMATIC, false)
+    return copy_model_style_mode(true, false)
 end
 
 function test_compute_conflict()
@@ -570,13 +576,7 @@ function test_compute_conflict()
 end
 
 function test_copy_model_base_auto()
-    return copy_model_style_mode(false, MOIU.AUTOMATIC, false)
-end
-function test_copy_model_jump_manual()
-    return copy_model_style_mode(true, MOIU.MANUAL, false)
-end
-function test_copy_model_base_manual()
-    return copy_model_style_mode(false, MOIU.MANUAL, false)
+    return copy_model_style_mode(false, false)
 end
 
 function test_copy_direct_mode()
@@ -675,7 +675,7 @@ function test_copy_dict_expr()
 end
 
 function test_copy_filter()
-    return copy_model_style_mode(true, MOIU.AUTOMATIC, true)
+    return copy_model_style_mode(true, true)
 end
 
 function test_copy_filter_array()
@@ -782,7 +782,7 @@ function test_copy_conflict()
     JuMP.optimize!(model)
 
     mockoptimizer = JuMP.backend(model).optimizer.model
-    MOI.set(mockoptimizer, MOI.TerminationStatus(), MOI.INFEASIBLE)
+    MOI.set(mockoptimizer, MOI.TerminationStatus(), INFEASIBLE)
     MOI.set(mockoptimizer, MOI.ConflictStatus(), MOI.CONFLICT_FOUND)
     MOI.set(
         mockoptimizer,

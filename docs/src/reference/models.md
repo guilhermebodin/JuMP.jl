@@ -24,8 +24,10 @@ DIRECT
 ```@docs
 backend
 unsafe_backend
+name(::AbstractModel)
 solver_name
 Base.empty!(::Model)
+Base.isempty(::Model)
 mode
 object_dictionary
 unregister
@@ -82,6 +84,7 @@ print_bridge_graph
 ## Extension tools
 
 ```@docs
+AbstractModel
 operator_warn
 error_if_direct_mode
 ```

@@ -1,12 +1,274 @@
-# JuMP release notes
+# Release notes
 
-## Version 0.22.0 (In development)
+## Version 0.23.2 (March 14, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.23.2).
+A summary of changes are as follows:
+
+- New features:
+  - Added `relative_gap` to `solution_summary`
+  - `register` now throws an informative error if the function is not
+    differentiable using ForwardDiff. In some cases, the check in `register`
+    will encounter a false negative, and the informative error will be thrown at
+    run-time. This usually happens when the function is non-differentiable in a
+    subset of the domain.
+- Bug fixes:
+  - Fixed a scoping issue when extending the `container` keyword of containers
+- Documentation and maintenance:
+  - Docs updated to the latest version of each package
+
+## Version 0.23.1 (March 2, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.23.1).
+A summary of changes are as follows:
+
+- New deprecations:
+  - `nl_expr_string` and `nl_constraint_string` have been renamed to
+    `nonlinear_expr_string` and `nonlinear_constraint_string`. The old methods
+    still exist with deprecation warnings. This change should impact very few
+    users because to call them you must rely on private internals of the
+    nonlinear API. Users are encouraged to use `sprint(show, x)` instead, where
+    `x` is the nonlinear expression or constraint of interest.
+- New features:
+  - Added support for `Base.abs2(x)` where `x` is a variable or affine
+    expression. This is mainly useful for complex-valued constraints.
+- Bug fixes:
+  - Fixed addition of complex and real affine expressions
+  - Fixed arithmetic for Complex-valued quadratic expressions
+  - Fixed variable bounds passed as `Rational{Int}(Inf)`
+  - Fixed printing of the coefficient `(0 + 1im)`
+  - Fixed a bug when `solution_summary` is called prior to `optimize!`
+
+## Version 0.23.0 (February 25, 2022)
+
+**JuMP v0.23.0 is a breaking release. It is also a release-candidate for JuMP
+v1.0.0. That is, if no issues are found with the v0.23.0 release, then it will
+be re-tagged as v1.0.0.**
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.23.0).
+A summary of changes are as follows:
+
+- Breaking changes:
+  - Julia 1.6 is now the minimum supported version
+  - MathOptInterface has been updated to v1.0.0
+  - All previously deprecated functionality has been removed
+  - `PrintMode`, `REPLMode` and `IJuliaMode` have been removed in favor of the
+    MIME types `MIME"text/plain"` and `MIME"text/latex"`. Replace instances of
+    `::Type{REPLMode}` with `::MIME"text/plain"`, `REPLMode` with
+    `MIME("text/plain")`, `::Type{IJuliaMode}` with `::MIME"text/latex"`, and
+    `IJuliaMode` with `MIME("text/latex")`.
+  - Functions containing the `nl_` acronym have been renamed to the more
+    explicit `nonlinear_`. For example, `num_nl_constraints` is now
+    `num_nonlinear_constraints` and `set_NL_objective` is now
+    `set_nonlinear_objective`. Calls to the old functions throw an error
+    explaining the new name.
+  - `SymMatrixSpace` has been renamed to `SymmetricMatrixSpace`
+- New features:
+  - Added `nonlinear_dual_start_value` and `set_nonlinear_dual_start_value`
+  - Added preliminary support for `Complex` coefficient types
+- Bug fixes:
+  - Fixed a bug in `solution_summary`
+- Documentation, maintenance:
+  - MILP examples have been migrated from GLPK to HiGHS
+  - Fixed various typos
+  - Improved section on setting constraint start values
+
+### Troubleshooting problems when updating
+
+If you experience problems when updating, you are likely using previously
+deprecated functionality. (By default, Julia does not warn when you use
+deprecated features.)
+
+To find the deprecated features you are using, start Julia with `--depwarn=yes`:
+```
+$ julia --depwarn=yes
+```
+Then install JuMP v0.22.3:
+```julia
+julia> using Pkg
+julia> pkg"add JuMP@0.22.3"
+```
+And then run your code. Apply any suggestions, or search the release notes below
+for advice on updating a specific deprecated feature.
+
+## Version 0.22.3 (February 10, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.22.3).
+A summary of changes are as follows:
+
+- New features:
+  - There are no new features in this release.
+- Bug fixes:
+  - Fixed a reproducibility issue in the TSP tutorial
+  - Fixed a reproducibility issue in the `max_cut_sdp` tutorial
+  - Fixed a bug broadcasting an empty SparseAxisArray
+- Documentation, maintenance:
+  - Added a warning and improved documentation for the modify-then-query case
+  - Fixed a typo in the docstring of `RotatedSecondOrderCone`
+  - Added Aqua.jl as a check for code health
+  - Added introductions to each section of the tutorials
+  - Improved the column generation and Benders decomposition tutorials
+  - Updated documentation to MOI v0.10.8
+  - Updated JuliaFormatter to v0.22.2
+
+## Version 0.22.2 (January 10, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.22.2).
+A summary of changes are as follows:
+
+- New features:
+  - The function `all_nl_constraints` now returns all nonlinear constraints
+    in a model
+  - `start_value` and `set_start_value` can now be used to get and set the
+    primal start for constraint references
+  - Plural macros now return a tuple containing the elements that were defined
+    instead of `nothing`
+  - Anonymous variables are now printed as `_[i]` where `i` is the index of the
+    variable instead of `noname`. Calling `name(x)` still returns `""` so this
+    is non-breaking.
+- Bug fixes:
+  - Fixed handling of `min` and `max` in nonlinear expressions
+  - CartesianIndex is no longer allowed as a key for DenseAxisArrays.
+- Documentation, maintenance:
+  - Improved the performance of GenericAffExpr
+  - Added a tutorial on the Travelling Salesperson Problem
+  - Added a tutorial on querying the Hessian of a nonlinear program
+  - Added documentation on using custom solver binaries.
+
+## Version 0.22.1 (November 29, 2021)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.22.1).
+A summary of changes are as follows:
+
+- New features:
+  * Export `OptimizationSense` enum, with instances: `MIN_SENSE`, `MAX_SENSE`,
+    and `FEASIBILITY_SENSE`
+  * Add `Base.isempty(::Model)` to match `Base.empty(::Model)`
+- Bug fixes:
+  * Fix bug in container with tuples as indices
+  * Fix bug in `set_time_limit_sec`
+- Documentation, maintenance
+  * Add tutorial "Design patterns for larger models"
+  * Remove release notes section from PDF
+  * General edits of the documentation and error messages
+
+## Version 0.22.0 (November 10, 2021)
 
 **JuMP v0.22 is a breaking release**
 
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.22.0).
+A summary of changes are as follows.
+
 ### Breaking changes
 
-- Update to MathOptInterface v0.10
+JuMP 0.22 contains a number of breaking changes. However, these should be
+invisible for the majority of users. You will mostly encounter these breaking
+changes if you: wrote a JuMP extension, accessed `backend(model)`, or called
+ `@SDconstraint`.
+
+The breaking changes are as follows:
+
+ * MathOptInterface has been updated to v0.10.4. For users who have interacted
+   with the MOI backend, this contains a large number of breaking changes. Read
+   the [MathOptInterface release notes](https://jump.dev/MathOptInterface.jl/v0.10/release_notes/#v0.10.0-(September-6,-2021))
+   for more details.
+ * The `bridge_constraints` keyword argument to `Model` and `set_optimizer` has
+   been renamed `add_bridges` to reflect that more thing were bridged than just
+   constraints.
+ * The `backend(model)` field now contains a concrete instance of a
+   `MOI.Utilities.CachingOptimizer` instead of one with an abstractly typed
+   optimizer field. In most cases, this will lead to improved performance.
+   However, calling `set_optimizer` after `backend` invalidates the old
+   backend. For example:
+   ```julia
+   model = Model()
+   b = backend(model)
+   set_optimizer(model, GLPK.Optimizer)
+   @variable(model, x)
+   # b is not updated with `x`! Get a new b by calling `backend` again.
+   new_b = backend(model)
+   ```
+ * All usages of `@SDconstraint` are deprecated. The new syntax is
+   `@constraint(model, X >= Y, PSDCone())`.
+ * Creating a `DenseAxisArray` with a `Number` as an axis will now display a
+   warning. This catches a common error in which users write
+   `@variable(model, x[length(S)])` instead of
+   `@variable(model, x[1:length(S)])`.
+ * The `caching_mode` argument to `Model`, e.g.,
+   `Model(caching_mode = MOIU.MANUAL)` mode has been removed. For more control
+   over the optimizer, use `direct_model` instead.
+ * The previously deprecated `lp_objective_perturbation_range` and
+   `lp_rhs_perturbation_range` functions have been removed. Use
+   `lp_sensitivity_report` instead.
+ * The `.m` fields of `NonlinearExpression` and `NonlinearParameter` have been
+   renamed to `.model`.
+ * Infinite variable bounds are now ignored. Thus, `@variable(model, x <= Inf)`
+   will show `has_upper_bound(x) == false`. Previously, these bounds were passed
+   through to the solvers which caused numerical issues for solvers expecting
+   finite bounds.
+ * The `variable_type` and `constraint_type` functions were removed. This should
+   only affect users who previously wrote JuMP extensions. The functions can be
+   deleted without consequence.
+ * The internal functions `moi_mode`, `moi_bridge_constraints`,
+   `moi_add_constraint`, and `moi_add_to_function_constant` are no longer
+   exported.
+ * The un-used method `Containers.generate_container` has been deleted.
+ * The `Containers` API has been refactored, and `_build_ref_sets` is now
+   public as `Containers.build_ref_sets`.
+ * The `parse_constraint_` methods for extending `@constraint` at parse time
+   have been refactored in a breaking way. Consult the Extensions documentation
+   for more details and examples.
+
+### New features
+
+ * The `TerminationStatusCode` and `ResultStatusCode` enums are now exported
+   by JuMP. Prefer `termination_status(model) == OPTIMAL` instead of
+   `== MOI.OPTIMAL`, although the `MOI.` prefix way still works.
+ * Copy a `x::DenseAxisArray` to an `Array` by calling `Array(x)`.
+ * `NonlinearExpression` is now a subtype of `AbstractJuMPScalar`
+ * Constraints such as `@constraint(model, x + 1 in MOI.Integer())` are now
+   supported.
+ * `primal_feasibility_report` now accepts a function as the first argument.
+ * Scalar variables `@variable(model, x[1:2] in MOI.Integer())` creates two
+   variables, both of which are constrained to be in the set `MOI.Integer`.
+ * Conic constraints can now be specified as inequalities under a different
+   partial ordering. So `@constraint(model, x - y in MOI.Nonnegatives())` can
+   now be written as `@constraint(model, x >= y, MOI.Nonnegatives())`.
+ * Names are now set for vectorized constraints.
+
+### Documentation, maintenance and performance
+
+ * The documentation is now available as a PDF.
+ * The documentation now includes a full copy of the MathOptInterface
+   documentation to make it easy to link concepts between the docs. (The
+   MathOptInterface documentation has also been significantly improved.)
+ * The documentation contains a large number of improvements and clarifications
+   on a range of topics. Thanks to @sshin23, @DilumAluthge, and @jlwether.
+ * The documentation is now built with Julia 1.6 instead of 1.0.
+ * Various error messages have been improved to be more readable.
+ * Fixed a performance issue when `show` was called on a `SparseAxisArray` with
+   a large number of elements.
+ * Fixed a bug displaying barrier and simplex iterations in `solution_summary`.
+ * Fixed a bug by implementing `hash` for `DenseAxisArray` and
+   `SparseAxisArray`.
+ * Names are now only set if the solver supports them. Previously, this
+   prevented solvers such as Ipopt from being used with `direct_model`.
+ * `MutableArithmetics.Zero` is converted into a `0.0` before being returned to
+   the user. Previously, some calls to `@expression` would return the
+   undocumented `MutableArithmetics.Zero()` object. One example is summing over
+   an empty set `@expression(model, sum(x[i] for i in 1:0))`. You will now get
+   `0.0` instead.
+ * `AffExpr` and `QuadExpr` can now be used with `== 0` instead of `iszero`.
+   This fixes a number of issues relating to Julia standard libraries such as
+   `LinearAlgebra` and `SparseArrays`.
+ * Fixed a bug when registering a user-defined function with splatting.
 
 ## Version 0.21.10 (September 4, 2021)
 
@@ -138,7 +400,7 @@ A summary of changes are as follows:
     to roll out over time, as we fix upstream issues in the formatter, and will
     eventually become compulsory.
   * The root cause of a large number of method invalidations has been resolved.
-  * We switched continuous integration from Travis and Appveyor to Github
+  * We switched continuous integration from Travis and Appveyor to GitHub
     Actions.
 
 ## Version 0.21.5 (September 18, 2020)
@@ -179,6 +441,10 @@ A summary of changes are as follows:
 
 ## Version 0.21.3 (June 18, 2020)
 
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.21.3).
+A summary of changes are as follows:
+
 - Added Special Order Sets (SOS1 and SOS2) to JuMP with default weights to ease
   the creation of such constraints (#2212).
 - Added functions `simplex_iterations`, `barrier_iterations` and `node_count`
@@ -203,6 +469,10 @@ A summary of changes are as follows:
 
 ## Version 0.21.2 (April 2, 2020)
 
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.21.2).
+A summary of changes are as follows:
+
 - Added `relative_gap()` to access `MOI.RelativeGap()` attribute (#2199).
 - Documentation fixes:
   * Added link to source for docstrings in the documentation (#2207).
@@ -219,9 +489,17 @@ A summary of changes are as follows:
 
 ## Version 0.21.1 (Feb 18, 2020)
 
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.21.1).
+A summary of changes are as follows:
+
 - Improved the clarity of the `with_optimizer` deprecation warning.
 
-## Version 0.21 (Feb 16, 2020)
+## Version 0.21.0 (Feb 16, 2020)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.21.0).
+A summary of changes are as follows:
 
 Breaking changes:
 
@@ -274,6 +552,10 @@ Bug fixes:
 
 ## Version 0.20.1 (Oct 18, 2019)
 
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.20.1).
+A summary of changes are as follows:
+
 - Add sections on `@variables` and `@constraints` in the documentation (#2062).
 - Fixed product of sparse matrices for Julia v1.3 (#2063).
 - Added `set_objective_coefficient` to modify the coefficient of a linear term
@@ -282,6 +564,10 @@ Bug fixes:
   and query the time limit for the solver in seconds (#2053).
 
 ## Version 0.20.0 (Aug 24, 2019)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.20.0).
+A summary of changes are as follows:
 
 - Documentation updates.
 - Numerous bug fixes.
@@ -302,6 +588,10 @@ Bug fixes:
   details.
 
 ## Version 0.19.2 (June 8, 2019)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v0.19.2).
+A summary of changes are as follows:
 
 - Fix a bug in derivatives that could arise in models with nested nonlinear
   subexpressions.
@@ -436,7 +726,7 @@ New features:
 - Style and naming guidelines.
 
 - Direct mode and manual mode provide explicit control over when copies of a
-  model are stored and/or regenerated. See the corresponding
+  model are stored or regenerated. See the corresponding
   [documentation](https://www.juliaopt.org/JuMP.jl/dev/solvers/).
 
 There are known regressions from JuMP 0.18 that will be addressed in a future
@@ -499,15 +789,15 @@ release (0.19.x or later):
 ## Version 0.17.0 (May 27, 2017)
 
    * **Breaking change**: Mixing quadratic and conic constraints is no longer supported.
-   * **Breaking change**: The ``getvariable`` and ``getconstraint`` functions are replaced by indexing on the corresponding symbol. For instance, to access the variable with name ``x``, one should now write ``m[:x]`` instead of ``getvariable(m, :x)``. As a consequence, creating a variable and constraint with the same name now triggers a warning, and accessing one of them afterwards throws an error. This change is breaking only in the latter case.
-   * Addition of the ``getobjectivebound`` function that mirrors the functionality of the MathProgBase ``getobjbound`` function except that it takes into account transformations performed by JuMP.
+   * **Breaking change**: The `getvariable` and `getconstraint` functions are replaced by indexing on the corresponding symbol. For instance, to access the variable with name `x`, one should now write `m[:x]` instead of `getvariable(m, :x)`. As a consequence, creating a variable and constraint with the same name now triggers a warning, and accessing one of them afterwards throws an error. This change is breaking only in the latter case.
+   * Addition of the `getobjectivebound` function that mirrors the functionality of the MathProgBase `getobjbound` function except that it takes into account transformations performed by JuMP.
    * Minor bug fixes.
 
 The following changes are primarily of interest to developers of JuMP extensions:
 
-   * The new syntax ``@constraint(model, expr in Cone)`` creates the constraint ensuring that ``expr`` is inside ``Cone``. The ``Cone`` argument is passed to ``constructconstraint!`` which enables the call to the dispatched to an extension.
-   * The ``@variable`` macro now calls ``constructvariable!`` instead of directly calling the ``Variable`` constructor. Extra arguments and keyword arguments passed to ``@variable`` are passed to ``constructvariable!`` which enables the call to be dispatched to an extension.
-   * Refactor the internal function ``conicdata`` (used build the MathProgBase conic model) into smaller subfunctions to make these parts reusable by extensions.
+   * The new syntax `@constraint(model, expr in Cone)` creates the constraint ensuring that `expr` is inside `Cone`. The `Cone` argument is passed to `constructconstraint!` which enables the call to the dispatched to an extension.
+   * The `@variable` macro now calls `constructvariable!` instead of directly calling the `Variable` constructor. Extra arguments and keyword arguments passed to `@variable` are passed to `constructvariable!` which enables the call to be dispatched to an extension.
+   * Refactor the internal function `conicdata` (used build the MathProgBase conic model) into smaller subfunctions to make these parts reusable by extensions.
 
 ## Version 0.16.2 (March 28, 2017)
 
@@ -516,41 +806,41 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.16.1 (March 7, 2017)
 
-   * Better support for ``AbstractArray`` in JuMP (Thanks @tkoolen)
+   * Better support for `AbstractArray` in JuMP (Thanks @tkoolen)
    * Minor bug fixes
 
 ## Version 0.16.0 (February 23, 2017)
 
-   * **Breaking change**: JuMP no longer has a mechanism for selecting solvers by default (the previous mechanism was flawed and incompatible with Julia 0.6). Not specifying a solver before calling ``solve()`` will result in an error.
-   * **Breaking change**: User-defined functions are no longer global. The first argument to ``JuMP.register`` is now a JuMP ``Model`` object within whose scope the function will be registered. Calling ``JuMP.register`` without a ``Model`` now produces an error.
-   * **Breaking change**: Use the new ``JuMP.fix`` method to fix a variable to a value or to update the value to which a variable is fixed. Calling ``setvalue`` on a fixed variable now results in an error in order to avoid silent behavior changes. (Thanks @joaquimg)
+   * **Breaking change**: JuMP no longer has a mechanism for selecting solvers by default (the previous mechanism was flawed and incompatible with Julia 0.6). Not specifying a solver before calling `solve()` will result in an error.
+   * **Breaking change**: User-defined functions are no longer global. The first argument to `JuMP.register` is now a JuMP `Model` object within whose scope the function will be registered. Calling `JuMP.register` without a `Model` now produces an error.
+   * **Breaking change**: Use the new `JuMP.fix` method to fix a variable to a value or to update the value to which a variable is fixed. Calling `setvalue` on a fixed variable now results in an error in order to avoid silent behavior changes. (Thanks @joaquimg)
    * Nonlinear expressions now print out similarly to linear/quadratic expressions (useful for debugging!)
-   * New ``category`` keyword to ``@variable``. Used for specifying categories of anonymous variables.
+   * New `category` keyword to `@variable`. Used for specifying categories of anonymous variables.
    * Compatibility with Julia 0.6-dev.
    * Minor fixes and improvements (Thanks @cossio, @ccoffrin, @blegat)
 
 ## Version 0.15.1 (January 31, 2017)
 
-  * Bugfix for ``@LinearConstraints`` and friends
+  * Bugfix for `@LinearConstraints` and friends
 
 ## Version 0.15.0 (December 22, 2016)
 
   * Julia 0.5.0 is the minimum required version for this release.
   * Document support for BARON solver
   * Enable info callbacks in more states than before, e.g. for recording solutions.
-    New ``when`` argument to ``addinfocallback`` ([#814](https://github.com/JuliaOpt/JuMP.jl/pull/814), thanks @yeesian)
+    New `when` argument to `addinfocallback` ([#814](https://github.com/JuliaOpt/JuMP.jl/pull/814), thanks @yeesian)
   * Improved support for anonymous variables. This includes new warnings for potentially confusing use of the traditional non-anonymous syntax:
     * When multiple variables in a model are given the same name
-    * When non-symbols are used as names, e.g., ``@variable(m, x[1][1:N])``
+    * When non-symbols are used as names, e.g., `@variable(m, x[1][1:N])`
   * Improvements in iterating over JuMP containers ([#836](https://github.com/JuliaOpt/JuMP.jl/pull/836), thanks @IssamT)
   * Support for writing variable names in .lp file output (Thanks @leethargo)
   * Support for querying duals to SDP problems (Thanks @blegat)
-  * The comprehension syntax with curly braces ``sum{}``, ``prod{}``, and ``norm2{}`` has been deprecated
-    in favor of Julia's native comprehension syntax ``sum()``, ``prod()`` and ``norm()`` as previously announced.
-    (For early adopters of the new syntax, ``norm2()`` was renamed to ``norm()`` without deprecation.)
+  * The comprehension syntax with curly braces `sum{}`, `prod{}`, and `norm2{}` has been deprecated
+    in favor of Julia's native comprehension syntax `sum()`, `prod()` and `norm()` as previously announced.
+    (For early adopters of the new syntax, `norm2()` was renamed to `norm()` without deprecation.)
   * Unit tests rewritten to use Base.Test instead of FactCheck
   * Improved support for operations with matrices of JuMP types (Thanks @ExpandingMan)
-  * The syntax to halt a solver from inside a callback has changed from ``throw(CallbackAbort())`` to ``return JuMP.StopTheSolver``
+  * The syntax to halt a solver from inside a callback has changed from `throw(CallbackAbort())` to `return JuMP.StopTheSolver`
   * Minor bug fixes
 
 ## Version 0.14.2 (December 12, 2016)
@@ -560,24 +850,24 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.14.1 (September 12, 2016)
 
   * More consistent handling of states in informational callbacks,
-    includes a new ``when`` parameter to ``addinfocallback`` for
+    includes a new `when` parameter to `addinfocallback` for
     specifying in which state an informational callback should be called.
 
 ## Version 0.14.0 (August 7, 2016)
 
   * Compatibility with Julia 0.5 and ForwardDiff 0.2
   * Support for "anonymous" variables, constraints, expressions, and parameters, e.g.,
-    ``x = @variable(m, [1:N])`` instead of ``@variable(m, x[1:N])``
-  * Support for retrieving constraints from a model by name via ``getconstraint``
-  * ``@NLconstraint`` now returns constraint references (as expected).
+    `x = @variable(m, [1:N])` instead of `@variable(m, x[1:N])`
+  * Support for retrieving constraints from a model by name via `getconstraint`
+  * `@NLconstraint` now returns constraint references (as expected).
   * Support for vectorized expressions within lazy constraints
-  * On Julia 0.5, parse new comprehension syntax ``sum(x[i] for i in 1:N if isodd(i))``
-    instead of ``sum{ x[i], i in 1:N; isodd(i) }``. The old syntax with curly
+  * On Julia 0.5, parse new comprehension syntax `sum(x[i] for i in 1:N if isodd(i))`
+    instead of `sum{ x[i], i in 1:N; isodd(i) }`. The old syntax with curly
     braces will be deprecated in JuMP 0.15.
-  * Now possible to provide nonlinear expressions as "raw" Julia ``Expr`` objects
+  * Now possible to provide nonlinear expressions as "raw" Julia `Expr` objects
     instead of using JuMP's nonlinear macros. This input format is useful for
     programmatically generated expressions.
-  * ``s/Mathematical Programming/Mathematical Optimization/``
+  * `s/Mathematical Programming/Mathematical Optimization/`
   * Support for local cuts (Thanks to @madanim, Mehdi Madani)
   * Document Xpress interface developed by @joaquimg, Joaquim Dias Garcia
   * Minor bug and deprecation fixes (Thanks @odow, @jrevels)
@@ -589,14 +879,14 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.13.1 (May 3, 2016)
 
-  * Fix broken deprecation for ``registerNLfunction``.
+  * Fix broken deprecation for `registerNLfunction`.
 
 ## Version 0.13.0 (April 29, 2016)
 
   * Most exported methods and macros have been renamed to avoid camelCase. See the list of changes [here](https://github.com/JuliaOpt/JuMP.jl/blob/e53d0db67cde2a4b80d0c1281f4b49eb0128a1f5/src/deprecated.jl#L30). There is a 1-1 mapping from the old names to the new, and it is safe to simply replace the names to update existing models.
-  * Specify variable lower/upper bounds in ``@variable`` using the ``lowerbound`` and ``upperbound`` keyword arguments.
-  * Change name printed for variable using the ``basename`` keyword argument to ``@variable``.
-  * New ``@variables`` macro allows multiline declaration of groups of variables.
+  * Specify variable lower/upper bounds in `@variable` using the `lowerbound` and `upperbound` keyword arguments.
+  * Change name printed for variable using the `basename` keyword argument to `@variable`.
+  * New `@variables` macro allows multiline declaration of groups of variables.
   * A number of solver methods previously available only through MathProgBase are now exposed directly in JuMP. The fix was [recorded](https://youtu.be/qF1lZPJ3a5A) live!
   * Compatibility fixes with Julia 0.5.
   * The "end" indexing syntax is no longer supported within JuMPArrays which do not use 1-based indexing until upstream issues are resolved, see [here](https://github.com/JuliaOpt/JuMP.jl/issues/730).
@@ -612,12 +902,12 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.12.0 (February 27, 2016)
 
   * The automatic differentiation functionality has been completely rewritten with a number of user-facing changes:
-      - ``@defExpr`` and ``@defNLExpr`` now take the model as the first argument. The previous one-argument version of ``@defExpr`` is deprecated; all expressions should be named. E.g., replace ``@defExpr(2x+y)`` with ``@defExpr(jump_model, my_expr, 2x+y)``.
+      - `@defExpr` and `@defNLExpr` now take the model as the first argument. The previous one-argument version of `@defExpr` is deprecated; all expressions should be named. E.g., replace `@defExpr(2x+y)` with `@defExpr(jump_model, my_expr, 2x+y)`.
       - JuMP no longer uses Julia's variable binding rules for efficiently re-solving a sequence of nonlinear models. Instead, we have introduced nonlinear parameters. This is a breaking change, so we have added a warning message when we detect models that may depend on the old behavior.
       - Support for user-defined functions integrated within nonlinear JuMP expressions.
-  * Replaced iteration over ``AffExpr`` with ``Number``-like scalar iteration; previous iteration behavior is now available via ``linearterms(::AffExpr)``.
-  * Stopping the solver via ``throw(CallbackAbort())`` from a callback no longer triggers an exception. Instead, ``solve()`` returns ``UserLimit`` status.
-  * ``getDual()`` now works for conic problems (Thanks @emreyamangil.)
+  * Replaced iteration over `AffExpr` with `Number`-like scalar iteration; previous iteration behavior is now available via `linearterms(::AffExpr)`.
+  * Stopping the solver via `throw(CallbackAbort())` from a callback no longer triggers an exception. Instead, `solve()` returns `UserLimit` status.
+  * `getDual()` now works for conic problems (Thanks @emreyamangil.)
 
 ## Version 0.11.3 (February 4, 2016)
 
@@ -636,15 +926,15 @@ The following changes are primarily of interest to developers of JuMP extensions
 
   * Julia 0.4.0 is the minimum required version for this release.
   * Fix for scoping semantics of index variables in sum{}. Index variables no longer leak into the surrounding scope.
-  * Addition of the ``solve(m::Model, relaxation=true)`` keyword argument to solve the standard continuous realaxation of model ``m``
-  * The ``getConstraintBounds()`` method allows access to the lower and upper bounds of all constraints in a (nonlinear) model.
+  * Addition of the `solve(m::Model, relaxation=true)` keyword argument to solve the standard continuous realaxation of model `m`
+  * The `getConstraintBounds()` method allows access to the lower and upper bounds of all constraints in a (nonlinear) model.
   * Update for breaking changes in MathProgBase
 
 ## Version 0.10.3 (November 20, 2015)
 
   * Fix a rare error when parsing quadratic expressions
-  * Fix ``Variable()`` constructor with default arguments
-  * Detect unrecognized keywords in ``solve()``
+  * Fix `Variable()` constructor with default arguments
+  * Detect unrecognized keywords in `solve()`
 
 ## Version 0.10.2 (September 28, 2015)
 
@@ -657,17 +947,17 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.10.0 (August 31, 2015)
 
-  * Support (on Julia 0.4 and later) for conditions in indexing ``@defVar`` and ``@addConstraint`` constructs, e.g. ``@defVar(m, x[i=1:5,j=1:5; i+j >= 3])``
+  * Support (on Julia 0.4 and later) for conditions in indexing `@defVar` and `@addConstraint` constructs, e.g. `@defVar(m, x[i=1:5,j=1:5; i+j >= 3])`
   * Support for vectorized operations on Variables and expressions. See the documentation for details.
-  * New ``getVar()`` method to access variables in a model by name
+  * New `getVar()` method to access variables in a model by name
   * Support for semidefinite programming.
-  * Dual solutions are now available for general nonlinear problems. You may call ``getDual`` on a reference object for a nonlinear constraint, and ``getDual`` on a variable object for Lagrange multipliers from active bounds.
-  * Introduce warnings for two common performance traps: too many calls to ``getValue()`` on a collection of variables and use of the ``+`` operator in a loop to sum expressions.
-  * Second-order cone constraints can be written directly with the ``norm()`` and ``norm2{}`` syntax.
+  * Dual solutions are now available for general nonlinear problems. You may call `getDual` on a reference object for a nonlinear constraint, and `getDual` on a variable object for Lagrange multipliers from active bounds.
+  * Introduce warnings for two common performance traps: too many calls to `getValue()` on a collection of variables and use of the `+` operator in a loop to sum expressions.
+  * Second-order cone constraints can be written directly with the `norm()` and `norm2{}` syntax.
   * Implement MathProgBase interface for querying Hessian-vector products.
-  * Iteration over ``JuMPContainer``s is deprecated; instead, use the ``keys`` and ``values`` functions, and ``zip(keys(d),values(d))`` for the old behavior.
-  * ``@defVar`` returns ``Array{Variable,N}`` when each of ``N`` index sets are of the form ``1:nᵢ``.
-  * Module precompilation: on Julia 0.4 and later, ``using JuMP`` is now much faster.
+  * Iteration over `JuMPContainer`s is deprecated; instead, use the `keys` and `values` functions, and `zip(keys(d),values(d))` for the old behavior.
+  * `@defVar` returns `Array{Variable,N}` when each of `N` index sets are of the form `1:nᵢ`.
+  * Module precompilation: on Julia 0.4 and later, `using JuMP` is now much faster.
 
 ## Version 0.9.3 (August 11, 2015)
 
@@ -684,22 +974,22 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.9.0 (April 18, 2015)
 
-  * Comparison operators for constructing constraints (e.g. ``2x >= 1``) have been deprecated. Instead, construct the constraints explicitly in
-    the ``@addConstraint`` macro to add them to the model, or in the ``@LinearConstraint`` macro to create a stand-alone linear constraint instance.
-  * ``getValue()`` method implemented to compute the value of a nonlinear subexpression
+  * Comparison operators for constructing constraints (e.g. `2x >= 1`) have been deprecated. Instead, construct the constraints explicitly in
+    the `@addConstraint` macro to add them to the model, or in the `@LinearConstraint` macro to create a stand-alone linear constraint instance.
+  * `getValue()` method implemented to compute the value of a nonlinear subexpression
   * JuMP is now released under the Mozilla Public License version 2.0 (was previously LGPL). MPL is a copyleft license which is less restrictive than LGPL, especially for embedding JuMP within other applications.
   * A number of performance improvements in ReverseDiffSparse for computing derivatives.
-  * ``MathProgBase.getsolvetime(m)`` now returns the solution time reported by the solver, if available. (Thanks @odow, Oscar Dowson)
+  * `MathProgBase.getsolvetime(m)` now returns the solution time reported by the solver, if available. (Thanks @odow, Oscar Dowson)
   * Formatting fix for LP format output. (Thanks @sbebo, Leonardo Taccari).
 
 ## Version 0.8.0 (February 17, 2015)
 
-  * Nonlinear subexpressions now supported with the ``@defNLExpr`` macro.
+  * Nonlinear subexpressions now supported with the `@defNLExpr` macro.
   * SCS supported for solving second-order conic problems.
-  * ``setXXXCallback`` family deprecated in favor of ``addXXXCallback``.
+  * `setXXXCallback` family deprecated in favor of `addXXXCallback`.
   * Multiple callbacks of the same type can be registered.
-  * Added support for informational callbacks via ``addInfoCallback``.
-  * A ``CallbackAbort`` exception can be thrown from callback to safely exit optimization.
+  * Added support for informational callbacks via `addInfoCallback`.
+  * A `CallbackAbort` exception can be thrown from callback to safely exit optimization.
 
 ## Version 0.7.4 (February 4, 2015)
 
@@ -716,9 +1006,9 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.7.2 (January 9, 2015)
 
-  * Fix a bug in ``sum(::JuMPDict)``
-  * Added the ``setCategory`` function to change a variables category (e.g. continuous or binary)
-  after construction, and ``getCategory`` to retrieve the variable category.
+  * Fix a bug in `sum(::JuMPDict)`
+  * Added the `setCategory` function to change a variables category (e.g. continuous or binary)
+  after construction, and `getCategory` to retrieve the variable category.
 
 ## Version 0.7.1 (January 2, 2015)
 
@@ -728,7 +1018,7 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ### Linear/quadratic/conic programming
 
-  * **Breaking change**: The syntax for column-wise model generation has been changed to use keyword arguments in ``@defVar``.
+  * **Breaking change**: The syntax for column-wise model generation has been changed to use keyword arguments in `@defVar`.
   * On Julia 0.4 and later, variables and coefficients may be multiplied in any order within macros. That is, variable*coefficient is now valid syntax.
   * ECOS supported for solving second-order conic problems.
 
@@ -736,17 +1026,17 @@ The following changes are primarily of interest to developers of JuMP extensions
 
   * Support for skipping model generation when solving a sequence of nonlinear models with changing data.
   * Fix a memory leak when solving a sequence of nonlinear models.
-  * The ``@addNLConstraint`` macro now supports the three-argument version to define sets of nonlinear constraints.
+  * The `@addNLConstraint` macro now supports the three-argument version to define sets of nonlinear constraints.
   * KNITRO supported as a nonlinear solver.
   * Speed improvements for model generation.
-  * The ``@addNLConstraints`` macro supports adding multiple (groups of) constraints at once. Syntax is similar to ``@addConstraints``.
+  * The `@addNLConstraints` macro supports adding multiple (groups of) constraints at once. Syntax is similar to `@addConstraints`.
   * Discrete variables allowed in nonlinear problems for solvers which support them (currently only KNITRO).
 
 ### General
 
-  * Starting values for variables may now be specified with ``@defVar(m, x, start=value)``.
-  * The ``setSolver`` function allows users to change the solver subsequent to model creation.
-  * Support for "fixed" variables via the ``@defVar(m, x == 1)`` syntax.
+  * Starting values for variables may now be specified with `@defVar(m, x, start=value)`.
+  * The `setSolver` function allows users to change the solver subsequent to model creation.
+  * Support for "fixed" variables via the `@defVar(m, x == 1)` syntax.
   * Unit tests rewritten to use FactCheck.jl, improved testing across solvers.
 
 ## Version 0.6.3 (October 19, 2014)
@@ -757,7 +1047,7 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.6.2 (October 11, 2014)
 
   * Further improvements and bug fixes for printing.
-  * Fixed a bug in ``@defExpr``.
+  * Fixed a bug in `@defExpr`.
   * Support for accessing expression graphs through the MathProgBase NLP interface.
 
 ## Version 0.6.1 (September 19, 2014)
@@ -767,19 +1057,19 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.6.0 (September 9, 2014)
 
   * Julia 0.3.0 is the minimum required version for this release.
-  * ``buildInternalModel(m::Model)`` added to build solver-level model in memory without optimizing.
-  * Deprecate ``load_model_only`` keyword argument to ``solve``.
-  * Add groups of constraints with ``@addConstraints`` macro.
-  * Unicode operators now supported, including ``∑`` for ``sum``, ``∏`` for ``prod``, and ``≤``/``≥``
-  * Quadratic constraints supported in ``@addConstraint`` macro.
-  * Quadratic objectives supported in ``@setObjective`` macro.
+  * `buildInternalModel(m::Model)` added to build solver-level model in memory without optimizing.
+  * Deprecate `load_model_only` keyword argument to `solve`.
+  * Add groups of constraints with `@addConstraints` macro.
+  * Unicode operators now supported, including `∑` for `sum`, `∏` for `prod`, and `≤`/`≥`
+  * Quadratic constraints supported in `@addConstraint` macro.
+  * Quadratic objectives supported in `@setObjective` macro.
   * MathProgBase solver-independent interface replaces Ipopt-specific interface for nonlinear problems
-    - **Breaking change**: ``IpoptOptions`` no longer supported to specify solver options, use ``m = Model(solver=IpoptSolver(options...))`` instead.
+    - **Breaking change**: `IpoptOptions` no longer supported to specify solver options, use `m = Model(solver=IpoptSolver(options...))` instead.
   * New solver interfaces: ECOS, NLopt, and nonlinear support for MOSEK
   * New option to control whether the lazy constraint callback is executed at each node in the B&B tree or just when feasible solutions are found
   * Add support for semicontinuous and semi-integer variables for those solvers that support them.
-  * Add support for index dependencies (e.g. triangular indexing) in ``@defVar``, ``@addConstraint``, and ``@defExpr`` (e.g. ``@defVar(m, x[i=1:10,j=i:10])``).
-    - This required some changes to the internal structure of JuMP containers, which may break code that explicitly stored ``JuMPDict`` objects.
+  * Add support for index dependencies (e.g. triangular indexing) in `@defVar`, `@addConstraint`, and `@defExpr` (e.g. `@defVar(m, x[i=1:10,j=i:10])`).
+    - This required some changes to the internal structure of JuMP containers, which may break code that explicitly stored `JuMPDict` objects.
 
 ## Version 0.5.8 (September 24, 2014)
 
@@ -791,7 +1081,7 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.5.6 (September 2, 2014)
   * Add support for semicontinuous and semi-integer variables for those solvers that support them.
-    - **Breaking change**: Syntax for ``Variable()`` constructor has changed (use of this interface remains discouraged)
+    - **Breaking change**: Syntax for `Variable()` constructor has changed (use of this interface remains discouraged)
   * Update for breaking changes in MathProgBase
 
 ## Version 0.5.5 (July 6, 2014)
@@ -800,7 +1090,7 @@ The following changes are primarily of interest to developers of JuMP extensions
 
 ## Version 0.5.4 (June 19, 2014)
 
-  * Update for breaking change in MathProgBase which reduces loading times for ``using JuMP``
+  * Update for breaking change in MathProgBase which reduces loading times for `using JuMP`
   * Fix error when MIPs not solved to optimality
 
 
@@ -820,10 +1110,10 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.5.0 (May 2, 2014)
 
   * Support for nonlinear optimization with exact, sparse second-order derivatives automatically computed. Ipopt is currently the only solver supported.
-  * ``getValue`` for ``AffExpr`` and ``QuadExpr``
-  * **Breaking change**: ``getSolverModel`` replaced by ``getInternalModel``, which returns the internal MathProgBase-level model
-  * Groups of constraints can be specified with ``@addConstraint`` (see documentation for details). This is not a breaking change.
-  * ``dot(::JuMPDict{Variable},::JuMPDict{Variable})`` now returns the corresponding quadratic expression.
+  * `getValue` for `AffExpr` and `QuadExpr`
+  * **Breaking change**: `getSolverModel` replaced by `getInternalModel`, which returns the internal MathProgBase-level model
+  * Groups of constraints can be specified with `@addConstraint` (see documentation for details). This is not a breaking change.
+  * `dot(::JuMPDict{Variable},::JuMPDict{Variable})` now returns the corresponding quadratic expression.
 
 ## Version 0.4.1 (March 24, 2014)
 
@@ -834,8 +1124,8 @@ The following changes are primarily of interest to developers of JuMP extensions
 
   * Support for SOS1 and SOS2 constraints.
   * Solver-independent callback for user heuristics.
-  * ``dot`` and ``sum`` implemented for ``JuMPDict`` objects. Now you can say ``@addConstraint(m, dot(a,x) <= b)``.
-  * Developers: support for extensions to JuMP. See definition of Model in ``src/JuMP.jl`` for more details.
+  * `dot` and `sum` implemented for `JuMPDict` objects. Now you can say `@addConstraint(m, dot(a,x) <= b)`.
+  * Developers: support for extensions to JuMP. See definition of Model in `src/JuMP.jl` for more details.
   * Option to construct the low-level model before optimizing.
 
 ## Version 0.3.2 (February 17, 2014)
@@ -846,36 +1136,38 @@ The following changes are primarily of interest to developers of JuMP extensions
 ## Version 0.3.1 (January 30, 2014)
 
  * Documentation updates
-   - Support for MOSEK
-   - CPLEXLink renamed to CPLEX
+ * Support for MOSEK
+ * CPLEXLink renamed to CPLEX
 
 ## Version 0.3.0 (January 21, 2014)
 
- * Unbounded/infeasibility rays: getValue() will return the corresponding
+ * Unbounded/infeasibility rays: `getValue()` will return the corresponding
    components of an unbounded ray when a model is unbounded, if supported
-   by the selected solver. getDual() will return an infeasibility ray (Farkas proof)
-   if a model is infeasible and the selected solver supports this feature.
+   by the selected solver. `getDual()` will return an infeasibility ray (Farkas
+   proof) if a model is infeasible and the selected solver supports this
+   feature.
  * Solver-independent callbacks for user generated cuts.
  * Use new interface for solver-independent QCQP.
- * ``setlazycallback`` renamed to ``setLazyCallback`` for consistency.
+ * `setlazycallback` renamed to `setLazyCallback` for consistency.
 
 ## Version 0.2.0 (December 15, 2013)
 
-  * **Breaking change**: Objective sense is specified in setObjective
-    instead of in the Model constructor.
-  * **Breaking change**: ``lpsolver`` and ``mipsolver`` merged into
-    single ``solver`` option.
-  * Problem modification with efficient LP restarts and MIP warm-starts.
-  * Relatedly, column-wise modeling now supported.
-  * Solver-independent callbacks supported. Currently we support only
-    a "lazy constraint" callback, which works with Gurobi, CPLEX, and GLPK.
-    More callbacks coming soon.
+ * Breaking changes:
+   * Objective sense is specified in `setObjective` instead of in the `Model`
+     constructor.
+   * `lpsolver` and `mipsolver` merged into single `solver` option.
+ * New features:
+   * Problem modification with efficient LP restarts and MIP warm-starts.
+   * Relatedly, column-wise modeling now supported.
+   * Solver-independent callbacks supported. Currently we support only
+     a "lazy constraint" callback, which works with Gurobi, CPLEX, and GLPK.
+     More callbacks coming soon.
 
 ## Version 0.1.2 (November 16, 2013)
 
   * Bug fixes for printing, improved error messages.
-  * Allow ``AffExpr`` to be used in macros; e.g.,
-    ``ex = y + z; @addConstraint(m, x + 2*ex <= 3)``
+  * Allow `AffExpr` to be used in macros; e.g.,
+    `ex = y + z; @addConstraint(m, x + 2*ex <= 3)`
 
 ## Version 0.1.1 (October 23, 2013)
 

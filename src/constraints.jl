@@ -130,6 +130,71 @@ function set_dual_start_value(
 end
 
 """
+    set_start_value(con_ref::ConstraintRef, value)
+
+Set the primal start value ([`MOI.ConstraintPrimalStart`](@ref)) of the
+constraint `con_ref` to `value`. To remove a primal start value set it to
+`nothing`.
+
+See also [`start_value`](@ref).
+"""
+function set_start_value(
+    con_ref::ConstraintRef{
+        <:AbstractModel,
+        <:_MOICON{<:MOI.AbstractVectorFunction,<:MOI.AbstractVectorSet},
+    },
+    value,
+)
+    MOI.set(
+        owner_model(con_ref),
+        MOI.ConstraintPrimalStart(),
+        con_ref,
+        vectorize(value, con_ref.shape),
+    )
+    return
+end
+
+function set_start_value(
+    con_ref::ConstraintRef{
+        <:AbstractModel,
+        <:_MOICON{<:MOI.AbstractVectorFunction,<:MOI.AbstractVectorSet},
+    },
+    ::Nothing,
+)
+    MOI.set(owner_model(con_ref), MOI.ConstraintPrimalStart(), con_ref, nothing)
+    return
+end
+
+function set_start_value(
+    con_ref::ConstraintRef{
+        <:AbstractModel,
+        <:_MOICON{<:MOI.AbstractScalarFunction,<:MOI.AbstractScalarSet},
+    },
+    value,
+)
+    MOI.set(owner_model(con_ref), MOI.ConstraintPrimalStart(), con_ref, value)
+    return
+end
+
+"""
+    start_value(con_ref::ConstraintRef)
+
+Return the primal start value ([`MOI.ConstraintPrimalStart`](@ref)) of the
+constraint `con_ref`.
+
+Note: If no primal start value has been set, `start_value` will return
+`nothing`.
+
+See also [`set_start_value`](@ref).
+"""
+function start_value(con_ref::ConstraintRef{<:AbstractModel,<:_MOICON})
+    return reshape_vector(
+        MOI.get(owner_model(con_ref), MOI.ConstraintPrimalStart(), con_ref),
+        con_ref.shape,
+    )
+end
+
+"""
     name(con_ref::ConstraintRef)
 
 Get a constraint's name attribute.
@@ -288,6 +353,7 @@ function delete(model::Model, con_ref::ConstraintRef)
             "belong to the model.",
         )
     end
+    model.is_model_dirty = true
     return MOI.delete(backend(model), index(con_ref))
 end
 
@@ -310,6 +376,7 @@ function delete(
         error("A constraint reference you are trying to delete does not" * "
             belong to the model.")
     end
+    model.is_model_dirty = true
     MOI.delete(backend(model), index.(con_refs))
     return
 end
@@ -523,7 +590,7 @@ function check_belongs_to_model(con::VectorConstraint, model)
     end
 end
 
-function moi_add_constraint(
+function _moi_add_constraint(
     model::MOI.ModelLike,
     f::F,
     s::S,
@@ -532,7 +599,7 @@ function moi_add_constraint(
         error(
             "Constraints of type $(F)-in-$(S) are not supported by the " *
             "solver.\n\nIf you expected the solver to support your problem, " *
-            "you may have an error in our formulation. Otherwise, consider " *
+            "you may have an error in your formulation. Otherwise, consider " *
             "using a different solver.\n\nThe list of available solvers, " *
             "along with the problem types they support, is available at " *
             "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
@@ -555,7 +622,7 @@ function add_constraint(
     # function.
     check_belongs_to_model(con, model)
     func, set = moi_function(con), moi_set(con)
-    cindex = moi_add_constraint(
+    cindex = _moi_add_constraint(
         backend(model),
         func,
         set,
@@ -571,6 +638,7 @@ function add_constraint(
        MOI.supports(backend(model), MOI.ConstraintName(), typeof(cindex))
         set_name(con_ref, name)
     end
+    model.is_model_dirty = true
     return con_ref
 end
 
@@ -604,14 +672,15 @@ function set_normalized_coefficient(
     T,
     F<:Union{MOI.ScalarAffineFunction{T},MOI.ScalarQuadraticFunction{T}},
 }
+    model = owner_model(con_ref)
     MOI.modify(
-        backend(owner_model(con_ref)),
+        backend(model),
         index(con_ref),
         MOI.ScalarCoefficientChange(index(variable), convert(T, value)),
     )
+    model.is_model_dirty = true
     return
 end
-@deprecate set_coefficient set_normalized_coefficient
 
 """
     normalized_coefficient(con_ref::ConstraintRef, variable::VariableRef)
@@ -686,7 +755,7 @@ function normalized_rhs(
     return MOI.constant(con.set)
 end
 
-function moi_add_to_function_constant(
+function _moi_add_to_function_constant(
     model::MOI.ModelLike,
     ci::MOI.ConstraintIndex{
         <:MOI.AbstractScalarFunction,
@@ -704,7 +773,7 @@ function moi_add_to_function_constant(
     new_set = MOIU.shift_constant(set, convert(Float64, -value))
     return MOI.set(model, MOI.ConstraintSet(), ci, new_set)
 end
-function moi_add_to_function_constant(
+function _moi_add_to_function_constant(
     model::MOI.ModelLike,
     ci::MOI.ConstraintIndex{
         <:Union{MOI.VectorAffineFunction,MOI.VectorQuadraticFunction},
@@ -756,13 +825,11 @@ function add_to_function_constant(
     constraint::ConstraintRef{<:AbstractModel},
     value,
 )
+    model = owner_model(constraint)
     # The type of `backend(model)` is not type-stable, so we use a function
-    # barrier (`moi_add_to_function_constant`) to improve performance.
-    moi_add_to_function_constant(
-        backend(owner_model(constraint)),
-        index(constraint),
-        value,
-    )
+    # barrier (`_moi_add_to_function_constant`) to improve performance.
+    _moi_add_to_function_constant(backend(model), index(constraint), value)
+    model.is_model_dirty = true
     return
 end
 
@@ -918,9 +985,9 @@ function _shadow_price_less_than(dual_value, sense::MOI.OptimizationSense)
     # shadow price is nonnegative (because relaxing a constraint can only
     # improve the objective). By MOI convention, a feasible dual on a LessThan
     # set is nonpositive, so we flip the sign when maximizing.
-    if sense == MOI.MAX_SENSE
+    if sense == MAX_SENSE
         return -dual_value
-    elseif sense == MOI.MIN_SENSE
+    elseif sense == MIN_SENSE
         return dual_value
     else
         error(
@@ -933,9 +1000,9 @@ end
 function _shadow_price_greater_than(dual_value, sense::MOI.OptimizationSense)
     # By MOI convention, a feasible dual on a GreaterThan set is nonnegative,
     # so we flip the sign when minimizing. (See comment in the method above).
-    if sense == MOI.MAX_SENSE
+    if sense == MAX_SENSE
         return dual_value
-    elseif sense == MOI.MIN_SENSE
+    elseif sense == MIN_SENSE
         return -dual_value
     else
         error(
