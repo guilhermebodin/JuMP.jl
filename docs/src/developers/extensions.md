@@ -16,13 +16,45 @@ JuMP provides a variety of ways to extend the basic modeling functionality.
     existing JuMP extensions. Examples include:
      * [BilevelJuMP.jl](https://github.com/joaquimg/BilevelJuMP.jl)
      * [Coluna.jl](https://github.com/atoptima/Coluna.jl)
-     * [InfiniteOpt.jl](https://github.com/pulsipher/InfiniteOpt.jl)
+     * [InfiniteOpt.jl](https://github.com/infiniteopt/InfiniteOpt.jl)
      * [Plasmo.jl](https://github.com/zavalab/Plasmo.jl)
      * [PolyJuMP.jl](https://github.com/jump-dev/PolyJuMP.jl)
      * [SDDP.jl](https://github.com/odow/SDDP.jl)
      * [StochasticPrograms.jl](https://github.com/martinbiel/StochasticPrograms.jl)
      * [SumOfSquares.jl](https://github.com/jump-dev/SumOfSquares.jl)
      * [vOptGeneric.jl](https://github.com/vOptSolver/vOptGeneric.jl)
+
+## Compatibility
+
+When writing JuMP extensions, you should carefully consider the compatibility
+guarantees that JuMP makes. In particular:
+
+ * All functions, structs, and constants which do not begin with an underscore
+   (`_`) are public. These are always safe to use, and they should all have
+   corresponding documentation.
+ * All identifiers beginning with an underscore (`_`) are private. These are
+   not safe to use, because they may break in any JuMP release, including
+   patch releases.
+ * Unless explicitly mentioned in the documentation, all fields of a struct are
+   private. These are not safe to use, because they may break in any JuMP
+   release, including patch releases. An example of a field which is safe to use
+   is the `model.ext` extension dictionary, which is documented in
+   [The extension dictionary](@ref).
+
+In general, we strongly encourage you to use only the public API of JuMP. If you
+are missing a feature, please open a GitHub issue.
+
+However, if you _do_ use the private API (for example, because your feature
+request has not been implemented yet), then you must carefully restrict the
+versions of JuMP that your package is compatible with in the `Project.toml`
+file. The easiest way to do this is via the [hyphen specifiers](https://pkgdocs.julialang.org/v1/compatibility/).
+For example, if your package supports all JuMP versions between v1.0.0 and
+v1.1.1, do:
+```
+JuMP = "1.0.0 - 1.1.1"
+```
+Then, whenever JuMP releases a new version, you should check if your package is
+still compatible and update the bound accordingly.
 
 ## Define a new set
 
@@ -63,7 +95,7 @@ model = Model()
 [x[1], x[2]] ∈ _NewVectorSet(2)
 ```
 
-## Extend [`@variable`](@ref)
+## [Extend `@variable`](@id extend_variable_macro)
 
 Just as `Bin` and `Int` create binary and integer variables, you can extend
 the [`@variable`](@ref) macro to create new types of variables. Here is an
@@ -118,12 +150,13 @@ julia> function JuMP.add_variable(
        end
 ```
 
-Now `AddTwice` can be passed to [`@variable`](@ref) similar to `Bin` or `Int`.
-However, now it adds two variables instead of one!
+Now `AddTwice` can be passed to [`@variable`](@ref) similar to `Bin` or `Int`,
+or through the `variable_type` keyword. However, now it adds two variables
+instead of one!
 ```jldoctest new_variable
 julia> model = Model();
 
-julia> @variable(model, x[i=1:2], AddTwice, kw=i)
+julia> @variable(model, x[i=1:2], variable_type = AddTwice, kw = i)
 Can also use Base.Iterators.Pairs(:kw => 1) here.
 Can also use Base.Iterators.Pairs(:kw => 2) here.
 2-element Vector{Tuple{VariableRef, VariableRef}}:
@@ -367,7 +400,68 @@ undocumented.
 The easiest way to extend JuMP by defining a new model type is to follow an
 existing example. A simple example to follow is the [JuMPExtension module](https://github.com/jump-dev/JuMP.jl/blob/master/test/JuMPExtension.jl)
 in the JuMP test suite. The best example of an external JuMP extension that
-implements an [`AbstractModel`](@ref) is [InfiniteOpt.jl](https://github.com/pulsipher/InfiniteOpt.jl).
+implements an [`AbstractModel`](@ref) is [InfiniteOpt.jl](https://github.com/infiniteopt/InfiniteOpt.jl).
+
+## Set an `optimize!` hook
+
+Some extensions require modification to the problem after the user has finished
+constructing the problem, but before `optimize!` is called. For these
+situations, JuMP provides [`set_optimize_hook`](@ref), which lets you intercept
+the [`optimize!`](@ref) call.
+
+Here's a simple example of adding an optimize hook that extends [`optimize!`](@ref)
+to take a keyword argument `silent`:
+```jldoctest
+julia> using JuMP, HiGHS
+
+julia> model = Model(HiGHS.Optimizer);
+
+julia> @variable(model, x >= 1.5, Int);
+
+julia> @objective(model, Min, x);
+
+julia> function silent_hook(model; silent::Bool)
+           if silent
+               set_silent(model)
+           else
+               unset_silent(model)
+           end
+           ## Make sure you set ignore_optimize_hook = true, or we'll
+           ## recursively enter the optimize hook!
+           return optimize!(model; ignore_optimize_hook = true)
+       end
+silent_hook (generic function with 1 method)
+
+julia> set_optimize_hook(model, silent_hook)
+silent_hook (generic function with 1 method)
+
+julia> optimize!(model; silent = true)
+
+julia> optimize!(model; silent = false)
+Presolving model
+0 rows, 0 cols, 0 nonzeros
+0 rows, 0 cols, 0 nonzeros
+Presolve: Optimal
+
+Solving report
+  Status            Optimal
+  Primal bound      2
+  Dual bound        2
+  Gap               0% (tolerance: 0.01%)
+  Solution status   feasible
+                    2 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.00 (total)
+                    0.00 (presolve)
+                    0.00 (postsolve)
+  Nodes             0
+  LP iterations     0 (total)
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+```
 
 ## Creating new container types
 
@@ -433,3 +527,43 @@ z[1]
      x[2]
      x[1]
     ```
+
+## Performance tips for extensions
+
+The function-in-set design of MathOptInterface causes type stability issues in
+Julia if you try to iterate over all of the constraints in a model. The easiest
+way to fix this is to use a function barrier.
+
+For example, instead of:
+```julia
+function all_names_slow(model)
+    names = Set{String}()
+    for ci in all_constraints(model)
+        push!(names, name(ci))
+    end
+    return names
+end
+```
+use:
+```julia
+function _function_barrier(names, model, ::Type{F}, ::Type{S}) where {F,S}
+    for ci in all_constraints(model, F, S)
+        push!(names, name(ci))
+    end
+    return
+end
+
+function all_names_fast(model)
+    names = Set{String}()
+    for (F, S) in list_of_constraint_types(model)
+        _function_barrier(names, model, F, S)
+    end
+    return names
+end
+```
+
+!!! note
+    It is important to explicitly type the `F` and `S` arguments. If you leave
+    them untyped, for example, `function _function_barrier(names, model, F, S)`,
+    Julia will not specialize the function calls and performance will not be
+    improved.

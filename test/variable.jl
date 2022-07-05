@@ -46,7 +46,7 @@ function _sliceof_util(VariableRefType, x, I, J, K)
         jj = 1
     end
     idx = [length(I) == 1, length(J) == 1, length(K) == 1]
-    return dropdims(y, dims = tuple(findall(idx)...))
+    return dropdims(y; dims = tuple(findall(idx)...))
 end
 
 function test_variable_no_bound(ModelType, VariableRefType)
@@ -676,7 +676,7 @@ function _mock_reduced_cost_util(
     has_duals::Bool = var_bounds_dual !== nothing,
 )
     mockoptimizer =
-        MOIU.MockOptimizer(MOIU.Model{Float64}(), eval_objective_value = false)
+        MOIU.MockOptimizer(MOIU.Model{Float64}(); eval_objective_value = false)
     m = JuMP.direct_model(mockoptimizer)
     if var_bound_type === :lower
         @variable(m, x >= 0)
@@ -1031,6 +1031,23 @@ function test_rational_inf_bounds(ModelType, ::Any)
     @variable(model, -u <= x <= u)
     @test has_lower_bound(x) == false
     @test has_upper_bound(x) == false
+    return
+end
+
+function test_Model_ConstraintRef(ModelType, ::Any)
+    model = Model()
+    @variable(model, x >= 0)
+    c = LowerBoundRef(x)
+    @constraint(model, c2, x >= 0)
+    @test VariableRef(c) == x
+    @test_throws(MethodError, VariableRef(c2))
+    return
+end
+
+function test_start_value_nothing(ModelType, ::Any)
+    model = ModelType()
+    @variable(model, x, start = nothing)
+    @test start_value(x) === nothing
     return
 end
 

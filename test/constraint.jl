@@ -834,6 +834,18 @@ function test_Model_change_coefficient(::Any, ::Any)
     )
 end
 
+function test_Model_change_coefficients(::Any, ::Any)
+    model = Model()
+    @variable(model, x)
+    @constraint(model, con, [2x + 3x, 4x] in MOI.Nonnegatives(2))
+    @test JuMP.isequal_canonical(JuMP.constraint_object(con).func, [5.0x, 4.0x])
+    set_normalized_coefficients(con, x, [(Int64(1), 3.0)])
+    @test JuMP.isequal_canonical(JuMP.constraint_object(con).func, [3.0x, 4.0x])
+    set_normalized_coefficients(con, x, [(Int64(1), 2.0), (Int64(2), 5.0)])
+    @test JuMP.isequal_canonical(JuMP.constraint_object(con).func, [2.0x, 5.0x])
+    return
+end
+
 function test_Model_change_rhs(::Any, ::Any)
     model = JuMP.Model()
     x = @variable(model)
@@ -1131,6 +1143,51 @@ function test_set_inequalities(::Any, ::Any)
     @test constraint_object(c6).set == MOI.Nonnegatives(2)
     @test_throws ErrorException @constraint(model, X >= 1, MOI.Nonnegatives(2))
     @test_throws ErrorException @constraint(model, 1 <= X, MOI.Nonnegatives(2))
+    return
+end
+
+function test_num_constraints(::Any, ::Any)
+    model = Model()
+    @variable(model, x >= 0, Int)
+    @constraint(model, 2x <= 1)
+    @test num_constraints(model; count_variable_in_set_constraints = true) == 3
+    @test num_constraints(model; count_variable_in_set_constraints = false) == 1
+    return
+end
+
+function test_num_constraints_UndefKeywordError(::Any, ::Any)
+    model = Model()
+    @variable(model, x >= 0, Int)
+    @constraint(model, 2x <= 1)
+    @test_throws UndefKeywordError num_constraints(model)
+    return
+end
+
+function test_num_constraints_nonlinear(::Any, ::Any)
+    model = Model()
+    @variable(model, x >= 0, Int)
+    @constraint(model, 2x <= 1)
+    @NLconstraint(model, sqrt(x) <= 3)
+    @test num_constraints(model; count_variable_in_set_constraints = true) == 4
+    @test num_constraints(model; count_variable_in_set_constraints = false) == 2
+    return
+end
+
+function test_Model_all_constraints(::Any, ::Any)
+    model = Model()
+    @variable(model, x >= 0, Int)
+    c = @constraint(model, 2x <= 1)
+    nl_c = @NLconstraint(model, x^2 <= 1)
+    ret = all_constraints(model; include_variable_in_set_constraints = true)
+    @test length(ret) == 4
+    @test c in ret
+    @test nl_c in ret
+    @test IntegerRef(x) in ret
+    @test LowerBoundRef(x) in ret
+    ret = all_constraints(model; include_variable_in_set_constraints = false)
+    @test length(ret) == 2
+    @test c in ret
+    @test nl_c in ret
     return
 end
 

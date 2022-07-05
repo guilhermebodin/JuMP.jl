@@ -63,12 +63,58 @@ model = Model(HiGHS.Optimizer; add_bridges = false)
 
 # ### Use PackageCompiler
 
-# As a final option, consider using [PackageCompiler.jl](https://julialang.github.io/PackageCompiler.jl/dev/)
-# to [create a custom sysimage](https://julialang.github.io/PackageCompiler.jl/dev/examples/plots/).
+# As an example of compilation latency, consider the following linear program
+# with two variables and two constraints:
 
-# This is a good option if you have finished prototyping a model, and you now
-# want to call it frequently from the command line without paying the
-# compilation price.
+using JuMP, HiGHS
+model = Model(HiGHS.Optimizer)
+@variable(model, x >= 0)
+@variable(model, 0 <= y <= 3)
+@objective(model, Min, 12x + 20y)
+@constraint(model, c1, 6x + 8y >= 100)
+@constraint(model, c2, 7x + 12y >= 120)
+optimize!(model)
+open("model.log", "w") do io
+    print(io, solution_summary(model; verbose = true))
+    return
+end
+
+# Saving the problem in `model.jl` and calling from the command line results in:
+# ```
+# $ time julia model.jl
+# 15.78s user 0.48s system 100% cpu 16.173 total
+# ```
+# Clearly, 16 seconds is a large overhead to pay for solving this trivial model.
+# However, the compilation latency is independent on the problem size, and so 16
+# seconds of additional overhead may be tolerable for larger models that take
+# minutes or hours to solve.
+
+# In cases where the compilation latency is intolerable, JuMP is compatible with
+# the [PackageCompiler.jl](https://julialang.github.io/PackageCompiler.jl/dev/)
+# package, which makes it easy to generate a custom _sysimage_ (a binary
+# extension to Julia that caches compiled code) that dramatically reduces the
+# compilation latency. A custom image for our problem can be created as follows:
+# ```julia
+# using PackageCompiler, Libdl
+# PackageCompiler.create_sysimage(
+#     ["JuMP", "HiGHS"],
+#     sysimage_path = "customimage." * Libdl.dlext,
+#     precompile_execution_file = "model.jl",
+# )
+# ```
+# When Julia is run with the custom image, the run time is now 0.7 seconds
+# instead of 16:
+# ```
+# $ time julia --sysimage customimage model.jl
+# 0.68s user 0.22s system 153% cpu 0.587 total
+# ```
+# Other performance tweaks, such as disabling bridges or using direct mode can
+# reduce this time futher.
+
+# !!! note
+#     `create_sysimage` only needs to be run once, and the same sysimage can be
+#     used--to a slight detriment of performance--even if we modify
+#     `model.jl` or run a different file.
 
 # ## Use macros to build expressions
 
@@ -113,3 +159,45 @@ model = Model()
 # If we use the [`@expression`](@ref) macro, we get many fewer allocations:
 
 @allocated @expression(model, x[1] + x[2] + x[3])
+
+# ## Disable string names
+
+# By default, JuMP creates `String` names for variables and constraints and
+# passes these to the solver. The benefit of passing names is that it improves
+# the readability of log messages from the solver (e.g., "variable x has invalid
+# bounds" instead of "variable v1203 has invalid bounds"), but for larger models
+# the overhead of passing names can be non-trivial.
+
+# Disable the creation of `String` names by setting `set_string_name = false` in
+# the [`@variable`](@ref) and [`@constraint`](@ref) macros, or by calling
+# [`set_string_names_on_creation`](@ref) to disable all names for a particular
+# model:
+
+model = Model()
+set_string_names_on_creation(model, false)
+@variable(model, x)
+
+#-
+
+@constraint(model, c, 2x <= 1)
+
+# Note that this doesn't change how symbolic names and bindings are stored:
+
+x
+
+#-
+
+model[:x]
+
+#-
+
+x === model[:x]
+
+# But you can no longer look up the variable by the string name:
+
+variable_by_name(model, "x") === nothing
+
+# !!! info
+#     For more information on the difference between string names, symbolic
+#     names, and bindings, see
+#     [String names, symbolic names, and bindings](@ref variable_names_and_bindings).

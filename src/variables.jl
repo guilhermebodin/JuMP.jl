@@ -354,6 +354,33 @@ function VariableRef(m::Model)
     return VariableRef(m, index)
 end
 
+"""
+    VariableRef(c::ConstraintRef)
+
+Get the variable associated with a `ConstraintRef`, if `c` is a constraint on a
+single variable.
+
+## Examples
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x >= 0)
+x
+
+julia> c = LowerBoundRef(x)
+x ≥ 0.0
+
+julia> VariableRef(c) == x
+true
+```
+"""
+function VariableRef(
+    c::ConstraintRef{<:AbstractModel,<:MOI.ConstraintIndex{MOI.VariableIndex}},
+)
+    return VariableRef(owner_model(c), MOI.VariableIndex(index(c).value))
+end
+
 # Name setter/getters
 # These functions need to be implemented for all `AbstractVariableRef`s
 """
@@ -602,7 +629,7 @@ function _upper_bound_index(v::VariableRef)
 end
 
 """
-    set_upper_bound(v::VariableRef,upper::Number)
+    set_upper_bound(v::VariableRef, upper::Number)
 
 Set the upper bound of a variable. If one does not exist, create an upper bound
 constraint.
@@ -1079,12 +1106,12 @@ function _moi_constrain_variable(moi_backend::MOI.ModelLike, index, info)
     if info.integer
         _moi_add_constraint(moi_backend, index, MOI.Integer())
     end
-    if info.has_start
+    if info.has_start && info.start !== nothing
         MOI.set(
             moi_backend,
             MOI.VariablePrimalStart(),
             index,
-            Float64(info.start),
+            convert(Float64, info.start),
         )
     end
 end

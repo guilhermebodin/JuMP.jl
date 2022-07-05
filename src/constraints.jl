@@ -683,6 +683,47 @@ function set_normalized_coefficient(
 end
 
 """
+    set_normalized_coefficients(
+        con_ref::ConstraintRef,
+        variable,
+        new_coefficients::Vector{Tuple{Int64,T}},
+    )
+
+Set the coefficients of `variable` in the constraint `con_ref` to
+`new_coefficients`, where each element in `new_coefficients` is a tuple which
+maps the row to a new coefficient.
+
+Note that prior to this step, during constraint creation, JuMP will aggregate
+multiple terms containing the same variable.
+
+```jldoctest; setup = :(using JuMP), filter=r"≤|<="
+model = Model()
+@variable(model, x)
+@constraint(model, con, [2x + 3x, 4x] in MOI.Nonnegatives(2))
+set_normalized_coefficients(con, x, [(1, 2.0), (2, 5.0)])
+con
+
+# output
+
+con : [2 x, 5 x] ∈ MathOptInterface.Nonnegatives(2)
+```
+"""
+function set_normalized_coefficients(
+    con_ref::ConstraintRef{<:AbstractModel,<:MOI.ConstraintIndex{F}},
+    variable,
+    new_coefficients::Vector{Tuple{Int64,T}},
+) where {T,F<:Union{MOI.VectorAffineFunction{T},MOI.VectorQuadraticFunction{T}}}
+    model = owner_model(con_ref)
+    MOI.modify(
+        backend(model),
+        index(con_ref),
+        MOI.MultirowChange(index(variable), new_coefficients),
+    )
+    model.is_model_dirty = true
+    return
+end
+
+"""
     normalized_coefficient(con_ref::ConstraintRef, variable::VariableRef)
 
 Return the coefficient associated with `variable` in `constraint` after JuMP has
@@ -1194,6 +1235,12 @@ julia> list_of_constraint_types(model)
  (VariableRef, MathOptInterface.GreaterThan{Float64})
  (VariableRef, MathOptInterface.ZeroOne)
 ```
+
+## Performance considerations
+
+Iterating over the list of function and set types is a type-unstable operation.
+Consider using a function barrier. See the [Performance tips for extensions](@ref)
+section of the documentation for more details.
 """
 function list_of_constraint_types(model::Model)::Vector{Tuple{Type,Type}}
     # We include an annotated return type here because Julia fails terribly at
@@ -1202,4 +1249,98 @@ function list_of_constraint_types(model::Model)::Vector{Tuple{Type,Type}}
         (jump_function_type(model, F), S) for
         (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
     ]
+end
+
+"""
+    num_constraints(model::Model; count_variable_in_set_constraints::Bool)
+
+Return the number of constraints in `model`.
+
+If `count_variable_in_set_constraints == true`, then `VariableRef` constraints
+such as `VariableRef`-in-`Integer` are included. To count only the number of
+structural constraints (e.g., the rows in the constraint matrix of a linear
+program), pass `count_variable_in_set_constraints = false`.
+
+## Examples
+
+```jldoctest; setup=:(using JuMP)
+julia> model = Model();
+
+julia> @variable(model, x >= 0, Int);
+
+julia> @constraint(model, 2x <= 1);
+
+julia> num_constraints(model; count_variable_in_set_constraints = true)
+3
+
+julia> num_constraints(model; count_variable_in_set_constraints = false)
+1
+```
+"""
+function num_constraints(model::Model; count_variable_in_set_constraints::Bool)
+    ret = num_nonlinear_constraints(model)
+    for (F, S) in list_of_constraint_types(model)
+        if F != VariableRef || count_variable_in_set_constraints
+            ret += num_constraints(model, F, S)
+        end
+    end
+    return ret
+end
+
+"""
+    all_constraints(
+        model::Model;
+        include_variable_in_set_constraints::Bool,
+    )::Vector{ConstraintRef}
+
+Return a list of all constraints in `model`.
+
+If `include_variable_in_set_constraints == true`, then `VariableRef` constraints
+such as `VariableRef`-in-`Integer` are included. To return only the structural
+constraints (e.g., the rows in the constraint matrix of a linear program), pass
+`include_variable_in_set_constraints = false`.
+
+## Examples
+
+```jldoctest; setup=:(using JuMP)
+julia> model = Model();
+
+julia> @variable(model, x >= 0, Int);
+
+julia> @constraint(model, 2x <= 1);
+
+julia> @NLconstraint(model, x^2 <= 1);
+
+julia> all_constraints(model; include_variable_in_set_constraints = true)
+4-element Vector{ConstraintRef}:
+ 2 x ≤ 1.0
+ x ≥ 0.0
+ x integer
+ x ^ 2.0 - 1.0 ≤ 0
+
+julia> all_constraints(model; include_variable_in_set_constraints = false)
+2-element Vector{ConstraintRef}:
+ 2 x ≤ 1.0
+ x ^ 2.0 - 1.0 ≤ 0
+```
+
+## Performance considerations
+
+Note that this function is type-unstable because it returns an abstractly typed
+vector. If performance is a problem, consider using [`list_of_constraint_types`](@ref)
+and a function barrier. See the [Performance tips for extensions](@ref) section
+of the documentation for more details.
+"""
+function all_constraints(
+    model::Model;
+    include_variable_in_set_constraints::Bool,
+)
+    ret = ConstraintRef[]
+    for (F, S) in list_of_constraint_types(model)
+        if F != VariableRef || include_variable_in_set_constraints
+            append!(ret, all_constraints(model, F, S))
+        end
+    end
+    append!(ret, all_nonlinear_constraints(model))
+    return ret
 end

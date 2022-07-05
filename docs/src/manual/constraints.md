@@ -295,6 +295,20 @@ julia> con
  my_con[2] : x ≤ 2.0
 ```
 
+!!! tip
+    For some models, setting the string name of each constraint can take a
+    non-trivial portion of the total time required to build the model. Turn off
+    `String` names by passing `set_string_name = false` to [`@constraint`](@ref):
+    ```jldoctest
+    julia> model = Model();
+
+    julia> @variable(model, x);
+
+    julia> @constraint(model, con, x <= 2, set_string_name = false)
+    x <= 2.0
+    ```
+    See [Disable string names](@ref) for more information.
+
 ### Retrieve a constraint by name
 
 Retrieve a constraint from a model using [`constraint_by_name`](@ref):
@@ -614,6 +628,8 @@ con : 2 x ∈ [-4.0, -2.0]
 
 ## Modify a variable coefficient
 
+### Scalar constraints
+
 To modify the coefficients for a linear term (modifying the coefficient of a
 quadratic term is not supported) in a constraint, use
 [`set_normalized_coefficient`](@ref). To query the current coefficient, use
@@ -634,6 +650,30 @@ julia> normalized_coefficient(con, x[2])
 !!! warning
     [`set_normalized_coefficient`](@ref) sets the coefficient of the normalized
     constraint. See [Normalization](@ref) for more details.
+
+### Vector constraints
+
+To modify the coefficients of a vector-valued constraint, use
+[`set_normalized_coefficients`](@ref).
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> @constraint(model, con, [2x + 3x, 4x] in MOI.Nonnegatives(2))
+con : [5 x, 4 x] ∈ MathOptInterface.Nonnegatives(2)
+
+julia> set_normalized_coefficients(con, x, [(1, 3.0)])
+
+julia> con
+con : [3 x, 4 x] ∈ MathOptInterface.Nonnegatives(2)
+
+julia> set_normalized_coefficients(con, x, [(1, 2.0), (2, 5.0)])
+
+julia> con
+con : [2 x, 5 x] ∈ MathOptInterface.Nonnegatives(2)
+```
 
 ## Delete a constraint
 
@@ -837,6 +877,27 @@ happens at parse time, it does not always make the best choice. Just like in
 keyword. For syntax and the reason behind this, take a look at the
 [variable docs](@ref variable_forcing).
 
+### Constraints with similar indices
+
+Containers are often used to create constraints over a set of indices. However,
+you'll often have cases in which you are repeating the indices:
+```jldoctest repeated_containers; setup=:(model=Model(); @variable(model, x[1:2]); @variable(model, y[1:2]))
+julia> @constraints(model, begin
+           [i=1:2, j=1:2, k=1:2], i * x[j] <= k
+           [i=1:2, j=1:2, k=1:2], i * y[j] <= k
+       end);
+```
+This is hard to read and leads to a lot of copy-paste. A more readable way is to
+use a for-loop:
+```jldoctest repeated_containers
+julia> for i=1:2, j=1:2, k=1:2
+           @constraints(model, begin
+               i * x[j] <= k
+               i * y[j] <= k
+           end)
+       end
+```
+
 ## Accessing constraints from a model
 
 Query the types of function-in-set constraints in a model using
@@ -866,6 +927,41 @@ julia> cons = all_constraints(model, VariableRef, MOI.Integer)
 2-element Vector{ConstraintRef{Model, MathOptInterface.ConstraintIndex{MathOptInterface.VariableIndex, MathOptInterface.Integer}, ScalarShape}}:
  x[1] integer
  x[2] integer
+```
+
+You can also count the total number of constraints in the model, but you must
+explicitly choose whether to count `VariableRef` constraints such as bound and
+integrality constraints:
+```jldoctest con_access
+julia> num_constraints(model; count_variable_in_set_constraints = true)
+5
+
+julia> num_constraints(model; count_variable_in_set_constraints = false)
+1
+```
+The same also applies for [`all_constraints`](@ref):
+```jldoctest con_access
+julia> all_constraints(model; include_variable_in_set_constraints = true)
+5-element Vector{ConstraintRef}:
+ x[1] + x[2] ≤ 1.0
+ x[1] ≥ 1.0
+ x[2] ≥ 2.0
+ x[1] integer
+ x[2] integer
+
+julia> all_constraints(model; include_variable_in_set_constraints = false)
+1-element Vector{ConstraintRef}:
+ x[1] + x[2] ≤ 1.0
+```
+
+If you need finer-grained control on which constraints to include, use a variant
+of:
+```jldoctest con_access
+julia> sum(
+           num_constraints(model, F, S) for
+           (F, S) in list_of_constraint_types(model) if F != VariableRef
+       )
+1
 ```
 
 Use [`constraint_object`](@ref) to get an instance of an

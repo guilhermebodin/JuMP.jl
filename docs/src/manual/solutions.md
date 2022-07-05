@@ -51,12 +51,14 @@ julia> solution_summary(model)
 * Candidate solution
   Objective value      : -2.05143e+02
   Objective bound      : -0.00000e+00
+  Relative gap         : Inf
   Dual objective value : -2.05143e+02
 
 * Work counters
-  Solve time (sec)   : 8.31557e-04
+  Solve time (sec)   : 6.70987e-04
   Simplex iterations : 2
   Barrier iterations : 0
+  Node count         : -1
 
 julia> solution_summary(model, verbose=true)
 * Solver : HiGHS
@@ -73,6 +75,7 @@ julia> solution_summary(model, verbose=true)
 * Candidate solution
   Objective value      : -2.05143e+02
   Objective bound      : -0.00000e+00
+  Relative gap         : Inf
   Dual objective value : -2.05143e+02
   Primal solution :
     x : 1.54286e+01
@@ -82,9 +85,10 @@ julia> solution_summary(model, verbose=true)
     c1 : 1.71429e+00
 
 * Work counters
-  Solve time (sec)   : 8.31557e-04
+  Solve time (sec)   : 6.70987e-04
   Simplex iterations : 2
   Barrier iterations : 0
+  Node count         : -1
 ```
 
 ## Why did the solver stop?
@@ -372,6 +376,11 @@ julia> termination_status(model)
 OPTIMAL::TerminationStatusCode = 1
 ```
 
+!!! warning
+    Be careful doing this! If your particular solver does not support
+    querying solution information after modification, it may silently return
+    incorrect solutions or throw an error.
+
 ```@meta
 # TODO: How to accurately measure the solve time.
 ```
@@ -396,6 +405,10 @@ or dual feasibility of the basic solution.
 
 Note that not all solvers compute the basis, and for sensitivity analysis, the
 solver interface must implement `MOI.ConstraintBasisStatus`.
+
+!!! tip
+    Read the [Sensitivity analysis of a linear program](@ref) for more
+    information on sensitivity analysis.
 
 To give a simple example, we could analyze the sensitivity of the optimal
 solution to the following (non-degenerate) LP problem:
@@ -625,9 +638,17 @@ To use the primal solution from a solve, omit the `point` argument:
 ```jldoctest feasibility
 julia> optimize!(model)
 
-julia> primal_feasibility_report(model)
+julia> primal_feasibility_report(model; atol = 0.0)
 Dict{Any, Float64}()
 ```
+Calling [`primal_feasibility_report`](@ref) without the `point` argument is
+useful when [`primal_status`](@ref) is `FEASIBLE_POINT` or `NEARLY_FEASIBLE_POINT`,
+and you want to assess the solution quality.
+
+!!! warning
+    To apply [`primal_feasibility_report`](@ref) to infeasible models, you must
+    also provide a candidate point (solvers generally do not provide one). To
+    diagnose the source of infeasibility, see [Conflicts](@ref).
 
 Pass `skip_mising = true` to skip constraints which contain variables that are
 not in `point`:

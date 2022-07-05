@@ -174,9 +174,9 @@ function test_Check_Julia_condition_expression_parsing()
 end
 
 function test_add_positional_args()
-    call = :(f(1, a = 2))
+    call = :(f(1; a = 2))
     @test JuMP._add_positional_args(call, [:(MyObject)]) isa Nothing
-    @test call == :(f(1, $(Expr(:escape, :MyObject)), a = 2))
+    @test call == :(f(1, $(Expr(:escape, :MyObject)); a = 2))
     return
 end
 
@@ -879,7 +879,7 @@ function test_Empty_summation_in_NLconstraints()
     model = Model()
     @variable(model, x)
     c = @NLconstraint(model, x == sum(1.0 for i in 1:0))
-    @test sprint(show, c) == "x - 0 = 0" || sprint(show, c) == "x - 0 == 0"
+    @test sprint(show, c) == "x - 0.0 = 0" || sprint(show, c) == "x - 0.0 == 0"
     return
 end
 
@@ -1284,54 +1284,113 @@ function test_nlparameter_register()
 end
 
 function test_variable_vector_lowerbound()
-    msg =
-        "Passing arrays as variable bounds is not supported. Instead of " *
-        "`@variable(model, x[1:2] >= lb)`, do " *
-        "`@variable(model, x[i=1:2] >= lb[i])`. Alternatively, create " *
-        "the variable without bounds, then call `set_lower_bound.(x, lb)`"
+    msg = """
+    Passing arrays as variable bounds without indexing them is not supported.
+
+    Instead of:
+    ```julia
+    @variable(model, x[1:2] >= lb)
+    ```
+    use
+    ```julia
+    @variable(model, x[i=1:2] >= lb[i])
+    ```
+    or
+    ```julia
+    @variable(model, x[1:2])
+    set_lower_bound.(x, lb)
+    ```
+    """
     model = Model()
     @test_throws_strip(
         ErrorException("In `@variable(model, x[1:2] >= [1, 2])`: $(msg)"),
         @variable(model, x[1:2] >= [1, 2]),
     )
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] .>= [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] .>= [1, 2]),
+    )
     return
 end
 
 function test_variable_vector_upperbound()
-    msg =
-        "Passing arrays as variable bounds is not supported. Instead of " *
-        "`@variable(model, x[1:2] <= ub)`, do " *
-        "`@variable(model, x[i=1:2] <= ub[i])`. Alternatively, create " *
-        "the variable without bounds, then call `set_upper_bound.(x, ub)`"
+    msg = """
+    Passing arrays as variable bounds without indexing them is not supported.
+
+    Instead of:
+    ```julia
+    @variable(model, x[1:2] <= ub)
+    ```
+    use
+    ```julia
+    @variable(model, x[i=1:2] <= ub[i])
+    ```
+    or
+    ```julia
+    @variable(model, x[1:2])
+    set_upper_bound.(x, ub)
+    ```
+    """
     model = Model()
     @test_throws_strip(
         ErrorException("In `@variable(model, x[1:2] <= [1, 2])`: $(msg)"),
         @variable(model, x[1:2] <= [1, 2]),
     )
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] .<= [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] .<= [1, 2]),
+    )
     return
 end
 
 function test_variable_vector_fixed()
-    msg =
-        "Passing arrays as variable bounds is not supported. Instead of " *
-        "`@variable(model, x[1:2] == fx)`, do " *
-        "`@variable(model, x[i=1:2] == fx[i])`. Alternatively, create " *
-        "the variable without bounds, then call `fix.(x, fx)`"
+    msg = """
+    Passing arrays as variable bounds without indexing them is not supported.
+
+    Instead of:
+    ```julia
+    @variable(model, x[1:2] == fx)
+    ```
+    use
+    ```julia
+    @variable(model, x[i=1:2] == fx[i])
+    ```
+    or
+    ```julia
+    @variable(model, x[1:2])
+    fix.(x, fx)
+    ```
+    """
     model = Model()
     @test_throws_strip(
         ErrorException("In `@variable(model, x[1:2] == [1, 2])`: $(msg)"),
         @variable(model, x[1:2] == [1, 2]),
     )
+    @test_throws_strip(
+        ErrorException("In `@variable(model, x[1:2] .== [1, 2])`: $(msg)"),
+        @variable(model, x[1:2] .== [1, 2]),
+    )
     return
 end
 
 function test_variable_vector_start()
-    msg =
-        "Passing arrays as variable starts is not supported. Instead of " *
-        "`@variable(model, x[1:2], start = x0)`, do " *
-        "`@variable(model, x[i=1:2], start = x0[i])`. Alternatively, " *
-        "create the variable without starting values, then call " *
-        "`set_start_value.(x, x0)`."
+    msg = """
+    Passing arrays as variable starts without indexing them is not supported.
+
+    Instead of:
+    ```julia
+    @variable(model, x[1:2], start = x0)
+    ```
+    use
+    ```julia
+    @variable(model, x[i=1:2], start = x0[i])
+    ```
+    or
+    ```julia
+    @variable(model, x[1:2])
+    set_start_value.(x, x0)
+    ```
+    """
     model = Model()
     @test_throws_strip(
         ErrorException("In `@variable(model, x[1:2], start = [1, 2])`: $(msg)"),
@@ -1341,17 +1400,35 @@ function test_variable_vector_start()
 end
 
 function test_variable_vector_interval()
-    msg =
-        "Passing arrays as variable bounds is not supported. Instead of " *
-        "`@variable(model, x[1:2] <= ub)`, do " *
-        "`@variable(model, x[i=1:2] <= ub[i])`. Alternatively, create " *
-        "the variable without bounds, then call `set_upper_bound.(x, ub)`"
+    msg = """
+    Passing arrays as variable bounds without indexing them is not supported.
+
+    Instead of:
+    ```julia
+    @variable(model, x[1:2] <= ub)
+    ```
+    use
+    ```julia
+    @variable(model, x[i=1:2] <= ub[i])
+    ```
+    or
+    ```julia
+    @variable(model, x[1:2])
+    set_upper_bound.(x, ub)
+    ```
+    """
     model = Model()
     @test_throws_strip(
         ErrorException(
             "In `@variable(model, 0 <= x[2:3, 3:4] <= rand(2, 2))`: $(msg)",
         ),
         @variable(model, 0 <= x[2:3, 3:4] <= rand(2, 2)),
+    )
+    @test_throws_strip(
+        ErrorException(
+            "In `@variable(model, 0 .<= x[2:3, 3:4] .<= rand(2, 2))`: $(msg)",
+        ),
+        @variable(model, 0 .<= x[2:3, 3:4] .<= rand(2, 2)),
     )
     return
 end
@@ -1542,6 +1619,74 @@ function test_broadcasted_DenseAxisArray_constraint()
     cons = @constraint(model, u .<= c)
     @test cons isa Containers.DenseAxisArray
     @test length(cons) == 2
+    return
+end
+
+function test_set_string_name_variables()
+    model = Model()
+    @variable(model, w[i = 1:2], set_string_name = isodd(i))
+    @test !isempty(name(w[1]))
+    @test isempty(name(w[2]))
+    @test model[:w] == w
+    @variable(model, x, set_string_name = false)
+    @test isempty(name(x))
+    @test model[:x] == x
+    @variable(model, y[1:2], set_string_name = false)
+    @test all(isempty.(name.(y)))
+    @test model[:y] == y
+    flag = false
+    @variable(model, z, set_string_name = flag)
+    @test isempty(name(z))
+    return
+end
+
+function test_set_string_name_constraints()
+    model = Model()
+    @variable(model, x)
+    @constraint(model, c1[i = 1:2], x <= i, set_string_name = isodd(i))
+    @test !isempty(name(c1[1]))
+    @test isempty(name(c1[2]))
+    @test model[:c1] == c1
+    @constraint(model, c2, x <= 1, set_string_name = false)
+    @test isempty(name(c2))
+    @test model[:c2] == c2
+    @constraint(model, c3[i = 1:2], x <= i, set_string_name = false)
+    @test all(isempty.(name.(c3)))
+    @test model[:c3] == c3
+    flag = false
+    @constraint(model, c4, x <= 1, set_string_name = flag)
+    @test isempty(name(c4))
+    return
+end
+
+function test_set_string_name_model()
+    model = Model()
+    set_string_names_on_creation(model, false)
+    @variable(model, w[i = 1:2], set_string_name = isodd(i))
+    @test !isempty(name(w[1]))
+    @test isempty(name(w[2]))
+    @test model[:w] == w
+    @variable(model, x)
+    @test isempty(name(x))
+    @test model[:x] == x
+    @variable(model, y[1:2])
+    @test all(isempty.(name.(y)))
+    @test model[:y] == y
+    flag = false
+    @variable(model, z, set_string_name = flag)
+    @test isempty(name(z))
+    return
+end
+
+function test_nonlinear_unicode_operators()
+    model = Model()
+    @variable(model, x)
+    c1 = @NLconstraint(model, x^2 ≤ 1)
+    @test c1 isa ConstraintRef
+    c2 = @NLconstraint(model, x^2 ≥ 1)
+    @test c2 isa ConstraintRef
+    c3 = @NLconstraint(model, 1 ≤ x^2 ≤ 2)
+    @test c3 isa ConstraintRef
     return
 end
 

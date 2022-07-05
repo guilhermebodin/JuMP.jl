@@ -1,5 +1,70 @@
 # Release notes
 
+## Version 1.1.1 (June 14, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v1.1.1).
+A summary of changes are as follows:
+
+- New features:
+  - There are no new features or bug fixes.
+- Documentation and maintenance:
+  - Fixed problem displaying LaTeX in the documentation
+  - Minor updates to the style guide
+  - Updated to MOI v1.4.0 in the documentation
+
+## Version 1.1.0 (May 25, 2022)
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v1.1.0).
+A summary of changes are as follows:
+
+- New features:
+  - Added `num_constraints(::Model; count_variable_in_set_constraints)` to
+    simplify the process of counting the number of constraints in a model
+  - Added `VariableRef(::ConstraintRef)` for querying the variable associated
+    with a bound or integrality constraint.
+  - Added `set_normalized_coefficients` for modifying the variable coefficients
+    of a vector-valued constraint.
+  - Added `set_string_names_on_creation` to disable creating `String` names for
+    variables and constraints. This can improve performance.
+- Bug fixes:
+  - Fixed a bug passing `nothing` to the `start` keyword of `@variable`
+- Documentation and maintenance:
+  - New tutorials:
+    - Sensitivity analysis of a linear program
+    - Serving web apps
+  - Minimal ellipse SDP tutorial refactored and improved
+  - Docs updated to the latest version of each package
+  - Lots of minor fixes and improvements to the documentation
+
+## Version 1.0.0 (March 24, 2022)
+
+**Read more about this release, along with an ackowledgement of all the
+contributors in our [JuMP 1.0.0 is released](https://jump.dev/blog/1.0.0-release/)
+blog post.**
+
+For a detailed list of the closed issues and pull requests from this release,
+see the [tag notes](https://github.com/jump-dev/JuMP.jl/releases/tag/v1.0.0).
+A summary of changes are as follows:
+
+- Breaking changes:
+  - The previously deprecated functions (v0.23.0, v0.23.1) have been removed.
+    Deprecation was to improve consistency of function names:
+    - `num_nl_constraints` (see `num_nonlinear_constraints`)
+    - `all_nl_constraints` (see `all_nonlinear_constraints`)
+    - `add_NL_expression` (see `add_nonlinear_expression`)
+    - `set_NL_objective`  (see `set_nonlinear_objective`)
+    - `add_NL_constraint` (see `add_nonlinear_constraint`)
+    - `nl_expr_string` (see `nonlinear_expr_string`)
+    - `nl_constraint_string` (see `nonlinear_constraint_string`)
+    - `SymMatrixSpace` (see `SymmetricMatrixSpace`)
+  - The unintentionally exported variable `JuMP.op_hint` has been renamed to the
+    unexported `JuMP._OP_HINT`
+- Bug fixes:
+  - Fixed a bug writing .nl files
+  - Fixed a bug broadcasting `SparseAxisArray`s
+
 ## Version 0.23.2 (March 14, 2022)
 
 For a detailed list of the closed issues and pull requests from this release,
@@ -1022,7 +1087,7 @@ The following changes are primarily of interest to developers of JuMP extensions
   * On Julia 0.4 and later, variables and coefficients may be multiplied in any order within macros. That is, variable*coefficient is now valid syntax.
   * ECOS supported for solving second-order conic problems.
 
-### Nonlinear programming
+### [Nonlinear programming](@id _nonlinear_programming_release_notes)
 
   * Support for skipping model generation when solving a sequence of nonlinear models with changing data.
   * Fix a memory leak when solving a sequence of nonlinear models.

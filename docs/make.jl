@@ -119,6 +119,7 @@ const _PAGES = [
             "tutorials/linear/knapsack.md",
             "tutorials/linear/multi.md",
             "tutorials/linear/n-queens.md",
+            "tutorials/linear/lp_sensitivity.md",
             "tutorials/linear/network_flows.md",
             "tutorials/linear/prod.md",
             "tutorials/linear/steelT3.md",
@@ -157,7 +158,10 @@ const _PAGES = [
             "tutorials/algorithms/cutting_stock_column_generation.md",
             "tutorials/algorithms/tsp_lazy_constraints.md",
         ],
-        "Applications" => ["tutorials/applications/power_systems.md"],
+        "Applications" => [
+            "tutorials/applications/power_systems.md",
+            "tutorials/applications/web_app.md",
+        ],
     ],
     "Manual" => [
         "manual/models.md",
@@ -229,7 +233,7 @@ function _add_moi_pages()
     !!! warning
         This documentation in this section is a copy of the official
         MathOptInterface documentation available at
-        [https://jump.dev/MathOptInterface.jl/v1.1.0](https://jump.dev/MathOptInterface.jl/v1.1.0).
+        [https://jump.dev/MathOptInterface.jl/v1.3.0](https://jump.dev/MathOptInterface.jl/v1.3.0).
         It is included here to make it easier to link concepts between JuMP and
         MathOptInterface.
     """
@@ -283,10 +287,11 @@ _validate_pages()
 @time Documenter.makedocs(
     sitename = "JuMP",
     authors = "The JuMP core developers and contributors",
-    format = Documenter.HTML(
+    format = Documenter.HTML(;
         # See https://github.com/JuliaDocs/Documenter.jl/issues/868
         prettyurls = get(ENV, "CI", nothing) == "true",
         analytics = "UA-44252521-1",
+        mathengine = Documenter.MathJax2(),
         collapselevel = 1,
         assets = ["assets/extra_styles.css"],
         sidebar_sitename = false,
@@ -324,7 +329,7 @@ if _PDF
     @time Documenter.makedocs(
         sitename = "JuMP",
         authors = "The JuMP core developers and contributors",
-        format = Documenter.LaTeX(platform = latex_platform),
+        format = Documenter.LaTeX(; platform = latex_platform),
         build = "latex_build",
         pages = _PAGES,
     )
@@ -341,7 +346,7 @@ end
 #  Deploy everything in `build`
 # ==============================================================================
 
-Documenter.deploydocs(
+Documenter.deploydocs(;
     repo = "github.com/jump-dev/JuMP.jl.git",
     push_preview = true,
 )

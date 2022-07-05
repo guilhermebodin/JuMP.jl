@@ -65,7 +65,7 @@ Packages in Julia compose well. It's common for people to pick two unrelated
 packages and use them in conjunction to create novel behavior. JuMP isn't one of
 those packages.
 
-If you want to optimize a ordinary differential equation from
+If you want to optimize an ordinary differential equation from
 [DifferentialEquations.jl](https://github.com/SciML/DifferentialEquations.jl)
 or tune a neural network from [Flux.jl](https://github.com/FluxML/Flux.jl),
 consider using other packages such as:
@@ -104,7 +104,7 @@ the right tool for the job.
 Alternatives to consider are:
  * [CasADi](https://web.casadi.org),
    [CasADi.jl](https://github.com/ichatzinikolaidis/CasADi.jl)
- * [InfiniteOpt.jl](https://github.com/pulsipher/InfiniteOpt.jl)
+ * [InfiniteOpt.jl](https://github.com/infiniteopt/InfiniteOpt.jl)
  * [pyomo.DAE](https://pyomo.readthedocs.io/en/stable/modeling_extensions/dae.html)
 
 ### Multiobjective programs
@@ -132,6 +132,6 @@ Alternatives to consider are:
 JuMP requires deterministic input data.
 
 If you have stochastic input data, consider using a JuMP extension such as:
- * [InfiniteOpt.jl](https://github.com/pulsipher/InfiniteOpt.jl)
+ * [InfiniteOpt.jl](https://github.com/infiniteopt/InfiniteOpt.jl)
  * [StochasticPrograms.jl](https://github.com/martinbiel/StochasticPrograms.jl)
  * [SDDP.jl](https://github.com/odow/SDDP.jl)

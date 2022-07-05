@@ -46,17 +46,11 @@ Shorthand for the MathOptInterface.Bridges package.
 """
 const MOIB = MOI.Bridges
 
-import Calculus
 import OrderedCollections.OrderedDict
-import ForwardDiff
-include("_Derivatives/_Derivatives.jl")
-using ._Derivatives
 
 include("Containers/Containers.jl")
 
 # Exports are at the end of the file.
-
-include("utils.jl")
 
 const _MOIVAR = MOI.VariableIndex
 const _MOICON{F,S} = MOI.ConstraintIndex{F,S}
@@ -149,7 +143,7 @@ mutable struct Model <: AbstractModel
     # where kwargs get passed along to subsequent solve calls.
     optimize_hook::Any
     # TODO: Document.
-    nlp_data::Any
+    nlp_model::Union{Nothing,MOI.Nonlinear.Model}
     # Dictionary from variable and constraint names to objects.
     obj_dict::Dict{Symbol,Any}
     # Number of times we add large expressions. Incremented and checked by
@@ -161,6 +155,26 @@ mutable struct Model <: AbstractModel
     # Enable extensions to attach arbitrary information to a JuMP model by
     # using an extension-specific symbol as a key.
     ext::Dict{Symbol,Any}
+    # A model-level option that is used as the default for the set_string_name
+    # keyword to @variable and @constraint.
+    set_string_names_on_creation::Bool
+end
+
+function Base.getproperty(model::Model, name::Symbol)
+    if name == :nlp_data
+        error(
+            "The internal field `.nlp_data` was removed from `Model` in JuMP " *
+            "v.1.2.0. If you encountered this message without going " *
+            "`model.nlp_data`, it means you are using a package that is " *
+            "incompatible with your installed version of JuMP. As a " *
+            "temporary fix, install a compatible version with " *
+            "`import Pkg; Pkg.pkg\"add JuMP@1.1\"`, then restart Julia for " *
+            "the changes to take effect. In addition, you should open a " *
+            "GitHub issue for the package you are using so that the issue " *
+            "can be fixed for future users.",
+        )
+    end
+    return getfield(model, name)
 end
 
 """
@@ -204,7 +218,7 @@ model = Model(() -> Gurobi.Optimizer(env); add_bridges = false)
 """
 function Model(optimizer_factory; add_bridges::Bool = true)
     model = Model()
-    set_optimizer(model, optimizer_factory, add_bridges = add_bridges)
+    set_optimizer(model, optimizer_factory; add_bridges = add_bridges)
     return model
 end
 
@@ -243,6 +257,7 @@ function direct_model(backend::MOI.ModelLike)
         0,
         false,
         Dict{Symbol,Any}(),
+        true,
     )
 end
 
@@ -410,6 +425,27 @@ function _try_get_solver_name(model_like)
 end
 
 """
+    set_string_names_on_creation(model::Model, value::Bool)
+
+Set the default argument of the `set_string_name` keyword in the
+[`@variable`](@ref) and [`@constraint`](@ref) macros to `value`. This is used to
+determine whether to assign `String` names to all variables and constraints in
+`model`.
+
+By default, `value` is `true`. However, for larger models calling
+`set_string_names_on_creation(model, false)` can improve performance at the cost
+of reducing the readability of printing and solver log messages.
+"""
+function set_string_names_on_creation(model::Model, value::Bool)
+    model.set_string_names_on_creation = value
+    return
+end
+
+set_string_names_on_creation(model::Model) = model.set_string_names_on_creation
+
+set_string_names_on_creation(::AbstractModel) = true
+
+"""
     solver_name(model::Model)
 
 If available, returns the `SolverName` property of the underlying optimizer.
@@ -565,7 +601,7 @@ function Base.empty!(model::Model)::Model
     #   message (so keeping it helps to discover inefficiencies).
     MOI.empty!(model.moi_backend)
     empty!(model.shapes)
-    model.nlp_data = nothing
+    model.nlp_model = nothing
     empty!(model.obj_dict)
     empty!(model.ext)
     model.is_model_dirty = false
@@ -582,7 +618,7 @@ apart from optimizer attributes.
 function Base.isempty(model::Model)
     MOI.is_empty(model.moi_backend) || return false
     isempty(model.shapes) || return false
-    model.nlp_data === nothing || return false
+    model.nlp_model === nothing || return false
     isempty(model.obj_dict) && isempty(model.ext) || return false
     return !model.is_model_dirty
 end
@@ -593,21 +629,6 @@ end
 Returns number of variables in `model`.
 """
 num_variables(model::Model)::Int64 = MOI.get(model, MOI.NumberOfVariables())
-
-"""
-    num_nonlinear_constraints(model::Model)
-
-Returns the number of nonlinear constraints associated with the `model`.
-"""
-function num_nonlinear_constraints(model::Model)
-    return model.nlp_data !== nothing ? length(model.nlp_data.nlconstr) : 0
-end
-
-function num_nl_constraints(::Model)
-    return error(
-        "`num_nl_constraints` has been renamed to `num_nonlinear_constraints`",
-    )
-end
 
 """
     object_dictionary(model::Model)
@@ -1327,35 +1348,11 @@ function operator_warn(model::Model)
     end
 end
 
-"""
-    NonlinearExpression <: AbstractJuMPScalar
-
-A struct to represent a nonlinear expression.
-
-Create an expression using [`@NLexpression`](@ref).
-"""
-struct NonlinearExpression <: AbstractJuMPScalar
-    model::Model
-    index::Int
-end
-
-"""
-    NonlinearParameter <: AbstractJuMPScalar
-
-A struct to represent a nonlinear parameter.
-
-Create a parameter using [`@NLparameter`](@ref).
-"""
-struct NonlinearParameter <: AbstractJuMPScalar
-    model::Model
-    index::Int
-end
-
 include("copy.jl")
+include("nlp.jl")
 include("operators.jl")
 include("macros.jl")
 include("optimizer_interface.jl")
-include("nlp.jl")
 include("print.jl")
 include("solution_summary.jl")
 include("lp_sensitivity2.jl")
@@ -1391,7 +1388,7 @@ end
 # with an underscore.
 const _EXCLUDE_SYMBOLS = [Symbol(@__MODULE__), :eval, :include]
 
-for sym in names(@__MODULE__, all = true)
+for sym in names(@__MODULE__; all = true)
     sym_string = string(sym)
     if sym in _EXCLUDE_SYMBOLS ||
        startswith(sym_string, "_") ||

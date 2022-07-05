@@ -396,17 +396,17 @@ end
 # nonlinear function fallbacks for JuMP built-in types
 ###############################################################################
 
-const op_hint = "Are you trying to build a nonlinear problem? Make sure you use @NLconstraint/@NLobjective."
-for (func, _) in Calculus.symbolic_derivatives_1arg(),
-    typ in [:AbstractVariableRef, :GenericAffExpr, :GenericQuadExpr]
-
-    if func == :abs2 && (typ == :AbstractVariableRef || typ == :GenericAffExpr)
+const _OP_HINT = "Are you trying to build a nonlinear problem? Make sure you use @NLconstraint/@NLobjective."
+for f in MOI.Nonlinear.DEFAULT_UNIVARIATE_OPERATORS
+    if f in (:+, :-, :abs) || !isdefined(Base, f)
         continue
     end
-
-    errstr = "$func is not defined for type $typ. $op_hint"
-    if isdefined(Base, func)
-        @eval Base.$(func)(::$typ) = error($errstr)
+    for T in (:AbstractVariableRef, :GenericAffExpr, :GenericQuadExpr)
+        if f == :abs2 && (T == :AbstractVariableRef || T == :GenericAffExpr)
+            continue
+        end
+        error_string = "$f is not defined for type $T. $_OP_HINT"
+        @eval Base.$(f)(::$T) = error($error_string)
     end
 end
 
@@ -417,11 +417,11 @@ function Base.:*(
     T<:GenericQuadExpr,
     S<:Union{AbstractVariableRef,GenericAffExpr,GenericQuadExpr},
 }
-    return error("*(::$T,::$S) is not defined. $op_hint")
+    return error("*(::$T,::$S) is not defined. $_OP_HINT")
 end
 function Base.:*(lhs::GenericQuadExpr, rhs::GenericQuadExpr)
     return error(
-        "*(::GenericQuadExpr,::GenericQuadExpr) is not defined. $op_hint",
+        "*(::GenericQuadExpr,::GenericQuadExpr) is not defined. $_OP_HINT",
     )
 end
 function Base.:*(
@@ -431,7 +431,7 @@ function Base.:*(
     T<:GenericQuadExpr,
     S<:Union{AbstractVariableRef,GenericAffExpr,GenericQuadExpr},
 }
-    return error("*(::$S,::$T) is not defined. $op_hint")
+    return error("*(::$S,::$T) is not defined. $_OP_HINT")
 end
 function Base.:/(
     ::S,
@@ -440,5 +440,5 @@ function Base.:/(
     S<:Union{_Constant,AbstractVariableRef,GenericAffExpr,GenericQuadExpr},
     T<:Union{AbstractVariableRef,GenericAffExpr,GenericQuadExpr},
 }
-    return error("/(::$S,::$T) is not defined. $op_hint")
+    return error("/(::$S,::$T) is not defined. $_OP_HINT")
 end

@@ -32,6 +32,7 @@ mode
 object_dictionary
 unregister
 latex_formulation
+set_string_names_on_creation
 ```
 
 ## Working with attributes
@@ -87,4 +88,5 @@ print_bridge_graph
 AbstractModel
 operator_warn
 error_if_direct_mode
+set_optimize_hook
 ```
