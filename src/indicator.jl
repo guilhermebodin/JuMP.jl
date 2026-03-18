@@ -7,7 +7,7 @@
 # JuMP can be extended.
 
 function _build_indicator_constraint(
-    _error::Function,
+    error_fn::Function,
     variable::AbstractVariableRef,
     constraint::ScalarConstraint,
     ::Type{MOI.Indicator{A}},
@@ -15,13 +15,27 @@ function _build_indicator_constraint(
     set = MOI.Indicator{A}(moi_set(constraint))
     return VectorConstraint([variable, jump_function(constraint)], set)
 end
+
+function _build_indicator_constraint(
+    error_fn::Function,
+    lhs::F,
+    ::ScalarConstraint,
+    ::Type{<:MOI.Indicator},
+) where {F}
+    return error_fn(
+        "unable to build indicator constraint with the left-hand side term " *
+        "`($lhs)::$F`. The left-hand side must be a binary decision variable.",
+    )
+end
+
 function _indicator_variable_set(::Function, variable::Symbol)
     return variable, MOI.Indicator{MOI.ACTIVATE_ON_ONE}
 end
-function _indicator_variable_set(_error::Function, expr::Expr)
+
+function _indicator_variable_set(error_fn::Function, expr::Expr)
     if expr.args[1] == :¬ || expr.args[1] == :!
         if length(expr.args) != 2
-            _error(
+            error_fn(
                 "Invalid binary variable expression `$(expr)` for indicator constraint.",
             )
         end
@@ -30,43 +44,43 @@ function _indicator_variable_set(_error::Function, expr::Expr)
         return expr, MOI.Indicator{MOI.ACTIVATE_ON_ONE}
     end
 end
+
+function parse_constraint_head(error_fn::Function, ::Val{:(-->)}, lhs, rhs)
+    code, call = parse_constraint_call(error_fn, false, Val(:(=>)), lhs, rhs)
+    return false, code, call
+end
+
 function parse_constraint_call(
-    _error::Function,
+    error_fn::Function,
     vectorized::Bool,
     ::Union{Val{:(=>)},Val{:⇒}},
     lhs,
     rhs,
 )
-    variable, S = _indicator_variable_set(_error, lhs)
-    if !isexpr(rhs, :braces) || length(rhs.args) != 1
-        _error(
+    variable, S = _indicator_variable_set(error_fn, lhs)
+    if !Meta.isexpr(rhs, :braces) || length(rhs.args) != 1
+        error_fn(
             "Invalid right-hand side `$(rhs)` of indicator constraint. Expected constraint surrounded by `{` and `}`.",
         )
     end
-    rhs_con = rhs.args[1]
-    rhs_vectorized, rhs_parsecode, rhs_buildcall =
-        parse_constraint(_error, rhs_con)
+    rhs_vectorized, rhs_parsecode, rhs_build_call =
+        parse_constraint(error_fn, rhs.args[1])
     if vectorized != rhs_vectorized
-        _error("Inconsistent use of `.` in symbols to indicate vectorization.")
-    end
-    if vectorized
-        buildcall = :(
-            _build_indicator_constraint.(
-                $_error,
-                $(esc(variable)),
-                $rhs_buildcall,
-                $S,
-            )
+        error_fn(
+            "Inconsistent use of `.` in symbols to indicate vectorization.",
         )
-    else
-        buildcall = :(_build_indicator_constraint(
-            $_error,
-            $(esc(variable)),
-            $rhs_buildcall,
-            $S,
-        ))
     end
-    return rhs_parsecode, buildcall
+    f, lhs_parse_code = _rewrite_expression(variable)
+    parsecode = quote
+        $rhs_parsecode
+        $lhs_parse_code
+    end
+    build_call = if vectorized
+        :(_build_indicator_constraint.($error_fn, $f, $rhs_build_call, $S))
+    else
+        :(_build_indicator_constraint($error_fn, $f, $rhs_build_call, $S))
+    end
+    return parsecode, build_call
 end
 
 function constraint_string(
@@ -80,5 +94,5 @@ function constraint_string(
     end
     con = ScalarConstraint(constraint.func[2], constraint.set.set)
     con_str = constraint_string(print_mode, con)
-    return var_str * " => {" * con_str * "}"
+    return var_str * " --> {" * con_str * "}"
 end

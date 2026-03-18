@@ -18,29 +18,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE  #src
 # SOFTWARE.                                                                      #src
 
-# # Experiment design
+# # Example: experiment design
 
-# **Originally Contributed by**: Arpit Bhatia, Chris Coey
+# **This tutorial was originally contributed by Arpit Bhatia and Chris Coey.**
 
 # This tutorial covers experiment design examples (D-optimal, A-optimal, and
-# E-optimal) from section 7.5 of the book [Convex Optimization](https://doi.org/10.1017/CBO9780511804441)
-# by Boyd and Vandenberghe.
+# E-optimal) from section 7.5 of [Boyd2004](@cite).
 
-# The tutorial uses the following packages
+# ## Required packages
+
+# This tutorial uses the following packages:
+
 using JuMP
-import SCS
+import Clarabel
 import LinearAlgebra
+import MathOptInterface as MOI
 import Random
-
-# !!! info
-#     This tutorial uses sets from [MathOptInterface](@ref moi_documentation).
-#     By default, JuMP exports the `MOI` symbol as an alias for the
-#     MathOptInterface.jl package. We recommend making this more explicit in
-#     your code by adding the following lines:
-#     ```julia
-#     import MathOptInterface
-#     const MOI = MathOptInterface
-#     ```
 
 # We set a seed so the random numbers are repeatable:
 Random.seed!(1234)
@@ -51,7 +44,7 @@ Random.seed!(1234)
 
 # Given the menu of possible choices for experiments, $v_{1}, \ldots, v_{p}$,
 # and the total number $m$ of experiments to be carried out, choose the numbers
-# of each type of experiment, i.e., $m_{1}, \ldots, m_{p}$ to make the error
+# of each type of experiment, that is, $m_{1}, \ldots, m_{p}$ to make the error
 # covariance $E$ small (in  some sense).
 
 # The variables $m_{1}, \ldots, m_{p}$ must, of course, be integers and sum to
@@ -101,7 +94,7 @@ Random.seed!(1234)
 
 q = 4 # dimension of estimate space
 p = 8 # number of experimental vectors
-nmax = 3 # upper bound on lambda
+n_max = 3 # upper bound on lambda
 n = 12
 
 V = randn(q, p)
@@ -129,20 +122,21 @@ eye = Matrix{Float64}(LinearAlgebra.I, q, q);
 # \end{aligned}
 # ```
 
-aOpt = Model(SCS.Optimizer)
+aOpt = Model(Clarabel.Optimizer)
 set_silent(aOpt)
-@variable(aOpt, np[1:p], lower_bound = 0, upper_bound = nmax)
+@variable(aOpt, np[1:p], lower_bound = 0, upper_bound = n_max)
 @variable(aOpt, u[1:q], lower_bound = 0)
 @constraint(aOpt, sum(np) <= n)
 for i in 1:q
     matrix = [
-        V*LinearAlgebra.diagm(0 => np ./ n)*V' eye[:, i]
+        V*LinearAlgebra.Diagonal(np ./ n)*V' eye[:, i]
         eye[i, :]' u[i]
     ]
     @constraint(aOpt, matrix >= 0, PSDCone())
 end
 @objective(aOpt, Min, sum(u))
 optimize!(aOpt)
+assert_is_solved_and_feasible(aOpt)
 objective_value(aOpt)
 
 #-
@@ -152,7 +146,7 @@ value.(np)
 # ## E-optimal design
 
 # In $E$ -optimal design, we minimize the norm of the error covariance matrix,
-# i.e. the maximum eigenvalue of $E$.
+# that is, the maximum eigenvalue of $E$.
 
 # Since the diameter (twice the longest semi-axis) of the confidence ellipsoid
 # $\mathcal{E}$ is proportional to $\|E\|_{2}^{1 / 2}$, minimizing $\|E\|_{2}$
@@ -172,18 +166,19 @@ value.(np)
 # \end{aligned}
 # ```
 
-eOpt = Model(SCS.Optimizer)
+eOpt = Model(Clarabel.Optimizer)
 set_silent(eOpt)
-@variable(eOpt, 0 <= np[1:p] <= nmax)
+@variable(eOpt, 0 <= np[1:p] <= n_max)
 @variable(eOpt, t)
 @constraint(
     eOpt,
-    V * LinearAlgebra.diagm(0 => np ./ n) * V' - (t .* eye) >= 0,
+    V * LinearAlgebra.Diagonal(np ./ n) * V' - (t .* eye) >= 0,
     PSDCone(),
 )
 @constraint(eOpt, sum(np) <= n)
 @objective(eOpt, Max, t)
 optimize!(eOpt)
+assert_is_solved_and_feasible(eOpt)
 objective_value(eOpt)
 #-
 value.(np)
@@ -205,18 +200,16 @@ value.(np)
 # \end{aligned}
 # ```
 
-dOpt = Model(SCS.Optimizer)
+dOpt = Model(Clarabel.Optimizer)
 set_silent(dOpt)
-@variable(dOpt, np[1:p], lower_bound = 0, upper_bound = nmax)
+@variable(dOpt, np[1:p], lower_bound = 0, upper_bound = n_max)
 @variable(dOpt, t)
 @objective(dOpt, Max, t)
 @constraint(dOpt, sum(np) <= n)
-E = V * LinearAlgebra.diagm(0 => np ./ n) * V'
-@constraint(
-    dOpt,
-    [t, 1, (E[i, j] for i in 1:q for j in 1:i)...] in MOI.LogDetConeTriangle(q)
-)
+E = V * LinearAlgebra.Diagonal(np ./ n) * V'
+@constraint(dOpt, [t; 1; triangle_vec(E)] in MOI.LogDetConeTriangle(q))
 optimize!(dOpt)
+assert_is_solved_and_feasible(dOpt)
 objective_value(dOpt)
 #-
 value.(np)

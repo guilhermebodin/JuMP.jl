@@ -13,8 +13,8 @@
 # In contrast, because tools like AMPL are stand-alone software packages, they
 # had to define their own syntax for set construction and manipulation. Indeed,
 # the [AMPL Book](https://ampl.com/resources/the-ampl-book/chapter-downloads/)
-# has two entire chapters devoted to sets and indexing (V: Simple Sets and
-# Indexing, and VI: Compound Sets and Indexing).
+# has two entire chapters devoted to sets and indexing (Chapter 5, "Simple Sets
+# and Indexing," and Chapter 6, "Compound Sets and Indexing").
 
 # The purpose of this tutorial is to demonstrate a variety of ways in which you
 # can construct and manipulate sets for optimization models.
@@ -68,7 +68,7 @@ model = Model()
 
 # ## Sets of numbers
 
-# Sets of numbers are useful to decribe sets that are ordered, such as years or
+# Sets of numbers are useful to describe sets that are ordered, such as years or
 # elements in a vector. The easiest way to create sets of numbers is to use
 # Julia's `range` syntax.
 
@@ -116,10 +116,42 @@ x["A", "D"]
 # !!! info
 #     Note how we indexed `x["A", "D"]` instead of `x[("A", "D")]` as above.
 
+# ## Sets to watch out for
+
+# JuMP supports any sets which are [iterable] (https://docs.julialang.org/en/v1/base/collections/),
+# that is, the set `set` supports a for-loop like: `[i for i in set]`. This
+# causes a few common errors.
+
+# First, if `T = 3`, you may pass the integer `T` by mistake instead of a range
+# like `1:T`:
+model = Model()
+T = 3
+@variable(model, x[T])
+
+# This results in a single variable being created, instead of three as desired.
+# Because this is a common error, a warning is printed, advising you to pass a
+# `Vector{Int}` instead:
+
+@variable(model, x_fixed[[T]])
+
+# Second, because `String`s are iterable, passing a `"index"` as a singleton
+# index is the same as passing `['i', 'n', 'd', 'e', 'x']`:
+
+@variable(model, y["index"])
+
+# This time, a warning is not printed, but the work-around is similar, pass a
+# `Vector{String}` instead:
+
+@variable(model, y_fixed[["index"]])
+
+# !!! tip
+#     As a rule of thumb, if you want an index with one element, avoid confusion
+#     by passing `[index]` instead of `index`.
+
 # ## Set operations
 
 # Julia has built-in support for set operations such as `union`, `intersect`,
-# and  `setdiff`.
+# and `setdiff`.
 
 # Therefore, to create a set of all years in which the summer Olympics were
 # held, we can use:
@@ -129,7 +161,7 @@ cancelled = [1916, 1940, 1944, 2020]
 off_year = [2021]
 olympic_years = union(setdiff(baseline, cancelled), off_year)
 
-# You can also find the number of elements (i.e., the cardinality) in a set
+# You can also find the number of elements (that is, the cardinality) in a set
 # using `length`:
 
 length(olympic_years)
@@ -212,11 +244,11 @@ model = Model()
 
 N = length(cities)
 model = Model()
-@variable(model, x[i = 1:N, j = 1:N; distances[i, j] > 0])
+@variable(model, x[i=1:N, j=1:N; distances[i, j] > 0])
 @objective(model, Min, sum(distances[i...] * x[i] for i in eachindex(x)))
 
 # !!! note
-#     The `i...` is called  a "splat". It converts a tuple like `(1, 2)` into
+#     The `i...` is called  a "splat." It converts a tuple like `(1, 2)` into
 #     two indices like `distances[1, 2]`.
 
 # ### Converting to a different data structure

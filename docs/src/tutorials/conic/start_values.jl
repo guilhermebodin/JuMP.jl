@@ -9,15 +9,23 @@
 # solution. This can improve performance, particularly if you are repeatedly
 # solving a sequence of related problems.
 
-# In this tutorial, we demonstrate how to write a function that sets the primal
-# and dual starts as the optimal solution stored in a model. It is intended to
-# be a starting point for which you can modify if you want to do something
-# similar in your own code.
+# The purpose of this tutorial is to demonstrate how to write a function that
+# sets the primal and dual starts as the optimal solution stored in a model. It
+# is intended to be a starting point for which you can modify if you want to do
+# something similar in your own code.
+
+# !!! tip
+#     See [`set_start_values`](@ref) for a generic implementation of this
+#     function that was added to JuMP after this tutorial was written.
+
+# ## Required packages
 
 # This tutorial uses the following packages:
 
 using JuMP
 import SCS
+
+# ## A basic function
 
 # The main component of this tutorial is the following function. The most
 # important observation is that we cache all of the solution values first, and
@@ -53,6 +61,8 @@ function set_optimal_start_values(model::Model)
     return
 end
 
+# ## Testing the function
+
 # To test our function, we use the following linear program:
 
 model = Model(SCS.Optimizer)
@@ -60,10 +70,10 @@ model = Model(SCS.Optimizer)
 @constraint(model, sum(x) <= 1)
 @objective(model, Max, sum(i * x[i] for i in 1:3))
 optimize!(model)
+assert_is_solved_and_feasible(model)
 
-# By looking at the log (not shown in Documenter due to a bug), we can see that
-# SCS took 100 iterations to find the optimal solution. Now we set the optimal
-# solution as our starting point:
+# By looking at the log, we can see that SCS took 75 iterations to find the optimal
+# solution. Now we set the optimal solution as our starting point:
 
 set_optimal_start_values(model)
 
@@ -73,3 +83,13 @@ optimize!(model)
 
 # Now the optimization terminates after 0 iterations because our starting point
 # is already optimal.
+
+# ## Caveats
+
+# Some solvers do not support setting some parts of the starting solution, for
+# example, they may support only `set_start_value` for variables.
+
+# If you encounter an `UnsupportedSupported` attribute error for
+# [`MOI.VariablePrimalStart`](@ref), [`MOI.ConstraintPrimalStart`](@ref), or
+# [`MOI.ConstraintDualStart`](@ref), comment out the corresponding part of the
+# `set_optimal_start_values` function.

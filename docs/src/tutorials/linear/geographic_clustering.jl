@@ -20,7 +20,7 @@
 
 # # Geographical clustering
 
-# **Originally Contributed by**: Matthew Helm ([with help from Mathieu Tanneau on Julia Discourse](https://discourse.julialang.org/t/which-jump-jl-solver-for-this-problem/43350/17?u=mthelm85))
+# **This tutorial was originally contributed by Matthew Helm and Mathieu Tanneau.**
 
 # The goal of this exercise is to cluster $n$ cities into $k$ groups, minimizing
 # the total pairwise distance between cities *and* ensuring that the variance in
@@ -33,96 +33,30 @@ import HiGHS
 import LinearAlgebra
 
 # For this example, we'll use the 20 most populous cities in the United States.
-
-cities = DataFrames.DataFrame(;
-    city = [
-        "New York, NY",
-        "Los Angeles, CA",
-        "Chicago, IL",
-        "Houston, TX",
-        "Philadelphia, PA",
-        "Phoenix, AZ",
-        "San Antonio, TX",
-        "San Diego, CA",
-        "Dallas, TX",
-        "San Jose, CA",
-        "Austin, TX",
-        "Indianapolis, IN",
-        "Jacksonville, FL",
-        "San Francisco, CA",
-        "Columbus, OH",
-        "Charlotte, NC",
-        "Fort Worth, TX",
-        "Detroit, MI",
-        "El Paso, TX",
-        "Memphis, TN",
+cities = DataFrames.DataFrame(
+    Union{String,Float64}[
+        "New York, NY" 8.405 40.7127 -74.0059
+        "Los Angeles, CA" 3.884 34.0522 -118.2436
+        "Chicago, IL" 2.718 41.8781 -87.6297
+        "Houston, TX" 2.195 29.7604 -95.3698
+        "Philadelphia, PA" 1.553 39.9525 -75.1652
+        "Phoenix, AZ" 1.513 33.4483 -112.0740
+        "San Antonio, TX" 1.409 29.4241 -98.4936
+        "San Diego, CA" 1.355 32.7157 -117.1610
+        "Dallas, TX" 1.257 32.7766 -96.7969
+        "San Jose, CA" 0.998 37.3382 -121.8863
+        "Austin, TX" 0.885 30.2671 -97.7430
+        "Indianapolis, IN" 0.843 39.7684 -86.1580
+        "Jacksonville, FL" 0.842 30.3321 -81.6556
+        "San Francisco, CA" 0.837 37.7749 -122.4194
+        "Columbus, OH" 0.822 39.9611 -82.9987
+        "Charlotte, NC" 0.792 35.2270 -80.8431
+        "Fort Worth, TX" 0.792 32.7554 -97.3307
+        "Detroit, MI" 0.688 42.3314 -83.0457
+        "El Paso, TX" 0.674 31.7775 -106.4424
+        "Memphis, TN" 0.653 35.1495 -90.0489
     ],
-    population = [
-        8.405,
-        3.884,
-        2.718,
-        2.195,
-        1.553,
-        1.513,
-        1.409,
-        1.355,
-        1.257,
-        0.998,
-        0.885,
-        0.843,
-        0.842,
-        0.837,
-        0.822,
-        0.792,
-        0.792,
-        0.688,
-        0.674,
-        0.653,
-    ],
-    lat = [
-        40.7127,
-        34.0522,
-        41.8781,
-        29.7604,
-        39.9525,
-        33.4483,
-        29.4241,
-        32.7157,
-        32.7766,
-        37.3382,
-        30.2671,
-        39.7684,
-        30.3321,
-        37.7749,
-        39.9611,
-        35.2270,
-        32.7554,
-        42.3314,
-        31.7775,
-        35.1495,
-    ],
-    lon = [
-        -74.0059,
-        -118.2436,
-        -87.6297,
-        -95.3698,
-        -75.1652,
-        -112.0740,
-        -98.4936,
-        -117.1610,
-        -96.7969,
-        -121.8863,
-        -97.7430,
-        -86.1580,
-        -81.6556,
-        -122.4194,
-        -82.9987,
-        -80.8431,
-        -97.3307,
-        -83.0457,
-        -106.4424,
-        -90.0489,
-    ],
+    ["city", "population", "lat", "lon"],
 )
 
 # ### Model Specifics
@@ -173,24 +107,17 @@ dm = LinearAlgebra.LowerTriangular([
 # First, we'll set up a model that leverages the Cbc solver. Next, we'll set up
 # a binary variable $x_{i,k}$ that takes the value $1$ if city $i$ is in group
 # $k$ and $0$ otherwise. Each city must be in a group, so we'll add the
-# constraint $\sum_kx_{i,k} = 1$ for every $i$.
+# constraint $\sum_k x_{i,k} = 1$ for every $i$.
 
 model = Model(HiGHS.Optimizer)
 set_silent(model)
-#-
-
 @variable(model, x[1:n, 1:k], Bin)
-
-#-
-
-@constraint(model, [i = 1:n], sum(x[i, :]) == 1)
-
-# To reduce symmetry, we fix the first city to belong to the first group.
-
+@constraint(model, [i = 1:n], sum(x[i, :]) == 1);
+## To reduce symmetry, we fix the first city to belong to the first group.
 fix(x[1, 1], 1; force = true)
 
 # The total population of a group $k$ is $Q_k = \sum_ix_{i,k}q_i$ where $q_i$ is
-# simply the $i$th value from the `population` column in our `cities` DataFrame.
+# simply the $i$-th value from the `population` column in our `cities` DataFrame.
 # Let's add constraints so that $\alpha \leq (Q_k - P) \leq \beta$. We'll set
 # $\alpha$ equal to $-3$ million and $\beta$ equal to $3$. By adjusting
 # these thresholds you'll find that there is a tradeoff between having
@@ -211,10 +138,7 @@ fix(x[1, 1], 1; force = true)
 # group, we add the constraints $z_{i,j} \geq x_{i,k} + x_{j,k} - 1$ for every
 # pair $i,j$ and every $k$:
 
-@variable(model, z[i = 1:n, j = 1:i], Bin)
-
-#-
-
+@variable(model, z[i=1:n, j=1:i], Bin)
 for k in 1:k, i in 1:n, j in 1:i
     @constraint(model, z[i, j] >= x[i, k] + x[j, k] - 1)
 end
@@ -222,11 +146,12 @@ end
 # We can now add an objective to our model which will simply be to minimize the
 # dot product of $z$ and our distance matrix, `dm`.
 
-@objective(model, Min, sum(dm[i, j] * z[i, j] for i in 1:n, j in 1:i))
+@objective(model, Min, sum(dm[i, j] * z[i, j] for i in 1:n, j in 1:i));
 
 # We can then call `optimize!` and review the results.
 
 optimize!(model)
+assert_is_solved_and_feasible(model)
 
 # ### Reviewing the Results
 

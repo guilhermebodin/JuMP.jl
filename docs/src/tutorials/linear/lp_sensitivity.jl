@@ -11,10 +11,10 @@
 
 # In brief, sensitivity analysis of a linear program is about asking two
 # questions:
-#  1) Given an optimal solution, how much can I change the objective
-#     coefficients before a different solution becomes optimal?
-#  2) Given an optimal solution, how much can I change the right-hand side of a
-#     linear constraint before a different solution becomes optimal?
+#  1) Given an optimal solution, how much can the objective coefficients change
+#     by before a different solution becomes optimal?
+#  2) Given an optimal solution, how much can the right-hand side of a linear
+#     constraint change by before a different solution becomes optimal?
 
 # JuMP provides a function, [`lp_sensitivity_report`](@ref), to help us compute
 # these values, but this tutorial extends that to create more informative
@@ -39,6 +39,7 @@ model = Model(HiGHS.Optimizer)
 @constraint(model, c2, 7x + 12y >= 120)
 @constraint(model, c3, x + y <= 20)
 optimize!(model)
+assert_is_solved_and_feasible(model)
 solution_summary(model; verbose = true)
 
 # Can you identify:
@@ -76,7 +77,7 @@ report[x]
 report[c1]
 
 # means that the right-hand side of the `c1` constraint (100), can decrease
-# by 4 units, or increase by 2.85 units, aand the primal solution `(15, 1.25)`
+# by 4 units, or increase by 2.85 units, and the primal solution `(15, 1.25)`
 # will remain optimal.
 
 # ## Variable sensitivity
@@ -107,21 +108,19 @@ x_report = variable_report(x)
 variable_df =
     DataFrames.DataFrame(variable_report(xi) for xi in all_variables(model))
 
-# Great! That looks just like the reports in Excel.
-
 # ## Constraint sensitivity
 
 # We can do something similar with constraints:
 
-function constraint_report(ci)
+function constraint_report(c::ConstraintRef)
     return (
-        name = name(ci),
-        value = value(ci),
-        rhs = normalized_rhs(ci),
-        slack = normalized_rhs(ci) - value(ci),
-        shadow_price = shadow_price(ci),
-        allowed_decrease = report[ci][1],
-        allowed_increase = report[ci][2],
+        name = name(c),
+        value = value(c),
+        rhs = normalized_rhs(c),
+        slack = normalized_rhs(c) - value(c),
+        shadow_price = shadow_price(c),
+        allowed_decrease = report[c][1],
+        allowed_increase = report[c][2],
     )
 end
 

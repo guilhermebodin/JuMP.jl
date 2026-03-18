@@ -22,37 +22,38 @@ The recommended way to create an affine expression is via the
 [`@expression`](@ref) macro.
 
 ```jldoctest affine_macro
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = @expression(model, 2x + y - 1)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = @expression(model, 2x + y - 1)
 2 x + y - 1
 ```
 
 This expression can be used in the objective or added to a constraint. For
 example:
 ```jldoctest affine_macro
-@objective(model, Min, 2 * ex - 1)
-objective_function(model)
+julia> @objective(model, Min, 2 * ex - 1)
+4 x + 2 y - 3
 
-# output
-
+julia> objective_function(model)
 4 x + 2 y - 3
 ```
 
 Just like variables and constraints, named expressions can also be created. For
 example
 ```jldoctest
-model = Model()
-@variable(model, x[i = 1:3])
-@expression(model, expr[i = 1:3], i * sum(x[j] for j in i:3))
-expr
+julia> model = Model();
 
-# output
+julia> @variable(model, x[i = 1:3]);
 
+julia> @expression(model, expr[i = 1:3], i * sum(x[j] for j in i:3));
+
+julia> expr
 3-element Vector{AffExpr}:
  x[1] + x[2] + x[3]
  2 x[2] + 2 x[3]
@@ -65,16 +66,18 @@ expr
 ### Operator overloading
 
 Expressions can also be created without macros. However, note that in some
-cases, this can be much slower that constructing an expression using macros.
+cases, this can be much slower than constructing an expression using macros.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = 2x + y - 1
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = 2x + y - 1
 2 x + y - 1
 ```
 
@@ -85,17 +88,19 @@ first argument is the constant term, and the remaining arguments are
 variable-coefficient pairs.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = AffExpr(-1.0, x => 2.0, y => 1.0)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = AffExpr(-1.0, x => 2.0, y => 1.0)
 2 x + y - 1
 ```
 
-### `add_to_expression!`
+### [`add_to_expression!`](@id manual_affine_add_to_expr)
 
 The fourth way to create an affine expression is by using
 [`add_to_expression!`](@ref). Compared to the operator overloading method,
@@ -103,16 +108,49 @@ this approach is faster because it avoids constructing temporary objects.
 The [`@expression`](@ref) macro uses [`add_to_expression!`](@ref)
 behind-the-scenes.
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = AffExpr(-1.0)
-add_to_expression!(ex, 2.0, x)
-add_to_expression!(ex, 1.0, y)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = AffExpr(-1.0)
+-1
+
+julia> add_to_expression!(ex, 2.0, x)
+2 x - 1
+
+julia> add_to_expression!(ex, 1.0, y)
 2 x + y - 1
+```
+
+[`add_to_expression!`](@ref) can also be used to sum expressions
+in-place:
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2])
+2-element Vector{VariableRef}:
+ x[1]
+ x[2]
+
+julia> @expression(model, ex1, sum(x))
+x[1] + x[2]
+
+julia> @expression(model, ex2, 2 * sum(x))
+2 x[1] + 2 x[2]
+
+julia> add_to_expression!(ex1, ex2)
+3 x[1] + 3 x[2]
+
+julia> ex1
+3 x[1] + 3 x[2]
+
+julia> ex2
+2 x[1] + 2 x[2]
 ```
 
 !!! warning
@@ -175,14 +213,16 @@ The [`@expression`](@ref) macro can be used to create quadratic expressions by
 including quadratic terms.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = @expression(model, x^2 + 2 * x * y + y^2 + x + y - 1)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
-x² + 2 y*x + y² + x + y - 1
+julia> @variable(model, y)
+y
+
+julia> ex = @expression(model, x^2 + 2 * x * y + y^2 + x + y - 1)
+x² + 2 x*y + y² + x + y - 1
 ```
 
 ### Operator overloading
@@ -191,13 +231,15 @@ Operator overloading can also be used to create quadratic expressions. The same
 performance warning (discussed in the affine expression section) applies.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = x^2 + 2 * x * y + y^2 + x + y - 1
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = x^2 + 2 * x * y + y^2 + x + y - 1
 x² + 2 x*y + y² + x + y - 1
 ```
 
@@ -209,33 +251,49 @@ where the first term is a `JuMP.UnorderedPair` and the second term is the
 coefficient.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-aff_expr = AffExpr(-1.0, x => 1.0, y => 1.0)
-quad_expr = QuadExpr(aff_expr, UnorderedPair(x, x) => 1.0,
-                     UnorderedPair(x, y) => 2.0, UnorderedPair(y, y) => 1.0)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> aff_expr = AffExpr(-1.0, x => 1.0, y => 1.0)
+x + y - 1
+
+julia> quad_expr = QuadExpr(
+           aff_expr,
+           UnorderedPair(x, x) => 1.0,
+           UnorderedPair(x, y) => 2.0,
+           UnorderedPair(y, y) => 1.0,
+       )
 x² + 2 x*y + y² + x + y - 1
 ```
 
-### `add_to_expression!`
+### [`add_to_expression!`](@id manual_quadratic_add_to_expr)
 
 Finally, [`add_to_expression!`](@ref) can also be used to add quadratic terms.
 
 ```jldoctest
-model = Model()
-@variable(model, x)
-@variable(model, y)
-ex = QuadExpr(x + y - 1.0)
-add_to_expression!(ex, 1.0, x, x)
-add_to_expression!(ex, 2.0, x, y)
-add_to_expression!(ex, 1.0, y, y)
+julia> model = Model();
 
-# output
+julia> @variable(model, x)
+x
 
+julia> @variable(model, y)
+y
+
+julia> ex = QuadExpr(x + y - 1.0)
+x + y - 1
+
+julia> add_to_expression!(ex, 1.0, x, x)
+x² + x + y - 1
+
+julia> add_to_expression!(ex, 2.0, x, y)
+x² + 2 x*y + x + y - 1
+
+julia> add_to_expression!(ex, 1.0, y, y)
 x² + 2 x*y + y² + x + y - 1
 ```
 
@@ -295,11 +353,8 @@ julia> coefficient(ex, x)
 
 ## Nonlinear expressions
 
-Nonlinear expressions can be constructed only using the [`@NLexpression`](@ref)
-macro and can be used only in [`@NLobjective`](@ref), [`@NLconstraint`](@ref),
-and other [`@NLexpression`](@ref)s. Moreover, quadratic and affine expressions
-cannot be used in the nonlinear macros. For more details, see the [Nonlinear
-Modeling](@ref) section.
+Nonlinear expressions in JuMP are represented by a [`NonlinearExpr`](@ref)
+object. See [Nonlinear expressions in detail](@ref) for more details.
 
 ## Initializing arrays
 
@@ -338,7 +393,22 @@ This happened because `zeros(AffExpr, 2)` calls `zero(AffExpr)` once to obtain a
 zero element, and then creates an appropriately sized array filled with the same
 element.
 
-This also happens with broadcasting calls containing a conversion of `0` or `1`:
+Note that this behaviour is not JuMP-specific. For example, `zeros(BigInt, 2)`
+will create two copies of the same instance of `BigInt`:
+```jldoctest
+julia> x = zeros(BigInt, 2)
+2-element Vector{BigInt}:
+ 0
+ 0
+
+julia> x[1] === x[2]
+true
+
+julia> objectid(x[1]) == objectid(x[2])
+true
+```
+
+This also happens with broadcasting:
 ```jldoctest
 julia> x = Vector{AffExpr}(undef, 2)
 2-element Vector{AffExpr}:
@@ -361,14 +431,10 @@ julia> x
 
 The recommended way to create an array of empty expressions is as follows:
 ```jldoctest
-julia> x = Vector{AffExpr}(undef, 2)
+julia> x = [zero(AffExpr) for _ in 1:2]
 2-element Vector{AffExpr}:
- #undef
- #undef
-
-julia> for i in eachindex(x)
-           x[i] = AffExpr(0.0)
-       end
+ 0
+ 0
 
 julia> add_to_expression!(x[1], 1.1)
 1.1

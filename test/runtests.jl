@@ -7,33 +7,25 @@
 # An algebraic modeling language for Julia
 # See https://github.com/jump-dev/JuMP.jl
 #############################################################################
-# test/runtests.jl
-#############################################################################
 
-using Test
+import JuMP
+import ParallelTestRunner
+import Test
 
-t = time()
-include("Containers/Containers.jl")
-println("Containers.jl took $(round(time() - t; digits = 1)) seconds.")
+# It is important to test this _before_ calling `include_modules_to_test`
+# because some of the tests introduce new ambiguities.
+Test.@test isempty(Test.detect_ambiguities(JuMP; recursive = true))
 
-for file in filter(f -> endswith(f, ".jl"), readdir(@__DIR__))
-    if file in [
-        "runtests.jl",
-        "utilities.jl",
-        "JuMPExtension.jl",
-        "nlp_solver.jl",
-        "hygiene.jl",
-    ]
-        continue
-    end
+is_test_file(f) = startswith(f, "test_") && endswith(f, ".jl")
 
-    @testset "$(file)" begin
-        t = time()
-        include(file)
-        println("$(file) took $(round(time() - t; digits = 1)) seconds.")
+testsuite = Dict{String,Expr}()
+for (root, dirs, files) in walkdir(@__DIR__)
+    for file in joinpath.(root, filter(is_test_file, files))
+        testsuite[file] = :(run_tests(include($file)))
     end
 end
 
-# TODO: The hygiene test should run in a separate Julia instance where JuMP
-# hasn't been loaded via `using`.
-include("hygiene.jl")
+const init_code = quote
+    include(joinpath(@__DIR__, "parallel_test_setup.jl"))
+end
+ParallelTestRunner.runtests(JuMP, ARGS; testsuite, init_code)

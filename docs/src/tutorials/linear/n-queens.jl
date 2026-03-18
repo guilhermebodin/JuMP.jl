@@ -20,7 +20,7 @@
 
 # # N-Queens
 
-# **Originally Contributed by**: Matthew Helm ([with help from @mtanneau on Julia Discourse](https://discourse.julialang.org/t/which-jump-jl-solver-for-this-problem/43350/17?u=mthelm85))
+# **This tutorial was originally contributed by Matthew Helm and Mathieu Tanneau.**
 
 # The N-Queens problem involves placing N queens on an N x N chessboard such
 # that none of the queens attacks another. In chess, a queen can move
@@ -40,12 +40,13 @@ import LinearAlgebra
 N = 8
 
 model = Model(HiGHS.Optimizer)
+set_silent(model)
 
 # Next, let's create an N x N chessboard of binary values. 0 will represent an
 # empty space on the board and 1 will represent a space occupied by one of our
 # queens:
 
-@variable(model, x[1:N, 1:N], Bin)
+@variable(model, x[1:N, 1:N], Bin);
 
 # Now we can add our constraints:
 
@@ -56,15 +57,16 @@ for i in 1:N
 end
 
 # There can only be one queen on any given diagonal
-for i in -(N - 1):(N-1)
+for i in (-(N-1)):(N-1)
     @constraint(model, sum(LinearAlgebra.diag(x, i)) <= 1)
     @constraint(model, sum(LinearAlgebra.diag(reverse(x; dims = 1), i)) <= 1)
 end
 
-# That's it! We are ready to put our model to work and see if it is able to find
+# We are ready to put our model to work and see if it is able to find
 # a feasible solution:
 
 optimize!(model)
+assert_is_solved_and_feasible(model)
 
 # We can now review the solution that our model found:
 

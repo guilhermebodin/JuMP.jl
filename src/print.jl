@@ -43,7 +43,7 @@ end
 Base.print(io::IO, model::AbstractModel) = _print_model(io, model)
 
 # Whether something is zero or not for the purposes of printing it
-# oneunit is useful e.g. if coef is a Unitful quantity.
+# oneunit is useful, for example, if coef is a Unitful quantity.
 _is_zero_for_printing(coef) = abs(coef) < 1e-10 * oneunit(coef)
 
 # Whether something is one or not for the purposes of printing it.
@@ -51,8 +51,9 @@ function _is_one_for_printing(coef)
     return _is_zero_for_printing(abs(coef) - oneunit(coef))
 end
 
-function _is_one_for_printing(coef::Complex)
-    return _is_one_for_printing(real(coef)) && _is_zero_for_printing(imag(coef))
+function _is_one_for_printing(coef::Complex{T}) where {T}
+    r, i = reim(coef)
+    return _is_one_for_printing(r) && _is_zero_for_printing(i)
 end
 
 function _is_zero_for_printing(coef::Complex)
@@ -60,24 +61,99 @@ function _is_zero_for_printing(coef::Complex)
            _is_zero_for_printing(imag(coef))
 end
 
-# Helper function that rounds carefully for the purposes of printing Reals
-# e.g.   5.3  =>  5.3
-#        1.0  =>  1
-_string_round(x::Float64) = isinteger(x) ? string(round(Int, x)) : string(x)
+_is_im_for_printing(coef) = false
 
-_string_round(::typeof(abs), x::Real) = _string_round(abs(x))
+function _is_im_for_printing(coef::Complex)
+    r, i = reim(coef)
+    return _is_zero_for_printing(r) && _is_one_for_printing(i)
+end
+
+_escape_if_scientific(::MIME, x::String) = x
+
+function _escape_if_scientific(::MIME"text/latex", x::String)
+    m = match(r"([0-9]+.[0-9]+)e(-?[0-9]+)", x)
+    if m === nothing
+        return x
+    end
+    return "$(m[1]) \\times 10^{$(m[2])}"
+end
+
+# Helper function that rounds carefully for the purposes of printing Reals
+# for example, 5.3  =>  5.3, and 1.0  =>  1
+function _string_round(mode::MIME, x::Union{Float32,Float64})
+    if isinteger(x) && typemin(Int64) <= x <= typemax(Int64)
+        return string(round(Int64, x))
+    end
+    return _escape_if_scientific(mode, string(x))
+end
+
+_string_round(mode, ::typeof(abs), x::Real) = _string_round(mode, abs(x))
 
 _sign_string(x::Real) = x < zero(x) ? " - " : " + "
 
+function _string_round(mode, ::typeof(abs), x::Complex)
+    r, i = reim(x)
+    if _is_zero_for_printing(r)
+        return _string_round(mode, Complex(r, abs(i)))
+    elseif _is_zero_for_printing(i)
+        return _string_round(mode, Complex(abs(r), i))
+    else
+        return _string_round(mode, x)
+    end
+end
+
+function _sign_string(x::Complex)
+    r, i = reim(x)
+    if _is_zero_for_printing(r)
+        return _sign_string(i)
+    elseif _is_zero_for_printing(i)
+        return _sign_string(r)
+    else
+        return " + "
+    end
+end
+
 # Fallbacks for other number types
 
-_string_round(x::Any) = string(x)
+_string_round(mode, x::Any) = string(x)
 
-_string_round(::typeof(abs), x::Any) = _string_round(x)
+_string_round(mode, ::typeof(abs), x::Any) = _string_round(mode, x)
 
 _sign_string(::Any) = " + "
 
-_string_round(x::Complex) = string("(", x, ")")
+_imaginary_number(::MIME) = "im"
+
+_imaginary_number(::MIME"text/latex") = "i"
+
+function _string_round(mode, x::Complex)
+    r, i = reim(x)
+    r_str = _string_round(mode, r)
+    if _is_zero_for_printing(i)
+        return r_str
+    elseif _is_zero_for_printing(r)
+        if _is_one_for_printing(i)
+            if i < 0
+                return "-" * _imaginary_number(mode)
+            else
+                return _imaginary_number(mode)
+            end
+        else
+            return string(_string_round(mode, i), _imaginary_number(mode))
+        end
+    elseif _is_one_for_printing(i)
+        return string("(", r_str, _sign_string(i), _imaginary_number(mode), ")")
+    else
+        abs_i = _string_round(mode, abs, i)
+        return string(
+            "(",
+            r_str,
+            _sign_string(i),
+            abs_i,
+            _imaginary_number(mode),
+            ")",
+        )
+    end
+end
 
 # REPL-specific symbols
 # Anything here: https://en.wikipedia.org/wiki/Windows-1252
@@ -105,11 +181,9 @@ function _math_symbol(::MIME"text/latex", name::Symbol)
         return "\\geq"
     elseif name == :eq
         return "="
-    elseif name == :sq
-        return "^2"
     else
-        @assert name == :in
-        return "\\in"
+        @assert name == :sq
+        return "^2"
     end
 end
 
@@ -127,15 +201,47 @@ _plural(n) = isone(n) ? "" : "s"
 
 Return the [`MOI.Name`](@ref) attribute of `model`'s [`backend`](@ref), or a
 default if empty.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> name(model)
+"A JuMP Model"
+```
 """
 name(model::AbstractModel) = "An Abstract JuMP Model"
 
-function name(model::Model)
+function name(model::GenericModel)
     if MOI.supports(backend(model), MOI.Name())
         ret = MOI.get(model, MOI.Name())
-        return isempty(ret) ? "A JuMP Model" : ret
+        if !isempty(ret)
+            return ret
+        end
     end
     return "A JuMP Model"
+end
+
+"""
+    set_name(model::GenericModel, name::AbstractString)
+
+Set the [`MOI.Name`](@ref) attribute of `model`'s [`backend`](@ref) to `name`.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> set_name(model, "My Model")
+
+julia> name(model)
+"My Model"
+```
+"""
+function set_name(model::GenericModel, name::AbstractString)
+    MOI.set(model, MOI.Name(), name)
+    return
 end
 
 """
@@ -173,12 +279,81 @@ function _print_summary(io::IO, model::AbstractModel)
     return
 end
 
+function _print_summary(io::IO, model::GenericModel{T}) where {T}
+    println(io, name(model))
+    if T != Float64
+        println(io, "├ value_type: ", T)
+    end
+    if mode(model) != AUTOMATIC
+        println(io, "├ mode: ", mode(model))
+    end
+    println(io, "├ solver: ", _try_solver_name(model))
+    sense = objective_sense(model)
+    println(io, "├ objective_sense: ", sense)
+    if sense != FEASIBILITY_SENSE
+        F = objective_function_type(model)
+        println(io, "│ └ objective_function_type: ", F)
+    end
+    println(io, "├ num_variables: ", num_variables(model))
+    n_constraints = 0
+    constraint_lines = String[]
+    for (F, S) in list_of_constraint_types(model)
+        n = num_constraints(model, F, S)
+        n_constraints += n
+        line = sprint(MOI.Utilities.print_with_acronym, "$F in $S: $n")
+        push!(constraint_lines, line)
+    end
+    n = num_nonlinear_constraints(model)
+    if n > 0
+        n_constraints += n
+        push!(constraint_lines, "Nonlinear: $n")
+    end
+    println(io, "├ num_constraints: $n_constraints")
+    for (i, line) in enumerate(constraint_lines)
+        tag = i == length(constraint_lines) ? "└" : "├"
+        println(io, "│ $tag $line")
+    end
+    print(io, "└ Names registered in the model")
+    if isempty(object_dictionary(model))
+        print(io, ": none")
+    else
+        names = sort!(collect(keys(object_dictionary(model))))
+        print(io, "\n  └ :", join(names, ", :"))
+    end
+    return
+end
+
+function _try_solver_name(model)
+    if mode(model) != DIRECT &&
+       MOI.Utilities.state(backend(model)) == MOI.Utilities.NO_OPTIMIZER
+        return "none"
+    end
+    try
+        return MOI.get(backend(model), MOI.SolverName())
+    catch
+        return "unknown"
+    end
+end
+
 """
     show_objective_function_summary(io::IO, model::AbstractModel)
 
 Write to `io` a summary of the objective function type.
+
+## Extensions
+
+`AbstractModel`s should implement this method.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> show_objective_function_summary(stdout, model)
+Objective function type: AffExpr
+```
 """
-function show_objective_function_summary(io::IO, model::Model)
+function show_objective_function_summary(io::IO, model::GenericModel)
     nlobj = _nlp_objective_function(model)
     print(io, "Objective function type: ")
     if nlobj === nothing
@@ -193,8 +368,23 @@ end
     show_constraints_summary(io::IO, model::AbstractModel)
 
 Write to `io` a summary of the number of constraints.
+
+## Extensions
+
+`AbstractModel`s should implement this method.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x >= 0);
+
+julia> show_constraints_summary(stdout, model)
+`VariableRef`-in-`MathOptInterface.GreaterThan{Float64}`: 1 constraint
+```
 """
-function show_constraints_summary(io::IO, model::Model)
+function show_constraints_summary(io::IO, model::GenericModel)
     for (F, S) in list_of_constraint_types(model)
         n = num_constraints(model, F, S)
         println(io, "`$F`-in-`$S`: $n constraint", _plural(n))
@@ -207,22 +397,61 @@ function show_constraints_summary(io::IO, model::Model)
 end
 
 """
-    show_backend_summary(io::IO, model::Model)
+    show_backend_summary(io::IO, model::GenericModel)
 
 Print a summary of the optimizer backing `model`.
 
+## Extensions
+
 `AbstractModel`s should implement this method.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> show_backend_summary(stdout, model)
+Model mode: AUTOMATIC
+CachingOptimizer state: NO_OPTIMIZER
+Solver name: No optimizer attached.
+```
 """
-function show_backend_summary(io::IO, model::Model)
+function show_backend_summary(io::IO, model::GenericModel)
     model_mode = mode(model)
     println(io, "Model mode: ", model_mode)
     if model_mode == MANUAL || model_mode == AUTOMATIC
         println(io, "CachingOptimizer state: ", MOIU.state(backend(model)))
     end
     # The last print shouldn't have a new line
-    print(io, "Solver name: ", solver_name(model))
+    name = try
+        solver_name(model)
+    catch
+        "unknown"
+    end
+    if name == "SolverName() attribute not implemented by the optimizer."
+        name = "unknown"
+    end
+    print(io, "Solver name: ", name)
     return
 end
+
+"""
+    const _CONSTRAINT_LIMIT_FOR_PRINTING = Ref{Int}(100)
+
+A global constant used to control when constraints are omitted when printing
+the model.
+
+Get and set this value using `_CONSTRAINT_LIMIT_FOR_PRINTING[]`.
+
+```julia
+julia> _CONSTRAINT_LIMIT_FOR_PRINTING[]
+100
+
+julia> _CONSTRAINT_LIMIT_FOR_PRINTING[] = 10
+10
+```
+"""
+const _CONSTRAINT_LIMIT_FOR_PRINTING = Ref{Int}(100)
 
 """
     _print_model(io::IO, model::AbstractModel)
@@ -245,8 +474,18 @@ function _print_model(io::IO, model::AbstractModel)
         println(io, "Feasibility")
     end
     println(io, "Subject to")
-    for constraint in constraints_string(mode, model)
-        println(io, " ", replace(constraint, '\n' => "\n "))
+    constraints = constraints_string(mode, model)
+    m = div(_CONSTRAINT_LIMIT_FOR_PRINTING[], 2)
+    skip_start = _CONSTRAINT_LIMIT_FOR_PRINTING[] - m + 1
+    skip_stop = length(constraints) - m
+    n = skip_stop - skip_start + 1
+    for (i, constraint) in enumerate(constraints)
+        if i < skip_start || skip_stop < i
+            println(io, " ", replace(constraint, '\n' => "\n "))
+        end
+        if n > 0 && i == skip_start
+            println(io, "[[...$n constraints skipped...]]")
+        end
     end
     nl_subexpressions = _nl_subexpression_string(mode, model)
     if !isempty(nl_subexpressions)
@@ -284,8 +523,20 @@ function _print_latex(io::IO, model::AbstractModel)
     constraints = constraints_string(mode, model)
     if !isempty(constraints)
         print(io, "\\text{Subject to} \\quad")
-        for constraint in constraints
-            println(io, " & ", constraint, "\\\\")
+        m = div(_CONSTRAINT_LIMIT_FOR_PRINTING[], 2)
+        skip_start = _CONSTRAINT_LIMIT_FOR_PRINTING[] - m + 1
+        skip_stop = length(constraints) - m
+        n = skip_stop - skip_start + 1
+        for (i, constraint) in enumerate(constraints)
+            if i < skip_start || skip_stop < i
+                println(io, " & ", constraint, "\\\\")
+            end
+            if n > 0 && i == skip_start
+                println(
+                    io,
+                    " & [[\\ldots\\text{$n constraints skipped}\\ldots]] \\\\",
+                )
+            end
         end
     end
     nl_subexpressions = _nl_subexpression_string(mode, model)
@@ -303,6 +554,19 @@ end
     model_string(mode::MIME, model::AbstractModel)
 
 Return a `String` representation of `model` given the `mode`.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x >= 0);
+
+julia> print(model_string(MIME("text/plain"), model))
+Feasibility
+Subject to
+ x ≥ 0
+```
 """
 function model_string(mode::MIME, model::AbstractModel)
     if mode == MIME("text/latex")
@@ -315,8 +579,21 @@ end
     objective_function_string(mode, model::AbstractModel)::String
 
 Return a `String` describing the objective function of the model.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
+julia> @objective(model, Min, 2 * x);
+
+julia> objective_function_string(MIME("text/plain"), model)
+"2 x"
+```
 """
-function objective_function_string(mode, model::Model)
+function objective_function_string(mode, model::GenericModel)
     nlobj = _nlp_objective_function(model)
     if nlobj === nothing
         return function_string(mode, objective_function(model))
@@ -333,36 +610,56 @@ _set_lhs(::Any) = nothing
 
 """
     nonlinear_constraint_string(
-        model::Model,
+        model::GenericModel,
         mode::MIME,
         c::_NonlinearConstraint,
     )
 
 Return a string representation of the nonlinear constraint `c` belonging to
 `model`, given the `mode`.
+
+!!! compat
+    This function is part of the legacy nonlinear interface. Consider using the
+    new nonlinear interface documented in [Nonlinear Modeling](@ref).
 """
 function nonlinear_constraint_string(
-    model::Model,
+    model::GenericModel,
     mode::MIME,
     c::MOI.Nonlinear.ConstraintIndex,
 )
-    constraint = nonlinear_model(model)[c]
+    nlp = nonlinear_model(model)::MOI.Nonlinear.Model
+    constraint = nlp[c]
     body = nonlinear_expr_string(model, mode, constraint.expression)
     lhs = _set_lhs(constraint.set)
     rhs = _set_rhs(constraint.set)
-    output = "$body $(_math_symbol(mode, rhs[1])) $(_string_round(rhs[2]))"
+    output = "$body $(_math_symbol(mode, rhs[1])) $(_string_round(mode, rhs[2]))"
     if lhs === nothing
         return output
     end
-    return "$(_string_round(lhs[2])) $(_math_symbol(mode, lhs[1])) $output"
+    return "$(_string_round(mode, lhs[2])) $(_math_symbol(mode, lhs[1])) $output"
 end
 
 """
     constraints_string(mode, model::AbstractModel)::Vector{String}
 
 Return a list of `String`s describing each constraint of the model.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x >= 0);
+
+julia> @constraint(model, c, 2 * x <= 1);
+
+julia> constraints_string(MIME("text/plain"), model)
+2-element Vector{String}:
+ "c : 2 x ≤ 1"
+ "x ≥ 0"
+```
 """
-function constraints_string(mode, model::Model)
+function constraints_string(mode, model::GenericModel)
     strings = String[
         constraint_string(mode, cref; in_math_mode = true) for
         (F, S) in list_of_constraint_types(model) for
@@ -376,20 +673,25 @@ end
 
 """
     nonlinear_expr_string(
-        model::Model,
+        model::GenericModel,
         mode::MIME,
         c::MOI.Nonlinear.Expression,
     )
 
 Return a string representation of the nonlinear expression `c` belonging to
 `model`, given the `mode`.
+
+!!! compat
+    This function is part of the legacy nonlinear interface. Consider using the
+    new nonlinear interface documented in [Nonlinear Modeling](@ref).
 """
 function nonlinear_expr_string(
-    model::Model,
+    model::GenericModel,
     mode::MIME,
     c::MOI.Nonlinear.Expression,
 )
-    expr = MOI.Nonlinear.convert_to_expr(nonlinear_model(model), c)
+    nlp = nonlinear_model(model)::MOI.Nonlinear.Model
+    expr = MOI.Nonlinear.convert_to_expr(nlp, c)
     # Walk terms, and replace
     #    MOI.VariableIndex => VariableRef
     #    MOI.Nonlinear.ExpressionIndex => _NonlinearExpressionIO
@@ -407,14 +709,16 @@ end
 
 _replace_expr_terms(::Any, ::Any, expr::Any) = expr
 
-_replace_expr_terms(model, ::Any, x::MOI.VariableIndex) = VariableRef(model, x)
+function _replace_expr_terms(model, ::Any, x::MOI.VariableIndex)
+    return GenericVariableRef(model, x)
+end
 
 # By default, JuMP will print NonlinearExpression objects with some preamble and
 # their fill expression. But when printed nested expressions, we only want to
 # print `subexpression[i]`. To create this behavior, we create a new object and
 # overload `Base.show`, and we replace any ExpressionIndex with this new type.
 struct _NonlinearExpressionIO
-    model::Model
+    model::GenericModel
     mode::MIME
     value::Int
 end
@@ -432,7 +736,7 @@ end
 
 # We do a similar thing for nonlinear parameters.
 struct _NonlinearParameterIO
-    model::Model
+    model::GenericModel
     mode::MIME
     value::Int
 end
@@ -470,7 +774,7 @@ end
 
 _nl_subexpression_string(::Any, ::AbstractModel) = String[]
 
-function _nl_subexpression_string(mode::MIME, model::Model)
+function _nl_subexpression_string(mode::MIME, model::GenericModel)
     nlp_model = nonlinear_model(model)
     strings = String[]
     if nlp_model === nothing
@@ -487,11 +791,29 @@ function _nl_subexpression_string(mode::MIME, model::Model)
     return strings
 end
 
+"""
+    anonymous_name(::MIME, x::AbstractVariableRef)
+
+The name to use for an anonymous variable `x` when printing.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> x = @variable(model);
+
+julia> anonymous_name(MIME("text/plain"), x)
+"_[1]"
+```
+"""
 anonymous_name(::Any, x::AbstractVariableRef) = "anon"
 
-anonymous_name(::MIME"text/plain", x::VariableRef) = "_[$(index(x).value)]"
+function anonymous_name(::MIME"text/plain", x::GenericVariableRef)
+    return "_[$(index(x).value)]"
+end
 
-function anonymous_name(::MIME"text/latex", x::VariableRef)
+function anonymous_name(::MIME"text/latex", x::GenericVariableRef)
     return "{\\_}_{$(index(x).value)}"
 end
 
@@ -502,8 +824,22 @@ end
     )
 
 Return a `String` representing the function `func` using print mode `mode`.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
+julia> function_string(MIME("text/plain"), 2 * x + 1)
+"2 x + 1"
+```
 """
 function function_string(mode::MIME"text/plain", v::AbstractVariableRef)
+    if !is_valid(owner_model(v), v)
+        return "InvalidVariableRef"
+    end
     var_name = name(v)
     if isempty(var_name)
         return anonymous_name(mode, v)
@@ -511,7 +847,18 @@ function function_string(mode::MIME"text/plain", v::AbstractVariableRef)
     return var_name
 end
 
+function _convert_args_to_subscript(name::AbstractString)
+    # Convert any x[args] to x_{args} so that indices on x print as subscripts.
+    if (m = match(r"^(.*)\[(.+)\]$", name)) !== nothing
+        return string(m[1]::AbstractString, "_{", m[2]::AbstractString, "}")
+    end
+    return name
+end
+
 function function_string(mode::MIME"text/latex", v::AbstractVariableRef)
+    if !is_valid(owner_model(v), v)::Bool
+        return "InvalidVariableRef"
+    end
     var_name = name(v)
     if isempty(var_name)
         return anonymous_name(mode, v)
@@ -523,36 +870,81 @@ function function_string(mode::MIME"text/latex", v::AbstractVariableRef)
     var_name = replace(var_name, "_" => "\\_")
     # Escape carets to prevent them being treated as superscript markers.
     var_name = replace(var_name, "^" => "\\^")
-    # Convert any x[args] to x_{args} so that indices on x print as subscripts.
-    m = match(r"^(.*)\[(.+)\]$", var_name)
-    if m !== nothing
-        var_name = m[1] * "_{" * m[2] * "}"
+    # Replace `real(_) => Re(_)` and `imag(_) => Im(_)`
+    if (m = match(r"^real\((.+)\)$", var_name)) !== nothing
+        # Type annotation needed for JET.
+        x = _convert_args_to_subscript(m[1]::SubString)
+        return string("\\text{Re}(", x, ")")
+    elseif (m = match(r"^imag\((.+)\)$", var_name)) !== nothing
+        # Type annotation needed for JET.
+        x = _convert_args_to_subscript(m[1]::SubString)
+        return string("\\text{Im}(", x, ")")
     end
-    return var_name
+    return _convert_args_to_subscript(var_name)
+end
+
+function _term_string(mode, coef, factor)
+    if _is_one_for_printing(coef)
+        return factor
+    elseif _is_im_for_printing(coef)
+        return string(factor, " ", _string_round(mode, abs, coef))
+    else
+        return string(_string_round(mode, abs, coef), " ", factor)
+    end
+end
+
+"""
+    const _TERM_LIMIT_FOR_PRINTING = Ref{Int}(60)
+
+A global constant used to control when terms are omitted when printing
+expressions.
+
+Get and set this value using `_TERM_LIMIT_FOR_PRINTING[]`.
+
+```julia
+julia> _TERM_LIMIT_FOR_PRINTING[]
+60
+
+julia> _TERM_LIMIT_FOR_PRINTING[] = 10
+10
+```
+"""
+const _TERM_LIMIT_FOR_PRINTING = Ref{Int}(60)
+
+_terms_omitted(::MIME, n::Int) = "[[...$n terms omitted...]]"
+
+function _terms_omitted(::MIME"text/latex", n::Int)
+    return "[[\\ldots\\text{$n terms omitted}\\ldots]]"
+end
+
+function _terms_to_truncated_string(mode, terms)
+    m = _TERM_LIMIT_FOR_PRINTING[]
+    if length(terms) <= 2 * m
+        return join(terms)
+    end
+    k_l = iseven(m) ? m + 1 : m + 2
+    k_r = iseven(m) ? m - 1 : m - 2
+    block = _terms_omitted(mode, div(length(terms), 2) - m)
+    return string(join(terms[1:k_l]), block, join(terms[(end-k_r):end]))
 end
 
 # TODO(odow): remove show_constant in JuMP 1.0
 function function_string(mode, a::GenericAffExpr, show_constant = true)
     if length(linear_terms(a)) == 0
-        return show_constant ? _string_round(a.constant) : "0"
+        return show_constant ? _string_round(mode, a.constant) : "0"
     end
     terms = fill("", 2 * length(linear_terms(a)))
     for (elm, (coef, var)) in enumerate(linear_terms(a))
         terms[2*elm-1] = _sign_string(coef)
-        v = function_string(mode, var)
-        if _is_one_for_printing(coef)
-            terms[2*elm] = v
-        else
-            terms[2*elm] = string(_string_round(abs, coef), " ", v)
-        end
+        terms[2*elm] = _term_string(mode, coef, function_string(mode, var))
     end
     terms[1] = terms[1] == " - " ? "-" : ""
-    ret = join(terms)
+    ret = _terms_to_truncated_string(mode, terms)
     if show_constant && !_is_zero_for_printing(a.constant)
         ret = string(
             ret,
             _sign_string(a.constant),
-            _string_round(abs, a.constant),
+            _string_round(mode, abs, a.constant),
         )
     end
     return ret
@@ -567,20 +959,16 @@ function function_string(mode, q::GenericQuadExpr)
         x = function_string(mode, var1)
         y = function_string(mode, var2)
         terms[2*elm-1] = _sign_string(coef)
-        if _is_one_for_printing(coef)
-            terms[2*elm] = "$x"
-        else
-            terms[2*elm] = string(_string_round(abs, coef), " ", x)
-        end
         if x == y
-            terms[2*elm] *= _math_symbol(mode, :sq)
+            factor = x * _math_symbol(mode, :sq)
         else
             times = mode == MIME("text/latex") ? "\\times " : "*"
-            terms[2*elm] *= string(times, y)
+            factor = string(x, times, y)
         end
+        terms[2*elm] = _term_string(mode, coef, factor)
     end
     terms[1] = terms[1] == " - " ? "-" : ""
-    ret = join(terms)
+    ret = _terms_to_truncated_string(mode, terms)
     aff_str = function_string(mode, q.aff)
     if aff_str == "0"
         return ret
@@ -592,23 +980,34 @@ function function_string(mode, q::GenericQuadExpr)
 end
 
 function function_string(mode, vector::Vector{<:AbstractJuMPScalar})
-    return "[" * join(function_string.(Ref(mode), vector), ", ") * "]"
+    strings = function_string.(Ref(mode), vector)
+    n = max(div(_TERM_LIMIT_FOR_PRINTING[], 2), 2)
+    if length(vector) <= n
+        return string("[", join(strings, ", "), "]")
+    end
+    n_lhs = div(n, 2)
+    i_rhs = length(vector) - (n - n_lhs) + 1
+    block = _terms_omitted(mode, length(vector) - n)
+    return string(
+        "[",
+        join(vcat(strings[1:n_lhs], block, strings[i_rhs:end]), ", "),
+        "]",
+    )
 end
 
 function function_string(
     ::MIME"text/plain",
     A::AbstractMatrix{<:AbstractJuMPScalar},
 )
-    str = sprint(show, MIME"text/plain"(), A)
+    str = sprint() do io
+        return show(IOContext(io, :limit => true), MIME("text/plain"), A)
+    end
     lines = split(str, '\n')
     # We drop the first line with the signature "m×n Array{...}:"
-    lines = lines[2:end]
+    popfirst!(lines)
     # We replace the first space by an opening `[`
     lines[1] = '[' * lines[1][2:end]
-    for i in 1:length(lines)
-        lines[i] = lines[i] * (i == length(lines) ? ']' : ';')
-    end
-    return join(lines, '\n')
+    return join(lines, "\n") * "]"
 end
 
 function function_string(
@@ -616,14 +1015,16 @@ function function_string(
     A::AbstractMatrix{<:AbstractJuMPScalar},
 )
     str = "\\begin{bmatrix}\n"
-    for i in 1:size(A, 1)
+    for i in axes(A, 1)
         line = ""
-        for j in 1:size(A, 2)
+        for j in axes(A, 2)
             if j != 1
                 line *= " & "
             end
-            if A isa Symmetric && i > j
-                line *= "\\cdot"
+            if A isa LinearAlgebra.Symmetric && i > j
+                line *= "\\cdots"
+            elseif A isa LinearAlgebra.UpperTriangular && i > j
+                line *= "\\cdots"
             else
                 line *= function_string(mode, A[i, j])
             end
@@ -638,8 +1039,23 @@ function function_string(mode, constraint::AbstractConstraint)
     return function_string(mode, f)
 end
 
+# A special case for symmetric matrix constraints. Since the shape is
+# SymmetricMatrixShape, we know that MOI has been passed the upper triangle of
+# the matrix. We can make this clearer to users by printing the
+# LinearAlgebra.UpperTriangular. There shouldn't be any cases in which the
+# constraint function becomes ambiguous.
+function function_string(
+    mode,
+    constraint::VectorConstraint{F,S,SymmetricMatrixShape},
+) where {F,S}
+    f = reshape_vector(jump_function(constraint), shape(constraint))
+    str = function_string(mode, LinearAlgebra.UpperTriangular(f))
+    return replace(str, "⋅" => "⋯")
+end
+
 function function_string(mode::MIME, p::NonlinearExpression)
-    expr = nonlinear_model(p.model)[index(p)]
+    nlp = nonlinear_model(p.model)::MOI.Nonlinear.Model
+    expr = nlp[index(p)]
     s = nonlinear_expr_string(p.model, mode, expr)
     return "subexpression[$(p.index)]: " * s
 end
@@ -658,28 +1074,44 @@ end
 
 Return a `String` representing the membership to the set `set` using print mode
 `mode`.
+
+## Extensions
+
+JuMP extensions may extend this method for new `set` types to improve the
+legibility of their printing.
+
+## Example
+
+```jldoctest
+julia> in_set_string(MIME("text/plain"), MOI.Interval(1.0, 2.0))
+"∈ [1, 2]"
+```
 """
 function in_set_string end
 
 function in_set_string(mode::MIME, set::MOI.LessThan)
-    return string(_math_symbol(mode, :leq), " ", set.upper)
+    return string(_math_symbol(mode, :leq), " ", _string_round(mode, set.upper))
 end
 
 function in_set_string(mode::MIME, set::MOI.GreaterThan)
-    return string(_math_symbol(mode, :geq), " ", set.lower)
+    return string(_math_symbol(mode, :geq), " ", _string_round(mode, set.lower))
 end
 
 function in_set_string(mode::MIME, set::MOI.EqualTo)
-    return string(_math_symbol(mode, :eq), " ", set.value)
+    return string(_math_symbol(mode, :eq), " ", _string_round(mode, set.value))
 end
 
-function in_set_string(::MIME"text/latex", set::MOI.Interval)
-    return string("\\in \\[", set.lower, ", ", set.upper, "\\]")
+function in_set_string(mode::MIME"text/latex", set::MOI.Interval)
+    lower = _string_round(mode, set.lower)
+    upper = _string_round(mode, set.upper)
+    return string("\\in [", lower, ", ", upper, "]")
 end
 
 function in_set_string(mode::MIME"text/plain", set::MOI.Interval)
     in = _math_symbol(mode, :in)
-    return string("$in [", set.lower, ", ", set.upper, "]")
+    lower = _string_round(mode, set.lower)
+    upper = _string_round(mode, set.upper)
+    return string("$in [", lower, ", ", upper, "]")
 end
 
 in_set_string(::MIME"text/plain", ::MOI.ZeroOne) = "binary"
@@ -688,7 +1120,17 @@ in_set_string(::MIME"text/latex", ::MOI.ZeroOne) = "\\in \\{0, 1\\}"
 in_set_string(::MIME"text/plain", ::MOI.Integer) = "integer"
 in_set_string(::MIME"text/latex", ::MOI.Integer) = "\\in \\mathbb{Z}"
 
-function in_set_string(mode, set::Union{PSDCone,MOI.AbstractSet})
+function in_set_string(
+    mode,
+    set::Union{
+        PSDCone,
+        HermitianPSDCone,
+        Zeros,
+        Nonnegatives,
+        Nonpositives,
+        MOI.AbstractSet,
+    },
+)
     # Use an `if` here instead of multiple dispatch to avoid ambiguity errors.
     if mode == MIME("text/plain")
         return _math_symbol(mode, :in) * " $(set)"
@@ -715,11 +1157,28 @@ end
     constraint_string(
         mode::MIME,
         ref::ConstraintRef;
-        in_math_mode::Bool = false)
+        in_math_mode::Bool = false,
+    )
 
 Return a string representation of the constraint `ref`, given the `mode`.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
+julia> @constraint(model, c, 2 * x <= 1);
+
+julia> constraint_string(MIME("text/plain"), c)
+"c : 2 x ≤ 1"
+```
 """
 function constraint_string(mode::MIME, ref::ConstraintRef; in_math_mode = false)
+    if !is_valid(owner_model(ref), ref)
+        return "InvalidConstraintRef"
+    end
     return constraint_string(
         mode,
         name(ref),
@@ -732,13 +1191,7 @@ function constraint_string(mode, constraint_object::AbstractConstraint)
     # Leave `mode` untyped to avoid ambiguities!
     func_str = function_string(mode, constraint_object)
     in_set_str = in_set_string(mode, constraint_object)
-    if mode == MIME("text/plain")
-        lines = split(func_str, '\n')
-        lines[1+div(length(lines), 2)] *= " " * in_set_str
-        return join(lines, '\n')
-    else
-        return func_str * " " * in_set_str
-    end
+    return func_str * " " * in_set_str
 end
 
 function constraint_string(
@@ -747,17 +1200,16 @@ function constraint_string(
     constraint_object::AbstractConstraint;
     in_math_mode::Bool = false,
 )
-    prefix = isempty(constraint_name) ? "" : constraint_name * " : "
     constraint_str = constraint_string(mode, constraint_object)
     if mode == MIME("text/latex")
+        # Do not print names in text/latex mode.
         if in_math_mode
             return constraint_str
-        elseif isempty(prefix)
-            return _wrap_in_math_mode(constraint_str)
         else
-            return prefix * _wrap_in_inline_math_mode(constraint_str)
+            return _wrap_in_math_mode(constraint_str)
         end
     end
+    prefix = isempty(constraint_name) ? "" : constraint_name * " : "
     return prefix * constraint_str
 end
 
@@ -774,7 +1226,8 @@ function Base.show(io::IO, f::AbstractJuMPScalar)
 end
 
 function Base.show(io::IO, ::MIME"text/latex", f::AbstractJuMPScalar)
-    return print(io, _wrap_in_math_mode(function_string(MIME("text/latex"), f)))
+    str = function_string(MIME("text/latex"), f)
+    return print(io, _wrap_in_inline_math_mode(str))
 end
 
 function Base.show(io::IO, ex::Union{NonlinearExpression,NonlinearParameter})

@@ -11,7 +11,7 @@
 
 function _build_complements_constraint(
     errorf::Function,
-    F::AbstractArray{<:AbstractJuMPScalar},
+    F::AbstractArray{<:Union{Real,AbstractJuMPScalar}},
     x::AbstractArray{<:AbstractVariableRef},
 )
     if size(F) != size(x)
@@ -25,7 +25,7 @@ end
 
 function _build_complements_constraint(
     errorf::Function,
-    F::Containers.SparseAxisArray{<:AbstractJuMPScalar},
+    F::Containers.SparseAxisArray{<:Union{Real,AbstractJuMPScalar}},
     x::Containers.SparseAxisArray{<:AbstractVariableRef},
 )
     elements = [F[i] for i in eachindex(F)]
@@ -41,7 +41,7 @@ end
 
 function _build_complements_constraint(
     errorf::Function,
-    ::AbstractArray{<:AbstractJuMPScalar},
+    ::AbstractArray{<:Union{Real,AbstractJuMPScalar}},
     ::AbstractArray{<:AbstractJuMPScalar},
 )
     return errorf("second term must be an array of variables.")
@@ -49,7 +49,7 @@ end
 
 function _build_complements_constraint(
     ::Function,
-    F::AbstractJuMPScalar,
+    F::Union{Real,AbstractJuMPScalar},
     x::AbstractVariableRef,
 )
     return VectorConstraint([F, x], MOI.Complements(2))
@@ -57,7 +57,7 @@ end
 
 function _build_complements_constraint(
     errorf::Function,
-    ::AbstractJuMPScalar,
+    ::Union{Real,AbstractJuMPScalar},
     ::AbstractJuMPScalar,
 )
     return errorf("second term must be a variable.")
@@ -70,6 +70,6 @@ function parse_constraint_call(
     F,
     x,
 )
-    f, parse_code = _MA.rewrite(F)
+    f, parse_code = _rewrite_expression(F)
     return parse_code, :(_build_complements_constraint($errorf, $f, $(esc(x))))
 end

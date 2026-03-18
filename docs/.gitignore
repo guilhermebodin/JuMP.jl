@@ -1,5 +1,15 @@
 build/
 latex_build/
+latex_src/
 src/tutorials/*/*.md
 !src/tutorials/*/introduction.md
+!src/tutorials/algorithms/parallelism.md
 src/moi/
+src/tutorials/linear/transp.txt
+src/release_notes.md
+src/packages/*.md
+!src/packages/solvers.md
+!src/packages/extensions.md
+src/JuMP.pdf
+src/tutorials/overview.md
+src/tutorials/linear/callbacks.md

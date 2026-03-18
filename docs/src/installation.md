@@ -9,13 +9,13 @@ JuMP is a package for [Julia](https://julialang.org). To use JuMP, first
 [download and install](https://julialang.org/downloads/) Julia.
 
 !!! tip
-    If you  are new  to Julia, read our [Getting started with Julia](@ref)
+    If you are new to Julia, read our [Getting started with Julia](@ref)
     tutorial.
 
-### Which version should I pick?
+### Choosing a version
 
 You can install the "Current stable release" or the "Long-term support (LTS)
-release".
+release."
 
  * The "Current stable release" is the latest release of Julia. It has access to
    newer features, and is likely faster.
@@ -23,21 +23,24 @@ release".
    continued to receive bug and security fixes. However, it may not have the
    latest features or performance improvements.
 
-For most users, you should install the "Current stable release", and whenever
+For most users, you should install the "Current stable release," and whenever
 Julia releases a new version of the current stable release, you should update
 your version of Julia. Note that any code you write on one version of the
 current stable release will continue to work on all subsequent releases.
 
-For users in restricted software environments (e.g., your enterprise IT controls
-what software you can install), you may be better off installing the long-term
-support release because you will not have to update Julia as frequently.
+For users in restricted software environments (for example, your enterprise IT
+controls what software you can install), you may be better off installing the
+long-term support release because you will not have to update Julia as
+frequently.
 
 ## Install JuMP
 
-From Julia, JuMP is installed using the built-in package manager:
+JuMP is installed using the built-in Julia package manager. Launch Julia, and
+then enter the following at the `julia>` prompt:
 ```julia
-import Pkg
-Pkg.add("JuMP")
+julia> import Pkg
+
+julia> Pkg.add("JuMP")
 ```
 
 !!! tip
@@ -48,8 +51,9 @@ Pkg.add("JuMP")
 
 When we release a new version of JuMP, you can update with:
 ```julia
-import Pkg
-Pkg.update("JuMP")
+julia> import Pkg
+
+julia> Pkg.update("JuMP")
 ```
 
 ## Install a solver
@@ -57,20 +61,26 @@ Pkg.update("JuMP")
 JuMP depends on solvers to solve optimization problems. Therefore, you will need
 to install one before you can solve problems with JuMP.
 
-Install a solver using the Julia package manager, replacing `"Clp"` by the
+Install a solver using the Julia package manager, replacing `"HiGHS"` by the
 Julia package name as appropriate.
 ```julia
-import Pkg
-Pkg.add("Clp")
+julia> import Pkg
+
+julia> Pkg.add("HiGHS")
 ```
 
-Once installed, you can use Clp as a solver with JuMP as follows, using
-[`set_optimizer_attributes`](@ref) to set solver-specific options:
-```julia
-using JuMP
-using Clp
-model = Model(Clp.Optimizer)
-set_optimizer_attributes(model, "LogLevel" => 1, "PrimalTolerance" => 1e-7)
+Once installed, you can use HiGHS as a solver with JuMP as follows, using
+[`set_attribute`](@ref) to set solver-specific options:
+```jldoctest
+julia> using JuMP
+
+julia> using HiGHS
+
+julia> model = Model(HiGHS.Optimizer);
+
+julia> set_attribute(model, "output_flag", false)
+
+julia> set_attribute(model, "primal_feasibility_tolerance", 1e-8)
 ```
 
 !!! note
@@ -107,36 +117,57 @@ The link in the `Solver` column is the corresponding Julia package.
 | [CDD](https://github.com/cddlib/cddlib)                                        | [CDDLib.jl](https://github.com/JuliaPolyhedra/CDDLib.jl)                         |        | GPL      | LP                        |
 | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl)                    |                                                                                  |        | Apache   | LP, QP, SOCP, SDP         |
 | [Clp](https://github.com/coin-or/Clp)                                          | [Clp.jl](https://github.com/jump-dev/Clp.jl)                                     |        | EPL      | LP                        |
+| [CoolPDLP.jl](https://github.com/JuliaDecisionFocusedLearning/CoolPDLP.jl)     |                                                                                  |        | MIT      | LP                        |
+| [COPT](https://www.shanshu.ai/copt)                                            | [COPT.jl](https://github.com/COPT-Public/COPT.jl)                                |        | Comm.    | (MI)LP, SOCP, SDP         |
 | [COSMO.jl](https://github.com/oxfordcontrol/COSMO.jl)                          |                                                                                  |        | Apache   | LP, QP, SOCP, SDP         |
 | [Couenne](http://github.com/coin-or/Couenne)                                   | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   |        | EPL      | (MI)NLP                   |
 | [CPLEX](https://www.ibm.com/analytics/cplex-optimizer/)                        | [CPLEX.jl](https://github.com/jump-dev/CPLEX.jl)                                 | Manual | Comm.    | (MI)LP, (MI)SOCP          |
 | [CSDP](https://github.com/coin-or/Csdp)                                        | [CSDP.jl](https://github.com/jump-dev/CSDP.jl)                                   |        | EPL      | LP, SDP                   |
-| [EAGO.jl](https://github.com/psorlab/EAGO.jl)                                  |                                                                                  |        | MIT | NLP                    |
+| [NVIDIA cuOpt](https://github.com/NVIDIA/cuOpt)                                | [cuOpt.jl](https://github.com/jump-dev/cuOpt.jl)                                 |        | Apache   | (MI)LP                    |
+| [cuPDLPx](https://github.com/MIT-Lu-Lab/cuPDLPx)                               | [CuPDLPx.jl](https://github.com/MIT-Lu-Lab/CuPDLPx.jl)                           |        | Apache   | LP                        |
+| [DAQP](https://github.com/darnstrom/daqp)                                      | [DAQP.jl](https://github.com/darnstrom/DAQP.jl)                                  |        | MIT      | (Mixed-binary) QP         |
+| [EAGO.jl](https://github.com/psorlab/EAGO.jl)                                  |                                                                                  |        | MIT      | (MI)NLP                   |
 | [ECOS](https://github.com/ifa-ethz/ecos)                                       | [ECOS.jl](https://github.com/jump-dev/ECOS.jl)                                   |        | GPL      | LP, SOCP                  |
 | [FICO Xpress](https://www.fico.com/en/products/fico-xpress-optimization-suite) | [Xpress.jl](https://github.com/jump-dev/Xpress.jl)                               | Manual | Comm.    | (MI)LP, (MI)SOCP          |
 | [GLPK](http://www.gnu.org/software/glpk/)                                      | [GLPK.jl](https://github.com/jump-dev/GLPK.jl)                                   |        | GPL      | (MI)LP                    |
 | [Gurobi](https://gurobi.com)                                                   | [Gurobi.jl](https://github.com/jump-dev/Gurobi.jl)                               | Manual | Comm.    | (MI)LP, (MI)SOCP          |
-| [HiGHS](https://github.com/ERGO-Code/HiGHS)                                    | [HiGHS.jl](https://github.com/jump-dev/HiGHS.jl)                                 |        |MIT       | (MI)LP                    |
+| [HiGHS](https://github.com/ERGO-Code/HiGHS)                                    | [HiGHS.jl](https://github.com/jump-dev/HiGHS.jl)                                 |        | MIT      | (MI)LP, QP                |
 | [Hypatia.jl](https://github.com/chriscoey/Hypatia.jl)                          |                                                                                  |        | MIT      | LP, SOCP, SDP             |
 | [Ipopt](https://github.com/coin-or/Ipopt)                                      | [Ipopt.jl](https://github.com/jump-dev/Ipopt.jl)                                 |        | EPL      | LP, QP, NLP               |
 | [Juniper.jl](https://github.com/lanl-ansi/Juniper.jl)                          |                                                                                  |        | MIT      | (MI)SOCP, (MI)NLP         |
+| [Loraine.jl](https://github.com/kocvara/Loraine.jl)                            |                                                                                  |        | MIT      | LP, SDP                   |
 | [MadNLP.jl](https://github.com/sshin23/MadNLP.jl)                              |                                                                                  |        | MIT      | LP, QP, NLP               |
+| [MAiNGO](https://git.rwth-aachen.de/avt-svt/public/maingo)                     | [MAiNGO.jl](https://github.com/MAiNGO-github/MAiNGO.jl)                          |        | EPL 2.0  |(MI)NLP                    |
+| [Manopt.jl](https://github.com/JuliaManifolds/Manopt.jl)                       |                                                                                  |        | MIT      | NLP                       |
+| [MiniZinc](https://www.minizinc.org/)                                          | [MiniZinc.jl](https://github.com/jump-dev/MiniZinc.jl)                           | Manual | MPL-2    | CP-SAT                    |
+| [Minotaur](https://github.com/coin-or/minotaur)                                | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   | Manual | BSD-like | (MI)NLP                   |
 | [MOSEK](https://www.mosek.com/)                                                | [MosekTools.jl](https://github.com/jump-dev/MosekTools.jl)                       | Manual | Comm.    | (MI)LP, (MI)SOCP, SDP     |
 | [NLopt](https://github.com/stevengj/nlopt)                                     | [NLopt.jl](https://github.com/JuliaOpt/NLopt.jl)                                 |        | GPL      | LP, QP, NLP               |
+| [Octeract](https://octeract.gg)                                                | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   |        | Comm.    | (MI)NLP                   |
+| [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl/)                        |                                                                                  |        | MIT      | NLP                       |
 | [OSQP](https://osqp.org/)                                                      | [OSQP.jl](https://github.com/oxfordcontrol/OSQP.jl)                              |        | Apache   | LP, QP                    |
-| [PATH](http://pages.cs.wisc.edu/~ferris/path.html)                             | [PATHSolver.jl](https://github.com/chkwon/PATHSolver.jl)                 |        | MIT      | MCP                       |
+| [PATH](http://pages.cs.wisc.edu/~ferris/path.html)                             | [PATHSolver.jl](https://github.com/chkwon/PATHSolver.jl)                         |        | MIT      | MCP                       |
 | [Pajarito.jl](https://github.com/jump-dev/Pajarito.jl)                         |                                                                                  |        | MPL-2    | (MI)NLP, (MI)SOCP, (MI)SDP |
 | [Pavito.jl](https://github.com/jump-dev/Pavito.jl)                             |                                                                                  |        | MPL-2    | (MI)NLP                   |
 | [Penbmi](http://www.penopt.com/penbmi.html)                                    | [Penopt.jl](https://github.com/jump-dev/Penopt.jl/)                              |        | Comm.    | Bilinear SDP              |
+| [Percival.jl](https://github.com/JuliaSmoothOptimizers/Percival.jl/)           |                                                                                  |        | MPL-2    | NLP                       |
+| [PolyJuMP.KKT](https://github.com/jump-dev/PolyJuMP.jl)                        | [PolyJuMP.jl](https://github.com/jump-dev/PolyJuMP.jl)                           |        | MIT      | NLP                       |
+| [PolyJuMP.QCQP](https://github.com/jump-dev/PolyJuMP.jl)                       | [PolyJuMP.jl](https://github.com/jump-dev/PolyJuMP.jl)                           |        | MIT      | NLP                       |
 | [ProxSDP.jl](https://github.com/mariohsouto/ProxSDP.jl)                        |                                                                                  |        | MIT      | LP, SOCP, SDP             |
-| [RAPOSa](https://raposa.usc.es/)                                               | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   |   Manual  | RAPOSa      | (MI)NLP                   |
-| [SCIP](https://scipopt.org/)                                                   | [SCIP.jl](https://github.com/scipopt/SCIP.jl)                            |        | ZIB      | (MI)LP, (MI)NLP           |
-| [SCS](https://github.com/cvxgrp/scs)                                           | [SCS.jl](https://github.com/jump-dev/SCS.jl)                                     |        | MIT      | LP, SOCP, SDP             |
+| [RAPOSa](https://raposa.usc.es/)                                               | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   | Manual | RAPOSa   | (MI)NLP                   |
+| [SCIP](https://scipopt.org/)                                                   | [SCIP.jl](https://github.com/scipopt/SCIP.jl)                                    |        | Apache   | (MI)LP, (MI)NLP           |
+| [SCS](https://github.com/cvxgrp/scs)                                           | [SCS.jl](https://github.com/jump-dev/SCS.jl)                                     |        | MIT      | LP, QP, SOCP, SDP         |
 | [SDPA](http://sdpa.sourceforge.net/)                                           | [SDPA.jl](https://github.com/jump-dev/SDPA.jl), [SDPAFamily.jl](https://github.com/ericphanson/SDPAFamily.jl) |  | GPL | LP, SDP |
+| [SDPLR](https://github.com/sburer/sdplr)                                       | [SDPLR.jl](https://github.com/jump-dev/SDPLR.jl)                                 |        | GPL      | LP, SDP                   |
+| [SDPLRPlus.jl](https://github.com/luotuoqingshan/SDPLRPlus.jl/)                | [SDPLRPlus.jl](https://github.com/luotuoqingshan/SDPLRPlus.jl/)                  |        | MIT      | LP, SDP                   |
 | [SDPNAL](https://blog.nus.edu.sg/mattohkc/softwares/sdpnalplus/)               | [SDPNAL.jl](https://github.com/jump-dev/SDPNAL.jl)                               | Manualᴹ | CC BY-SA | LP, SDP                  |
 | [SDPT3](https://blog.nus.edu.sg/mattohkc/softwares/sdpt3/)                     | [SDPT3.jl](https://github.com/jump-dev/SDPT3.jl)                                 | Manualᴹ | GPL      | LP, SOCP, SDP            |
 | [SeDuMi](http://sedumi.ie.lehigh.edu/)                                         | [SeDuMi.jl](https://github.com/jump-dev/SeDuMi.jl)                               | Manualᴹ | GPL      | LP, SOCP, SDP            |
+| [SHOT](https://github.com/coin-or/SHOT)                                        | [AmplNLWriter.jl](https://github.com/jump-dev/AmplNLWriter.jl)                   |        | EPL       | (MI)NLP                  |
+| [StatusSwitchingQP.jl](https://github.com/PharosAbad/StatusSwitchingQP.jl)     |                                                                                  |        | MIT       | LP, QP                   |
 | [Tulip.jl](https://github.com/ds4dm/Tulip.jl)                                  |                                                                                  |        | MPL-2     | LP                       |
+|[CATrustRegionMethod.jl](https://github.com/fadihamad94/CATrustRegionMethod.jl) |                                                                                  |        | MIT       | NLP                      |
+| [Uno](https://github.com/cvanaret/Uno)                                         | [UnoSolver.jl](https://github.com/cvanaret/Uno/tree/main/interfaces/Julia)       |        | MIT       | NLP                      |
 
 Where:
 - LP = Linear programming
@@ -147,11 +178,13 @@ Where:
 - NLP = Nonlinear programming
 - SDP = Semidefinite programming
 - (MI)XXX = Mixed-integer equivalent of problem type `XXX`
+- CP-SAT = Constraint programming and Boolean satisfiability
 
 !!! note
     Developed a solver or solver wrapper? This table is open for new
-    contributions! Start by making a pull request to edit the [installation.md](https://github.com/jump-dev/JuMP.jl/blob/master/docs/src/installation.md)
-    file.
+    contributions. Edit the [installation.md](https://github.com/jump-dev/JuMP.jl/blob/master/docs/src/installation.md)
+    file, and use the checklist [Adding a new solver to the documentation](@ref)
+    when opening the pull request.
 
 !!! note
     Developing a solver or solver wrapper? See [Models](@ref jump_models) and the
@@ -163,11 +196,12 @@ Where:
 ## AMPL-based solvers
 
 Use [AmplNLWriter](https://github.com/jump-dev/AmplNLWriter.jl) to access
-solvers that support the [nl format](https://en.wikipedia.org/wiki/Nl_(format)).
+solvers that support the [NL format](https://en.wikipedia.org/wiki/Nl_(format)).
 
-Some solvers, such as [Bonmin](https://github.com/coin-or/Bonmin) and
-[Couenne](https://github.com/coin-or/Couenne) can be installed via the Julia
-package manager. Others need to be manually installed.
+Some solvers, such as [Bonmin](https://github.com/coin-or/Bonmin),
+[Couenne](https://github.com/coin-or/Couenne) and [SHOT](https://github.com/coin-or/SHOT)
+can be installed via the Julia package manager. Others need to be manually
+installed.
 
 Consult the AMPL documentation for a [complete list of supported solvers](https://ampl.com/products/solvers/all-solvers-for-ampl/).
 
@@ -217,8 +251,8 @@ of a package by going to the relevant GitHub page, and navigating to the
 "releases" page. For example, the list of JuMP releases is available at:
 [https://github.com/jump-dev/JuMP.jl/releases](https://github.com/jump-dev/JuMP.jl/releases).
 
-If you post on the [community forum](https://discourse.julialang.org/c/domain/opt/13),
-please include the output of `Pkg.status()`!
+If you post on the [community forum](https://jump.dev/forum), please include the
+output of `Pkg.status()`.
 
 ### Unsatisfiable requirements detected
 
@@ -232,7 +266,7 @@ previously worked no longer works.
 
 This usually happens because the new package is not compatible with the latest
 version of JuMP. Therefore, the package manager rolls-back JuMP to an earlier
-version! Here's an example.
+version. Here's an example.
 
 First, we add JuMP:
 ```julia
@@ -260,4 +294,4 @@ for this is that JuMPeR doesn't support a version of JuMP newer than `0.18.6`.
 
 !!! tip
     Pay careful attention to the output of the package manager when adding new
-    packages, especially when you see a package being downgraded!
+    packages, especially when you see a package being downgraded.

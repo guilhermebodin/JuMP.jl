@@ -20,10 +20,10 @@
 
 # # Sudoku
 
-# **Originally Contributed by**: Iain Dunning
+# **This tutorial was originally contributed by Iain Dunning.**
 
 # [Sudoku](http://en.wikipedia.org/wiki/Sudoku) is a popular number puzzle. The
-# goal is to place the digits 1,...,9 on a nine-by-nine grid, with some of the
+# goal is to place the digits 1 to 9 on a nine-by-nine grid, with some of the
 # digits already filled in. Your solution must satisfy the following rules:
 #
 # * The numbers 1 to 9 must appear in each 3x3 square
@@ -46,7 +46,7 @@
 # then we can solve it with any integer programming solver.
 
 using JuMP
-using HiGHS
+import HiGHS
 
 # We will define a binary variable (a variable that is either 0 or 1) for each
 # possible number in each possible cell. The meaning of each variable is as
@@ -55,17 +55,19 @@ using HiGHS
 # where `i` is the row and `j` is the column.
 
 # Create a model
+
 sudoku = Model(HiGHS.Optimizer)
+set_silent(sudoku)
 
 # Create our variables
-@variable(sudoku, x[i = 1:9, j = 1:9, k = 1:9], Bin)
+@variable(sudoku, x[i=1:9, j=1:9, k=1:9], Bin);
 
 # Now we can begin to add our constraints. We'll actually start with something
 # obvious to us as humans, but what we need to enforce: that there can be only
 # one number per cell.
 
-for i in 1:9  ## For each row
-    for j in 1:9  ## and each column
+for i in 1:9  # For each row
+    for j in 1:9  # and each column
         ## Sum across all the possible digits. One and only one of the digits
         ## can be in this cell, so the sum must be equal to one.
         @constraint(sudoku, sum(x[i, j, k] for k in 1:9) == 1)
@@ -76,8 +78,8 @@ end
 # are all very similar, so much so that we can actually add them at the same
 # time.
 
-for ind in 1:9  ## Each row, OR each column
-    for k in 1:9  ## Each digit
+for ind in 1:9  # Each row, OR each column
+    for k in 1:9  # Each digit
         ## Sum across columns (j) - row constraint
         @constraint(sudoku, sum(x[ind, j, k] for j in 1:9) == 1)
         ## Sum across rows (i) - column constraint
@@ -94,7 +96,7 @@ for i in 1:3:7
     for j in 1:3:7
         for k in 1:9
             ## i is the top left row, j is the top left column.
-            ## We'll sum from i to i+2, e.g. i=4, r=4, 5, 6.
+            ## We'll sum from i to i+2, for example, i=4, r=4, 5, 6.
             @constraint(
                 sudoku,
                 sum(x[r, c, k] for r in i:(i+2), c in j:(j+2)) == 1
@@ -132,9 +134,10 @@ end
 
 # solve problem
 optimize!(sudoku)
+assert_is_solved_and_feasible(sudoku)
 
 # Extract the values of x
-x_val = value.(x)
+x_val = value.(x);
 # Create a matrix to store the solution
 sol = zeros(Int, 9, 9)  # 9x9 matrix of integers
 for i in 1:9
@@ -170,25 +173,25 @@ model = Model(HiGHS.Optimizer)
 set_silent(model)
 ## HiGHS v1.2 has a bug in presolve which causes the problem to be classified as
 ## infeasible.
-set_optimizer_attribute(model, "presolve", "off")
+set_attribute(model, "presolve", "off")
 
 # Instead of the binary variables, we directly define a 9x9 grid of integer
 # values between 1 and 9:
 
-@variable(model, 1 <= x[1:9, 1:9] <= 9, Int)
+@variable(model, 1 <= x[1:9, 1:9] <= 9, Int);
 
 # Then, we enforce that the values in each row must be all-different:
 
-@constraint(model, [i = 1:9], x[i, :] in MOI.AllDifferent(9))
+@constraint(model, [i = 1:9], x[i, :] in MOI.AllDifferent(9));
 
 # That the values in each column must be all-different:
 
-@constraint(model, [j = 1:9], x[:, j] in MOI.AllDifferent(9))
+@constraint(model, [j = 1:9], x[:, j] in MOI.AllDifferent(9));
 
 # And that the values in each 3x3 sub-grid must be all-different:
 
 for i in (0, 3, 6), j in (0, 3, 6)
-    @constraint(model, vec(x[i.+(1:3), j.+(1:3)]) in MOI.AllDifferent(9))
+    @constraint(model, vec(x[i .+ (1:3), j .+ (1:3)]) in MOI.AllDifferent(9))
 end
 
 # Finally, as before we set the initial solution and optimize:
@@ -200,6 +203,7 @@ for i in 1:9, j in 1:9
 end
 
 optimize!(model)
+assert_is_solved_and_feasible(model)
 
 # Display the solution
 

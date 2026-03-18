@@ -23,8 +23,7 @@
 
 using Ipopt, JuMP
 using Test
-using MathOptInterface
-const MOI = MathOptInterface
+import MathOptInterface as MOI
 
 @testset "NLP solver tests" begin
     @testset "HS071" begin
@@ -38,20 +37,19 @@ const MOI = MathOptInterface
         # End at (1.000..., 4.743..., 3.821..., 1.379...)
         m = Model(Ipopt.Optimizer)
         initval = [1, 5, 5, 1]
-        @variable(m, 1 <= x[i = 1:4] <= 5, start = initval[i])
+        @variable(m, 1 <= x[i=1:4] <= 5, start = initval[i])
         @NLobjective(m, Min, x[1] * x[4] * (x[1] + x[2] + x[3]) + x[3])
         @NLconstraint(m, x[1] * x[2] * x[3] * x[4] >= 25)
         @NLconstraint(m, sum(x[i]^2 for i in 1:4) == 40)
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol =
-            1e-3
+        @test value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol = 1e-3
     end
 
     @testset "HS071 (no macros)" begin
@@ -65,32 +63,31 @@ const MOI = MathOptInterface
         # End at (1.000..., 4.743..., 3.821..., 1.379...)
         m = Model(Ipopt.Optimizer)
         initval = [1, 5, 5, 1]
-        @variable(m, 1 <= x[i = 1:4] <= 5, start = initval[i])
-        JuMP.set_nonlinear_objective(
+        @variable(m, 1 <= x[i=1:4] <= 5, start = initval[i])
+        set_nonlinear_objective(
             m,
             MIN_SENSE,
             :($(x[1]) * $(x[4]) * ($(x[1]) + $(x[2]) + $(x[3])) + $(x[3])),
         )
-        JuMP.add_nonlinear_constraint(
+        add_nonlinear_constraint(
             m,
             :($(x[1]) * $(x[2]) * $(x[3]) * $(x[4]) >= 25),
         )
-        JuMP.add_nonlinear_constraint(
+        add_nonlinear_constraint(
             m,
             :($(x[1])^2 + $(x[2])^2 + $(x[3])^2 + $(x[4])^2 == 40),
         )
         bad_expr = :(x[1]^2 + x[2]^2 + x[3]^2 + x[4]^2 == 40)
-        @test_throws ErrorException JuMP.add_nonlinear_constraint(m, bad_expr)
+        @test_throws ErrorException add_nonlinear_constraint(m, bad_expr)
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol =
-            1e-3
+        @test value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol = 1e-3
     end
 
     @testset "HS071 (epigraph)" begin
@@ -101,7 +98,7 @@ const MOI = MathOptInterface
         #     ...
         model = Model(Ipopt.Optimizer)
         start = [1.0, 5.0, 5.0, 1.0]
-        @variable(model, 1 <= x[i = 1:4] <= 5, start = start[i])
+        @variable(model, 1 <= x[i=1:4] <= 5, start = start[i])
         @variable(model, t, start = 100)
         @objective(model, Min, t)
         @NLconstraint(model, t >= x[1] * x[4] * (x[1] + x[2] + x[3]) + x[3])
@@ -109,11 +106,10 @@ const MOI = MathOptInterface
         @NLconstraint(model, sum(x[i]^2 for i in 1:4) == 40)
 
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol =
-            1e-3
+        optimize!(model)
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value.(x) ≈ [1.000000, 4.742999, 3.821150, 1.379408] atol = 1e-3
     end
 
     @testset "HS109" begin
@@ -126,7 +122,7 @@ const MOI = MathOptInterface
         U = [Inf, Inf, 0.55, 0.55, 252, 252, 252, 800, 800]
 
         m = Model(Ipopt.Optimizer)
-        @variable(m, L[i] <= x[i = 1:9] <= U[i], start = 0.0)
+        @variable(m, L[i] <= x[i=1:9] <= U[i], start = 0.0)
 
         @NLobjective(
             m,
@@ -180,13 +176,13 @@ const MOI = MathOptInterface
         )
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.objective_value(m) ≈ 5326.851310161077 atol = 1e-5
+        @test objective_value(m) ≈ 5326.851310161077 atol = 1e-5
     end
 
     @testset "HS110" begin
@@ -201,14 +197,14 @@ const MOI = MathOptInterface
         )
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
+        @test has_values(m)
         # Ipopt returns AlmostLOCALLY_SOLVED and NearlyFEASIBLE_POINT on this instance.
-        # @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        # @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        # @test termination_status(m) == MOI.LOCALLY_SOLVED
+        # @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.objective_value(m) ≈ -45.77846971 atol = 1e-5
+        @test objective_value(m) ≈ -45.77846971 atol = 1e-5
     end
 
     @testset "HS111" begin
@@ -252,13 +248,13 @@ const MOI = MathOptInterface
         )
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.objective_value(m) ≈ -47.76109026 atol = 1e-5
+        @test objective_value(m) ≈ -47.76109026 atol = 1e-5
     end
 
     @testset "HS112" begin
@@ -292,13 +288,13 @@ const MOI = MathOptInterface
         @NLconstraint(m, x[3] + x[7] + x[8] + 2 * x[9] + x[10] == 1)
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.objective_value(m) ≈ -47.76109026 atol = 1e-5
+        @test objective_value(m) ≈ -47.76109026 atol = 1e-5
     end
 
     @testset "HS114" begin
@@ -311,7 +307,7 @@ const MOI = MathOptInterface
         start = [1745, 12000, 110, 3048, 1974, 89.2, 92.8, 8, 3.6, 145]
 
         m = Model(Ipopt.Optimizer)
-        @variable(m, lower[i] <= x[i = 1:n] <= upper[i], start = start[i])
+        @variable(m, lower[i] <= x[i=1:n] <= upper[i], start = start[i])
 
         @NLobjective(
             m,
@@ -359,13 +355,13 @@ const MOI = MathOptInterface
         @NLconstraint(m, (x[2] + x[5]) / x[1] - x[8] == 0)
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.objective_value(m) ≈ -1768.80696 atol = 1e-3
+        @test objective_value(m) ≈ -1768.80696 atol = 1e-3
     end
 
     @testset "HS116" begin
@@ -417,7 +413,7 @@ const MOI = MathOptInterface
             [0.5 2 0.8 3 0.9 4 0.1 5 0.14 6 0.5 7 489 8 80 9 650 0.5 2 0.8 3 0.9 4 0.1 5 0.14 6 0.5 7 489 8 80 9 650]
 
         m = Model(Ipopt.Optimizer)
-        @variable(m, lower[i] <= x[i = 1:N] <= upper[i], start = start[i])
+        @variable(m, lower[i] <= x[i=1:N] <= upper[i], start = start[i])
         @NLobjective(m, Min, x[11] + x[12] + x[13])
 
         @NLconstraints m begin
@@ -442,14 +438,14 @@ const MOI = MathOptInterface
         end
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
         # This test occasionally fails, for unknown reasons.
-        @test JuMP.objective_value(m) ≈ 97.588409 atol = 1e-3
+        @test objective_value(m) ≈ 97.588409 atol = 1e-3
     end
 
     @testset "HS118" begin
@@ -488,10 +484,10 @@ const MOI = MathOptInterface
             20.0,
         ]
 
-        @variable(m, L[i] <= x[i = 1:15] <= U[i])
+        @variable(m, L[i] <= x[i=1:15] <= U[i])
 
         # Initial solution (could also use 'start' keyword in @variable)
-        JuMP.set_start_value.(x, start)
+        set_start_value.(x, start)
 
         @NLobjective(
             m,
@@ -531,14 +527,14 @@ const MOI = MathOptInterface
         @constraint(m, x[13] + x[14] + x[15] >= 100)
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
 
-        @test JuMP.value.(x[1:4]) ≈ [8.0, 49.0, 3.0, 1.0] atol = 1e-4
-        @test JuMP.objective_value(m) ≈ 664.82045 atol = 1e-5
+        @test value.(x[1:4]) ≈ [8.0, 49.0, 3.0, 1.0] atol = 1e-4
+        @test objective_value(m) ≈ 664.82045 atol = 1e-5
     end
 
     @testset "Two-sided constraints" begin
@@ -548,45 +544,45 @@ const MOI = MathOptInterface
         l = -1
         u = 1
         @NLconstraint(m, l <= x <= u)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ u atol = 1e-6
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ u atol = 1e-6
 
         @NLobjective(m, Min, x)
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ l atol = 1e-6
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ l atol = 1e-6
     end
 
     @testset "Two-sided constraints (no macros)" begin
         m = Model(Ipopt.Optimizer)
         @variable(m, x)
-        JuMP.set_nonlinear_objective(m, MAX_SENSE, x)
+        set_nonlinear_objective(m, MAX_SENSE, x)
         l = -1
         u = 1
-        JuMP.add_nonlinear_constraint(m, :($l <= $x <= $u))
+        add_nonlinear_constraint(m, :($l <= $x <= $u))
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ u atol = 1e-6
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ u atol = 1e-6
 
-        JuMP.set_nonlinear_objective(m, MIN_SENSE, x)
-        JuMP.optimize!(m)
+        set_nonlinear_objective(m, MIN_SENSE, x)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ l atol = 1e-6
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ l atol = 1e-6
     end
 
     @testset "Duals" begin
@@ -594,55 +590,55 @@ const MOI = MathOptInterface
         @variable(m, x >= 0)
         @variable(m, y <= 5)
         @variable(m, 2 <= z <= 4)
-        @variable(m, 0 <= r[i = 3:6] <= i)
+        @variable(m, 0 <= r[i=3:6] <= i)
         @NLobjective(m, Min, -((x + y) / 2.0 + 3.0) / 3.0 - z - r[3])
         @constraint(m, cons1, x + y >= 2)
         @constraint(m, cons2, sum(r[i] for i in 3:5) <= (2 - x) / 2.0)
         @NLconstraint(m, cons3, 7.0 * y <= z + r[6] / 1.9)
 
         function test_result()
-            @test JuMP.has_values(m)
-            @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-            @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+            @test has_values(m)
+            @test termination_status(m) == MOI.LOCALLY_SOLVED
+            @test primal_status(m) == MOI.FEASIBLE_POINT
 
-            @test JuMP.value(x) ≈ 0.9774436 atol = 1e-6
-            @test JuMP.value(y) ≈ 1.0225563 atol = 1e-6
-            @test JuMP.value(z) ≈ 4.0 atol = 1e-6
-            @test JuMP.value(r[3]) ≈ 0.5112781 atol = 1e-6
-            @test JuMP.value(r[4]) ≈ 0.0 atol = 1e-6
-            @test JuMP.value(r[5]) ≈ 0.0 atol = 1e-6
-            @test JuMP.value(r[6]) ≈ 6.0 atol = 1e-6
-            @test JuMP.dual_status(m) == MOI.FEASIBLE_POINT
+            @test value(x) ≈ 0.9774436 atol = 1e-6
+            @test value(y) ≈ 1.0225563 atol = 1e-6
+            @test value(z) ≈ 4.0 atol = 1e-6
+            @test value(r[3]) ≈ 0.5112781 atol = 1e-6
+            @test value(r[4]) ≈ 0.0 atol = 1e-6
+            @test value(r[5]) ≈ 0.0 atol = 1e-6
+            @test value(r[6]) ≈ 6.0 atol = 1e-6
+            @test dual_status(m) == MOI.FEASIBLE_POINT
             # Reduced costs
-            @test JuMP.dual(JuMP.LowerBoundRef(x)) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(y)) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(z)) ≈ -1.0714286 atol = 1e-6
-            @test JuMP.dual(JuMP.LowerBoundRef(r[3])) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(r[3])) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.LowerBoundRef(r[4])) ≈ 1.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(r[4])) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.LowerBoundRef(r[5])) ≈ 1.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(r[5])) ≈ 0.0 atol = 1e-6
-            @test JuMP.dual(JuMP.UpperBoundRef(r[6])) ≈ -0.03759398 atol = 1e-6
-            @test JuMP.dual(JuMP.LowerBoundRef(r[6])) ≈ 0.0 atol = 1e-6
+            @test dual(LowerBoundRef(x)) ≈ 0.0 atol = 1e-6
+            @test dual(UpperBoundRef(y)) ≈ 0.0 atol = 1e-6
+            @test dual(UpperBoundRef(z)) ≈ -1.0714286 atol = 1e-6
+            @test dual(LowerBoundRef(r[3])) ≈ 0.0 atol = 1e-6
+            @test dual(UpperBoundRef(r[3])) ≈ 0.0 atol = 1e-6
+            @test dual(LowerBoundRef(r[4])) ≈ 1.0 atol = 1e-6
+            @test dual(UpperBoundRef(r[4])) ≈ 0.0 atol = 1e-6
+            @test dual(LowerBoundRef(r[5])) ≈ 1.0 atol = 1e-6
+            @test dual(UpperBoundRef(r[5])) ≈ 0.0 atol = 1e-6
+            @test dual(UpperBoundRef(r[6])) ≈ -0.03759398 atol = 1e-6
+            @test dual(LowerBoundRef(r[6])) ≈ 0.0 atol = 1e-6
 
             # Constraint duals
-            @test JuMP.dual(cons1) ≈ 0.333333 atol = 1e-6
-            @test JuMP.dual(cons2) ≈ -1.0 atol = 1e-6
-            @test JuMP.dual(cons3) ≈ -0.0714286 atol = 1e-6
+            @test dual(cons1) ≈ 0.333333 atol = 1e-6
+            @test dual(cons2) ≈ -1.0 atol = 1e-6
+            @test dual(cons3) ≈ -0.0714286 atol = 1e-6
         end
 
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
         test_result()
-        @test JuMP.objective_value(m) ≈ -5.8446115 atol = 1e-6
+        @test objective_value(m) ≈ -5.8446115 atol = 1e-6
 
         # Same objective with sense/sign flipped.
         @NLobjective(m, Max, ((x + y) / 2.0 + 3.0) / 3.0 + z + r[3])
 
-        JuMP.optimize!(m)
+        optimize!(m)
         test_result()
-        @test JuMP.objective_value(m) ≈ 5.8446115 atol = 1e-6
+        @test objective_value(m) ≈ 5.8446115 atol = 1e-6
     end
 
     @testset "Quadratic inequality constraints, linear objective" begin
@@ -652,13 +648,13 @@ const MOI = MathOptInterface
         @objective(m, Min, x - y)
         @constraint(m, x + x^2 + x * y + y^2 <= 1)
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ -1 - 4 / sqrt(3) atol = 1e-6
-        @test JuMP.value(x) + JuMP.value(y) ≈ -1 / 3 atol = 1e-3
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ -1 - 4 / sqrt(3) atol = 1e-6
+        @test value(x) + value(y) ≈ -1 / 3 atol = 1e-3
     end
 
     @testset "Quadratic inequality constraints, NL objective" begin
@@ -668,13 +664,13 @@ const MOI = MathOptInterface
         @NLobjective(m, Min, x - y)
         @constraint(m, x + x^2 + x * y + y^2 <= 1)
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ -1 - 4 / sqrt(3) atol = 1e-6
-        @test JuMP.value(x) + JuMP.value(y) ≈ -1 / 3 atol = 1e-3
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ -1 - 4 / sqrt(3) atol = 1e-6
+        @test value(x) + value(y) ≈ -1 / 3 atol = 1e-3
     end
 
     @testset "Quadratic equality constraints" begin
@@ -683,13 +679,13 @@ const MOI = MathOptInterface
         @constraint(m, x[1]^2 + x[2]^2 == 1 / 2)
         @NLobjective(m, Max, x[1] - x[2])
         set_silent(m)
-        JuMP.optimize!(m)
+        optimize!(m)
 
-        @test JuMP.has_values(m)
-        @test JuMP.termination_status(m) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
-        @test JuMP.objective_value(m) ≈ sqrt(1 / 2) atol = 1e-6
-        @test JuMP.value.(x) ≈ [sqrt(1 / 2), 0] atol = 1e-6
+        @test has_values(m)
+        @test termination_status(m) == MOI.LOCALLY_SOLVED
+        @test primal_status(m) == MOI.FEASIBLE_POINT
+        @test objective_value(m) ≈ sqrt(1 / 2) atol = 1e-6
+        @test value.(x) ≈ [sqrt(1 / 2), 0] atol = 1e-6
     end
 
     @testset "Fixed variables" begin
@@ -700,9 +696,9 @@ const MOI = MathOptInterface
         @objective(m, Min, y)
         @NLconstraint(m, y ≥ x^2)
         for α in 1:4
-            JuMP.fix(x, α)
-            JuMP.optimize!(m)
-            @test JuMP.value(y) ≈ α^2 atol = 1e-6
+            fix(x, α)
+            optimize!(m)
+            @test value(y) ≈ α^2 atol = 1e-6
         end
     end
 
@@ -712,26 +708,26 @@ const MOI = MathOptInterface
         # The minimizer is at smooth point, so solvers should be okay.
         @NLobjective(model, Min, ifelse(x <= 1, x^2, x))
         set_silent(model)
-        JuMP.optimize!(model)
+        optimize!(model)
 
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value(x) ≈ 0.0 atol = 1e-5
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value(x) ≈ 0.0 atol = 1e-5
     end
 
     @testset "infeasible problem" begin
         # (Attempt to) solve an infeasible problem
         model = Model(Ipopt.Optimizer)
         n = 10
-        @variable(model, 0 <= x[i = 1:n] <= 1)
+        @variable(model, 0 <= x[i=1:n] <= 1)
         @NLobjective(model, Max, x[n])
-        for i in 1:n-1
+        for i in 1:(n-1)
             @NLconstraint(model, x[i+1] - x[i] == 0.15)
         end
         set_silent(model)
-        JuMP.optimize!(model)
+        optimize!(model)
 
-        @test JuMP.termination_status(model) == MOI.LOCALLY_INFEASIBLE
+        @test termination_status(model) == MOI.LOCALLY_INFEASIBLE
     end
 
     @testset "unbounded problem" begin
@@ -740,8 +736,8 @@ const MOI = MathOptInterface
         @NLobjective(model, Max, x)
         @NLconstraint(model, x >= 5)
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.termination_status(model) == MOI.NORM_LIMIT
+        optimize!(model)
+        @test termination_status(model) == MOI.NORM_LIMIT
     end
 
     @testset "Derivatives of x^4, x < 0" begin
@@ -749,11 +745,11 @@ const MOI = MathOptInterface
         @variable(model, x >= -1, start = -0.5)
         @NLobjective(model, Min, x^4)
         set_silent(model)
-        JuMP.optimize!(model)
+        optimize!(model)
 
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value(x) ≈ 0.0 atol = 1e-2
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value(x) ≈ 0.0 atol = 1e-2
     end
 
     # This test seems to be checking for a bug in expression handling.
@@ -761,23 +757,23 @@ const MOI = MathOptInterface
         model = Model(Ipopt.Optimizer)
         @variable(model, x[1:4] >= 0, start = 1)
         @variable(model, z[1:4], start = 0)
-        @NLexpression(model, entropy[i = 1:4], -x[i] * log(x[i]))
+        @NLexpression(model, entropy[i=1:4], -x[i] * log(x[i]))
         @NLobjective(
             model,
             Max,
             sum(z[i] for i in 1:2) + sum(z[i] / 2 for i in 3:4)
         )
-        @NLconstraint(model, z_constr1[i = 1], z[i] <= entropy[i])
-        @NLconstraint(model, z_constr1_dup[i = 2], z[i] <= entropy[i]) # duplicate expressions
-        @NLconstraint(model, z_constr2[i = 3:4], z[i] <= 2 * entropy[i])
+        @NLconstraint(model, z_constr1[i=1], z[i] <= entropy[i])
+        @NLconstraint(model, z_constr1_dup[i=2], z[i] <= entropy[i]) # duplicate expressions
+        @NLconstraint(model, z_constr2[i=3:4], z[i] <= 2 * entropy[i])
         @constraint(model, sum(x) == 1)
         set_silent(model)
-        JuMP.optimize!(model)
+        optimize!(model)
 
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value.(x) ≈ [1 / 4, 1 / 4, 1 / 4, 1 / 4] atol = 1e-3
-        @test JuMP.value(entropy[1]) ≈ -(1 / 4) * log(1 / 4) atol = 1e-4
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value.(x) ≈ [1 / 4, 1 / 4, 1 / 4, 1 / 4] atol = 1e-3
+        @test value(entropy[1]) ≈ -(1 / 4) * log(1 / 4) atol = 1e-4
     end
 
     @testset "Changing objectives" begin
@@ -786,17 +782,17 @@ const MOI = MathOptInterface
         @variable(model, y >= 0)
         @objective(model, Max, x + y)
         @NLconstraint(model, x + 2y <= 1)
-        JuMP.optimize!(model)
-        @test JuMP.value(x) ≈ 1.0 atol = 1e-4
-        @test JuMP.value(y) ≈ 0.0 atol = 1e-4
-        @test JuMP.objective_value(model) ≈ 1.0 atol = 1e-4
+        optimize!(model)
+        @test value(x) ≈ 1.0 atol = 1e-4
+        @test value(y) ≈ 0.0 atol = 1e-4
+        @test objective_value(model) ≈ 1.0 atol = 1e-4
 
         @objective(model, Max, 2x + y)
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.value(x) ≈ 1.0 atol = 1e-4
-        @test JuMP.value(y) ≈ 0.0 atol = 1e-4
-        @test JuMP.objective_value(model) ≈ 2.0 atol = 1e-4
+        optimize!(model)
+        @test value(x) ≈ 1.0 atol = 1e-4
+        @test value(y) ≈ 0.0 atol = 1e-4
+        @test objective_value(model) ≈ 2.0 atol = 1e-4
     end
 
     @testset "Setting NLobjective then objective" begin
@@ -805,17 +801,17 @@ const MOI = MathOptInterface
         @variable(model, y >= 0)
         @NLobjective(model, Max, x + y)
         @NLconstraint(model, x + 2y <= 1)
-        JuMP.optimize!(model)
-        @test JuMP.value(x) ≈ 1.0 atol = 1e-4
-        @test JuMP.value(y) ≈ 0.0 atol = 1e-4
-        @test JuMP.objective_value(model) ≈ 1.0 atol = 1e-4
+        optimize!(model)
+        @test value(x) ≈ 1.0 atol = 1e-4
+        @test value(y) ≈ 0.0 atol = 1e-4
+        @test objective_value(model) ≈ 1.0 atol = 1e-4
 
         @objective(model, Max, 2x + y)
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.value(x) ≈ 1.0 atol = 1e-4
-        @test JuMP.value(y) ≈ 0.0 atol = 1e-4
-        @test JuMP.objective_value(model) ≈ 2.0 atol = 1e-4
+        optimize!(model)
+        @test value(x) ≈ 1.0 atol = 1e-4
+        @test value(y) ≈ 0.0 atol = 1e-4
+        @test objective_value(model) ≈ 2.0 atol = 1e-4
     end
 
     my_square(x) = x^2
@@ -825,43 +821,43 @@ const MOI = MathOptInterface
 
     @testset "User-defined functions" begin
         model = Model(Ipopt.Optimizer)
-        JuMP.register(model, :my_f, 2, my_f; autodiff = true)
-        JuMP.register(model, :my_square, 1, my_square; autodiff = true)
+        register(model, :my_f, 2, my_f; autodiff = true)
+        register(model, :my_square, 1, my_square; autodiff = true)
 
         @variable(model, x[1:2] >= 0.5)
         @NLobjective(model, Min, my_f(x[1], my_square(x[2])))
 
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value.(x) ≈ [1, sqrt(2.0)]
+        optimize!(model)
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value.(x) ≈ [1, sqrt(2.0)]
     end
 
     @testset "Univariate user-defined functions" begin
         model = Model(Ipopt.Optimizer)
-        JuMP.register(model, :my_square, 1, my_square; autodiff = true)
+        register(model, :my_square, 1, my_square; autodiff = true)
 
         # Test just univariate functions because this is a path where hessians
         # are enabled.
         @variable(model, x[1:2] >= 0.5)
         @NLobjective(model, Min, my_square(x[1] - 0.4) + my_square(x[2] - 2.0))
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value.(x) ≈ [0.5, 2.0] atol = 1e-4
+        optimize!(model)
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value.(x) ≈ [0.5, 2.0] atol = 1e-4
     end
 
     @testset "Issue #927" begin
         model = Model(Ipopt.Optimizer)
-        JuMP.register(model, :my_f, 2, my_f; autodiff = true)
+        register(model, :my_f, 2, my_f; autodiff = true)
         @variable(model, x)
         @NLobjective(model, Min, my_f(x, x))
         set_silent(model)
-        JuMP.optimize!(model)
-        @test JuMP.termination_status(model) == MOI.LOCALLY_SOLVED
-        @test JuMP.primal_status(model) == MOI.FEASIBLE_POINT
-        @test JuMP.value.(x) ≈ 1.5 atol = 1e-4
+        optimize!(model)
+        @test termination_status(model) == MOI.LOCALLY_SOLVED
+        @test primal_status(model) == MOI.FEASIBLE_POINT
+        @test value.(x) ≈ 1.5 atol = 1e-4
     end
 end

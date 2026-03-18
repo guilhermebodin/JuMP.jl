@@ -208,7 +208,7 @@ function _macro_linear(N::Int)
         @constraint(
             m,
             9 * y[1, 1, 1] - 5 * y[N, N, N] -
-            2 * sum(z * x[j, i*N] for j in ((z-1)*N+1):z*N, i in 3:4) +
+            2 * sum(z * x[j, i*N] for j in ((z-1)*N+1):(z*N), i in 3:4) +
             sum(i * (9 * x[i, j] + 3 * x[j, i]) for i in N:2N, j in N:2N) +
             x[1, 1] +
             x[10N, 5N] +
@@ -221,12 +221,12 @@ function _macro_linear(N::Int)
                 sum(
                     sum(
                         N * i * j * k * y[i, j, k] + x[i, j] for
-                        k = 1:N if i != j && j != k
+                        k in 1:N if i != j && j != k
                     ) for j in 1:N
                 ) for i in 1:N
             ) + sum(
-                sum(x[i, j] for j = 1:5N if j % i == 3) for
-                i = 1:10N if i <= N * z
+                sum(x[i, j] for j in 1:5N if j % i == 3) for
+                i in 1:10N if i <= N * z
             )
         )
     end
@@ -241,7 +241,7 @@ function _macro_quad(N::Int)
         @constraint(
             m,
             9 * y[1, 1, 1] - 5 * y[N, N, N] -
-            2 * sum(z * x[j, i*N] for j in ((z-1)*N+1):z*N, i in 3:4) +
+            2 * sum(z * x[j, i*N] for j in ((z-1)*N+1):(z*N), i in 3:4) +
             sum(i * (9 * x[i, j] + 3 * x[j, i]) for i in N:2N, j in N:2N) +
             x[1, 1] +
             x[10N, 5N] * x[2N, 1] +
@@ -252,12 +252,12 @@ function _macro_quad(N::Int)
                 sum(
                     sum(
                         N * i * j * k * y[i, j, k] * x[i, j] for
-                        k = 1:N if i != j && j != k
+                        k in 1:N if i != j && j != k
                     ) for j in 1:N
                 ) for i in 1:N
             ) + sum(
-                sum(x[i, j] for j = 1:5N if j % i == 3) for
-                i = 1:10N if i <= N * z
+                sum(x[i, j] for j in 1:5N if j % i == 3) for
+                i in 1:10N if i <= N * z
             )
         )
     end
@@ -301,8 +301,8 @@ function benchmark_print_small_model()
     m = Model()
     N = 10
     @variable(m, x1[1:N])
-    @variable(m, x2[1:N, f = 1:N])
-    @variable(m, x3[1:N, f = 1:2:N])
+    @variable(m, x2[1:N, f=1:N])
+    @variable(m, x3[1:N, f=1:2:N])
     @variable(m, x4[[:a, :b, :c]])
     @variable(m, x5[[:a, :b, :c], [:d, "e", 4]])
     @constraint(
@@ -432,8 +432,8 @@ function benchmark_p_median(
         Min,
         sum(
             abs(customer_locations[customer] - location) *
-            is_closest[location, customer] for customer in 1:num_customers,
-            location in 1:num_locations
+            is_closest[location, customer] for
+            customer in 1:num_customers, location in 1:num_locations
         )
     )
     for customer in 1:num_customers
@@ -523,7 +523,7 @@ Run a script to benchmark various aspects of JuMP.
 
 Pass `-r N` to run each benchmark function `N` times.
 
-### Examples
+### Example
 
 ```
 \$ julia test/perf/JuMPBenchmarks.jl -r 2
@@ -537,7 +537,7 @@ instead.
  * If `--compare` is not given, save a new benchmark dataset to `file`.
  * If `--compare`, compare aginst the data in `file`.
 
-### Examples
+### Example
 
 ```
 \$ julia test/perf/JuMPBenchmarks.jl -f my_benchmark_run
@@ -552,7 +552,7 @@ start Julia at the command line. This uses the Project.toml located at
 `/docs/src/Project.toml`, which assumes you have dev'd JuMP to it as
 appropriate.
 
-### Examples
+### Example
 
 ```
 \$ julia test/perf/JuMPBenchmarks.jl -j /Users/oscar/julia1.6

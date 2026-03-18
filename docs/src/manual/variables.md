@@ -35,26 +35,59 @@ contexts.
 
 ## Create a variable
 
-Create variables using the [`@variable`](@ref) macro. When creating a variable,
-you can also specify variable bounds:
+Create variables using the [`@variable`](@ref) macro:
+
+```jldoctest variables
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> typeof(x)
+VariableRef (alias for GenericVariableRef{Float64})
+
+julia> num_variables(model)
+1
+```
+Here `x` is a Julia variable that is bound to a [`VariableRef`](@ref) object, and
+we have added 1 decision variable to our model.
+
+To make the binding more explicit, we could have written:
+```jldoctest variables
+julia> model = Model();
+
+julia> x = @variable(model, x)
+x
+```
+but there is no need to in general; the macro does it for us.
+
+When creating a variable, you can also specify variable bounds:
 ```jldoctest variables_2
-model = Model()
-@variable(model, x_free)
-@variable(model, x_lower >= 0)
-@variable(model, x_upper <= 1)
-@variable(model, 2 <= x_interval <= 3)
-@variable(model, x_fixed == 4)
-print(model)
+julia> model = Model();
 
-# output
+julia> @variable(model, x_free)
+x_free
 
+julia> @variable(model, x_lower >= 0)
+x_lower
+
+julia> @variable(model, x_upper <= 1)
+x_upper
+
+julia> @variable(model, 2 <= x_interval <= 3)
+x_interval
+
+julia> @variable(model, x_fixed == 4)
+x_fixed
+
+julia> print(model)
 Feasibility
 Subject to
- x_fixed = 4.0
- x_lower ≥ 0.0
- x_interval ≥ 2.0
- x_upper ≤ 1.0
- x_interval ≤ 3.0
+ x_fixed = 4
+ x_lower ≥ 0
+ x_interval ≥ 2
+ x_upper ≤ 1
+ x_interval ≤ 3
 ```
 
 !!! warning
@@ -79,7 +112,9 @@ variables. We'll cover some brief syntax here; read the [Variable containers](@r
 section for more details.
 
 You can create arrays of JuMP variables:
-```jldoctest; setup=:(model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2])
 2×2 Matrix{VariableRef}:
  x[1,1]  x[1,2]
@@ -90,7 +125,9 @@ x[1,2]
 ```
 
 Index sets can be named, and bounds can depend on those names:
-```jldoctest; setup=:(model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, sqrt(i) <= x[i = 1:3] <= i^2)
 3-element Vector{VariableRef}:
  x[1]
@@ -102,7 +139,9 @@ x[2]
 ```
 
 Sets can be any Julia type that supports iteration:
-```jldoctest; setup=:(model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[i = 2:3, j = 1:2:3, ["red", "blue"]] >= 0)
 3-dimensional DenseAxisArray{VariableRef,3,...} with index sets:
     Dimension 1, 2:3
@@ -122,7 +161,9 @@ x[2,1,red]
 ```
 
 Sets can depend upon previous indices:
-```jldoctest; setup=:(model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, u[i = 1:2, j = i:3])
 JuMP.Containers.SparseAxisArray{VariableRef, 2, Tuple{Int64, Int64}} with 5 entries:
   [1, 1]  =  u[1,1]
@@ -132,7 +173,9 @@ JuMP.Containers.SparseAxisArray{VariableRef, 2, Tuple{Int64, Int64}} with 5 entr
   [2, 3]  =  u[2,3]
 ```
 and we can filter elements in the sets using the `;` syntax:
-```jldoctest; setup=:(model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, v[i = 1:9; mod(i, 3) == 0])
 JuMP.Containers.SparseAxisArray{VariableRef, 1, Tuple{Int64}} with 3 entries:
   [3]  =  v[3]
@@ -147,23 +190,23 @@ corresponding symbol. Get a registered name using `model[:key]`:
 ```jldoctest
 julia> model = Model()
 A JuMP Model
-Feasibility problem with:
-Variables: 0
-Model mode: AUTOMATIC
-CachingOptimizer state: NO_OPTIMIZER
-Solver name: No optimizer attached.
+├ solver: none
+├ objective_sense: FEASIBILITY_SENSE
+├ num_variables: 0
+├ num_constraints: 0
+└ Names registered in the model: none
 
 julia> @variable(model, x)
 x
 
 julia> model
 A JuMP Model
-Feasibility problem with:
-Variable: 1
-Model mode: AUTOMATIC
-CachingOptimizer state: NO_OPTIMIZER
-Solver name: No optimizer attached.
-Names registered in the model: x
+├ solver: none
+├ objective_sense: FEASIBILITY_SENSE
+├ num_variables: 1
+├ num_constraints: 0
+└ Names registered in the model
+  └ :x
 
 julia> model[:x] === x
 true
@@ -193,7 +236,7 @@ Subject to
 
 To reduce the likelihood of accidental bugs, and because JuMP registers
 variables inside a model, creating two variables with the same name is an error:
-```julia
+```jldoctest
 julia> model = Model();
 
 julia> @variable(model, x)
@@ -201,7 +244,7 @@ x
 
 julia> @variable(model, x)
 ERROR: An object of name x is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, e.g.,
+    is intended, consider using the anonymous construction syntax, for example,
     `x = @variable(model, [1:N], ...)` where the name of the object does
     not appear inside the macro.
 
@@ -215,7 +258,9 @@ A common reason for encountering this error is adding variables in a loop.
 
 As a work-around, JuMP provides *anonymous* variables. Create a scalar valued
 anonymous variable by omitting the name argument:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> x = @variable(model)
 _[1]
 ```
@@ -224,11 +269,13 @@ the variable.
 
 !!! warning
     The index of the variable may not correspond to the column of the variable
-    in the solver!
+    in the solver.
 
 Create a container of anonymous JuMP variables by dropping the name in front of
 the `[`:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> y = @variable(model, [1:2])
 2-element Vector{VariableRef}:
  _[1]
@@ -238,7 +285,9 @@ julia> y = @variable(model, [1:2])
 The `<=` and `>=` short-hand cannot be used to set bounds on scalar-valued
 anonymous JuMP variables. Instead, use the `lower_bound` and `upper_bound`
 keywords:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> x_lower = @variable(model, lower_bound = 1.0)
 _[1]
 
@@ -381,14 +430,14 @@ x
 
 julia> model
 A JuMP Model
-Feasibility problem with:
-Variable: 1
-Model mode: AUTOMATIC
-CachingOptimizer state: NO_OPTIMIZER
-Solver name: No optimizer attached.
+├ solver: none
+├ objective_sense: FEASIBILITY_SENSE
+├ num_variables: 1
+├ num_constraints: 0
+└ Names registered in the model: none
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 
 julia> x_binding
 x
@@ -401,12 +450,12 @@ x
 
 julia> model
 A JuMP Model
-Feasibility problem with:
-Variable: 1
-Model mode: AUTOMATIC
-CachingOptimizer state: NO_OPTIMIZER
-Solver name: No optimizer attached.
-Names registered in the model: x_register
+├ solver: none
+├ objective_sense: FEASIBILITY_SENSE
+├ num_variables: 1
+├ num_constraints: 0
+└ Names registered in the model
+  └ :x_register
 
 julia> model[:x_register]
 x
@@ -415,7 +464,7 @@ julia> model[:x_register] === x_binding
 true
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 ## Create, delete, and modify variable bounds
@@ -506,10 +555,20 @@ julia> fix_value(x)
 Binary variables are constrained to the set ``x \in \{0, 1\}``.
 
 Create a binary variable by passing `Bin` as an optional positional argument:
-```jldoctest variables_binary; setup=:(model=Model())
+```jldoctest variables_binary
+julia> model = Model();
+
 julia> @variable(model, x, Bin)
 x
 ```
+
+!!! warning
+    Solvers use tolerances to decide whether a variable satisfies the binary
+    constraint. Thus, the true feasible region is
+    $[-\varepsilon, \varepsilon] \cup [1 - \varepsilon, 1 + \varepsilon]$,
+    where $\varepsilon$ is solver-specific, but typically `1e-6`. As a result,
+    you should expect the `value(x)` of a `Bin` variable to sometimes take a
+    value like `-0.0`, `1e-8`, or `0.999999`.
 
 Check if a variable is binary using [`is_binary`](@ref):
 ```jldoctest variables_binary
@@ -525,12 +584,16 @@ false
 ```
 
 Binary variables can also be created by setting the `binary` keyword to `true`:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x, binary=true)
 x
 ```
 or by using [`set_binary`](@ref):
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x)
 x
 
@@ -542,10 +605,20 @@ julia> set_binary(x)
 Integer variables are constrained to the set ``x \in \mathbb{Z}``.
 
 Create an integer variable by passing `Int` as an optional positional argument:
-```jldoctest variables_integer; setup=:(model=Model())
+```jldoctest variables_integer
+julia> model = Model();
+
 julia> @variable(model, x, Int)
 x
 ```
+
+!!! warning
+    Solvers use tolerances to decide whether a variable satisfies the integer
+    constraint. Thus, the true feasible region is
+    $\cup_{z \in \mathbb{Z}}[z - \varepsilon, z + \varepsilon]$,
+    where $\varepsilon$ is solver-specific, but typically `1e-6`. As a result,
+    you should expect the `value(x)` of an `Int` variable to sometimes take a
+    value like `1e-8`, or `2.999999`.
 
 Check if a variable is integer using [`is_integer`](@ref):
 ```jldoctest variables_integer
@@ -562,12 +635,16 @@ false
 
 Integer variables can also be created by setting the `integer` keyword to
 `true`:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x, integer=true)
 x
 ```
 or by using [`set_integer`](@ref):
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x)
 x
 
@@ -578,6 +655,30 @@ julia> set_integer(x)
     The [`relax_integrality`](@ref) function relaxes all integrality constraints
     in the model, returning a function that can be called to undo the operation
     later on.
+
+## Semi-integer and semi-continuous variables
+
+Semi-continuous variables are constrained to the set
+``x \in \{0\} \cup [l, u]``.
+
+Create a semi-continuous variable using the [`Semicontinuous`](@ref) set:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x in Semicontinuous(1.5, 3.5))
+x
+```
+
+Semi-integer variables  are constrained to the set
+``x \in \{0\} \cup \{l, l+1, \dots, u\}``.
+
+Create a semi-integer variable using the [`Semiinteger`](@ref) set:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x in Semiinteger(1.0, 3.0))
+x
+```
 
 ## Start values
 
@@ -590,7 +691,9 @@ or a warmstart) for each variable:
 The starting value of a variable can be queried using [`start_value`](@ref). If
 no start value has been set, [`start_value`](@ref) will return `nothing`.
 
-```jldoctest variables_start; setup=:(model=Model())
+```jldoctest variables_start
+julia> model = Model();
+
 julia> @variable(model, x)
 x
 
@@ -608,6 +711,22 @@ julia> start_value(y)
 2.0
 ```
 
+The `start` keyword argument can depend on the indices of a variable container:
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, z[i = 1:2], start = i^2)
+2-element Vector{VariableRef}:
+ z[1]
+ z[2]
+
+julia> start_value.(z)
+2-element Vector{Float64}:
+ 1.0
+ 4.0
+```
+
 !!! warning
     Some solvers do not support start values. If a solver does not support start
     values, an `MathOptInterface.UnsupportedAttribute{MathOptInterface.VariablePrimalStart}`
@@ -622,13 +741,16 @@ julia> start_value(y)
     x_solution = value.(x)
     set_start_value.(x, x_solution)
     ```
+    Alternatively, use [`set_start_values`](@ref).
 
 ## [Delete a variable](@id delete_a_variable)
 
 Use [`delete`](@ref) to delete a variable from a model. Use [`is_valid`](@ref)
 to check if a variable belongs to a model and has not been deleted.
 
-```jldoctest variables_delete; setup=:(model=Model())
+```jldoctest variables_delete
+julia> model = Model();
+
 julia> @variable(model, x)
 x
 
@@ -646,7 +768,7 @@ Therefore, creating a new variable of the same name will throw an error:
 ```jldoctest variables_delete
 julia> @variable(model, x)
 ERROR: An object of name x is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, e.g.,
+    is intended, consider using the anonymous construction syntax, for example,
     `x = @variable(model, [1:N], ...)` where the name of the object does
     not appear inside the macro.
 
@@ -678,8 +800,8 @@ x
 JuMP provides a mechanism for creating collections of variables in three types
 of data structures, which we refer to as *containers*.
 
-The three types are `Array`s, `DenseAxisArray`s, and `SparseAxisArray`s. We
-explain each of these in the following.
+The three types are `Array`, [`Containers.DenseAxisArray`](@ref), and
+[`Containers.SparseAxisArray`](@ref). We explain each of these in the following.
 
 !!! tip
     You can read more about containers in the [Containers](@ref) section.
@@ -689,7 +811,9 @@ explain each of these in the following.
 We have already seen the creation of an array of JuMP variables with the
 `x[1:2]` syntax. This can be extended to create multi-dimensional
 arrays of JuMP variables. For example:
-```jldoctest variables_arrays; setup=:(model=Model())
+```jldoctest variables_arrays
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2])
 2×2 Matrix{VariableRef}:
  x[1,1]  x[1,2]
@@ -708,7 +832,9 @@ julia> x[2, :]
 ```
 
 Variable bounds can depend upon the indices:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[i=1:2, j=1:2] >= 2i + j)
 2×2 Matrix{VariableRef}:
  x[1,1]  x[1,2]
@@ -724,7 +850,7 @@ JuMP will form an `Array` of JuMP variables when it can determine at compile
 time that the indices are one-based integer ranges. Therefore `x[1:b]` will
 create an `Array` of JuMP variables, but `x[a:b]` will not. If JuMP cannot
 determine that the indices are one-based integer ranges (for example, in the case of
-`x[a:b]`), JuMP will create a `DenseAxisArray` instead.
+`x[a:b]`), JuMP will create a [`Containers.DenseAxisArray`](@ref) instead.
 
 ### [DenseAxisArrays](@id variable_jump_arrays)
 
@@ -733,8 +859,10 @@ ranges. For example, we may want to create a variable indexed by the name of a
 product or a location. The syntax is the same as that above, except with an
 arbitrary vector as an index as opposed to a one-based range. The biggest
 difference is that instead of returning an `Array` of JuMP variables, JuMP will
-return a `DenseAxisArray`. For example:
-```jldoctest variables_jump_arrays; setup=:(model=Model())
+return a [`Containers.DenseAxisArray`](@ref). For example:
+```jldoctest variables_jump_arrays
+julia> model = Model();
+
 julia> @variable(model, x[1:2, [:A,:B]])
 2-dimensional DenseAxisArray{VariableRef,2,...} with index sets:
     Dimension 1, Base.OneTo(2)
@@ -744,7 +872,7 @@ And data, a 2×2 Matrix{VariableRef}:
  x[2,A]  x[2,B]
 ```
 
-DenseAxisArrays can be indexed and sliced as follows:
+A [`Containers.DenseAxisArray`](@ref) can be indexed and sliced as follows:
 ```jldoctest variables_jump_arrays
 julia> x[1, :A]
 x[1,A]
@@ -758,7 +886,9 @@ And data, a 2-element Vector{VariableRef}:
 ```
 
 Bounds can depend upon indices:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[i=2:3, j=1:2:3] >= 0.5i + j)
 2-dimensional DenseAxisArray{VariableRef,2,...} with index sets:
     Dimension 1, 2:3
@@ -778,11 +908,13 @@ And data, a 2×2 Matrix{Float64}:
 
 ### [SparseAxisArrays](@id variable_sparseaxisarrays)
 
-The third container type that JuMP natively supports is `SparseAxisArray`.
+The third container type that JuMP natively supports is [`Containers.SparseAxisArray`](@ref).
 These arrays are created when the indices do not form a rectangular set.
 For example, this applies when indices have a dependence upon previous
 indices (called *triangular indexing*). JuMP supports this as follows:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[i=1:2, j=i:2])
 JuMP.Containers.SparseAxisArray{VariableRef, 2, Tuple{Int64, Int64}} with 3 entries:
   [1, 1]  =  x[1,1]
@@ -793,7 +925,9 @@ JuMP.Containers.SparseAxisArray{VariableRef, 2, Tuple{Int64, Int64}} with 3 entr
 We can also conditionally create variables via a JuMP-specific syntax. This
 syntax appends a comparison check that depends upon the named indices and is
 separated from the indices by a semi-colon (`;`). For example:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[i=1:4; mod(i, 2)==0])
 JuMP.Containers.SparseAxisArray{VariableRef, 1, Tuple{Int64}} with 2 entries:
   [2]  =  x[2]
@@ -807,7 +941,9 @@ evaluates the conditional for each combination. If there are many index
 dimensions and a large amount of sparsity, this can be inefficient.
 
 For example:
-```jldoctest; setup=:(model=Model()), filter=r"[0-9\.]+ seconds.+"
+```jldoctest variable_performance_considerations; filter=r"[0-9\.]+ seconds.+"
+julia> model = Model();
+
 julia> N = 10
 10
 
@@ -832,17 +968,26 @@ And data, a 2-element Vector{VariableRef}:
 ```
 
 The first option is slower because it is equivalent to:
-```julia
-x1 = Dict()
-for i in 1:N
-    for j in 1:N
-        for k in 1:N
-            if (i, j, k) in S
-                x1[i, j, k] = @variable(model)
-            end
-        end
-    end
-end
+```jldoctest variable_performance_considerations
+julia> model = Model();
+
+julia> x1 = Dict{NTuple{3,Int},VariableRef}()
+Dict{Tuple{Int64, Int64, Int64}, VariableRef}()
+
+julia> for i in 1:N
+           for j in 1:N
+               for k in 1:N
+                   if (i, j, k) in S
+                       x1[i, j, k] = @variable(model, base_name = "x1[$i,$j,$k]")
+                   end
+               end
+           end
+       end
+
+julia> x1
+Dict{Tuple{Int64, Int64, Int64}, VariableRef} with 2 entries:
+  (1, 1, 1)    => x1[1,1,1]
+  (10, 10, 10) => x1[10,10,10]
 ```
 If performance is a concern, explicitly construct the set of indices instead of
 using the filtering syntax.
@@ -851,10 +996,13 @@ using the filtering syntax.
 
 When creating a container of JuMP variables, JuMP will attempt to choose the
 tightest container type that can store the JuMP variables. Thus, it will prefer
-to create an Array before a DenseAxisArray and a DenseAxisArray before a
-SparseAxisArray. However, because this happens at compile time, JuMP does not
-always make the best choice. To illustrate this, consider the following example:
-```jldoctest variable_force_container; setup=:(model=Model())
+to create an `Array` before a [`Containers.DenseAxisArray`](@ref) and a
+[`Containers.DenseAxisArray`](@ref) before a [`Containers.SparseAxisArray`](@ref).
+However, because this happens at compile time, JuMP does not always make the
+best choice. To illustrate this, consider the following example:
+```jldoctest variable_force_container
+julia> model = Model();
+
 julia> A = 1:2
 1:2
 
@@ -867,8 +1015,8 @@ And data, a 2-element Vector{VariableRef}:
 ```
 Since the value (and type) of `A` is unknown at parsing time, JuMP is unable to
 infer that `A` is a one-based integer range. Therefore, JuMP creates a
-`DenseAxisArray`, even though it could store these two variables in a standard
-one-dimensional `Array`.
+[`Containers.DenseAxisArray`](@ref), even though it could store these two
+variables in a standard one-dimensional `Array`.
 
 We can share our knowledge that it is possible to store these JuMP variables as
 an array by setting the `container` keyword:
@@ -878,7 +1026,7 @@ julia> @variable(model, y[A], container=Array)
  y[1]
  y[2]
 ```
-JuMP now creates a vector of JuMP variables instead of a DenseAxisArray.
+JuMP now creates a `Vector` of JuMP variables instead of a [`Containers.DenseAxisArray](@ref).
 Choosing an invalid container type will throw an error.
 
 ### User-defined containers
@@ -892,7 +1040,9 @@ of JuMP variables.
 
 For example, the following code creates a dictionary with symmetric matrices as
 the values:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> variables = Dict{Symbol,Array{VariableRef,2}}(
            key => @variable(model, [1:2, 1:2], Symmetric, base_name = "$(key)")
            for key in [:A, :B]
@@ -914,13 +1064,16 @@ model = Model()
 This is not possible with the built-in JuMP container types. However, you can
 use regular Julia types instead:
 ```jldoctest
-model = Model()
-x = model[:x] = @variable(model, [1:2], lower_bound = 0, base_name = "x")
-append!(x, @variable(model, [1:2], lower_bound = 0, base_name = "y"))
-model[:x]
+julia> model = Model();
 
-# output
+julia> x = model[:x] = @variable(model, [1:2], lower_bound = 0, base_name = "x")
+2-element Vector{VariableRef}:
+ x[1]
+ x[2]
 
+julia> append!(x, @variable(model, [1:2], lower_bound = 0, base_name = "y"));
+
+julia> model[:x]
 4-element Vector{VariableRef}:
  x[1]
  x[2]
@@ -928,40 +1081,182 @@ model[:x]
  y[2]
 ```
 
+### Sparse arrays
+
+To construct a `SparseArrays.SparseMatrixCSC` of JuMP variables, create a
+vector of JuMP variables for the non-zero elements, and then use the
+`SparseArrays.sparse` constructor:
+
+```jldoctest
+julia> import SparseArrays
+
+julia> model = Model();
+
+julia> x = @variable(model, [1:5]);
+
+julia> A = SparseArrays.sparse([1, 1, 2, 2, 3], [1, 2, 2, 3, 3], x)
+3×3 SparseArrays.SparseMatrixCSC{VariableRef, Int64} with 5 stored entries:
+ _[1]  _[2]  ⋅
+ ⋅     _[3]  _[4]
+ ⋅     ⋅     _[5]
+```
+
 ## Semidefinite variables
 
-A square symmetric matrix ``X`` is positive semidefinite if all eigenvalues are
-nonnegative.
+Declare a square matrix of JuMP variables to be positive semidefinite by passing
+`PSD` as a positional argument:
 
-Declare a matrix of JuMP variables to be positive semidefinite by passing `PSD`
-as an optional positional argument:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2], PSD)
 2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
  x[1,1]  x[1,2]
  x[1,2]  x[2,2]
 ```
 
+This will ensure that `x` is symmetric, and that all of its eigenvalues are
+nonnegative.
+
 !!! note
     `x` must be a square 2-dimensional `Array` of JuMP variables; it cannot be a
-    DenseAxisArray or a SparseAxisArray.
+    [`Containers.DenseAxisArray`](@ref) or a [`Containers.SparseAxisArray`](@ref).
+
+Use [`VariableInSetRef`](@ref) to obtain the associated constraint reference:
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2], PSD)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> c = VariableInSetRef(x)
+[x[1,1]  x[1,2]
+ ⋯       x[2,2]] ∈ PSDCone()
+```
+
+The `PSD` argument must be provided explicitly to the macro. Passing it via a
+variable throws an error:
+```jldoctest
+julia> model = Model();
+
+julia> type = :PSD
+:PSD
+
+julia> @variable(model, x[1:2, 1:2], type)
+ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`: Unrecognized positional arguments: (:PSD,). (You may have passed it as a positional argument, or as a keyword value to `variable_type`.)
+
+If you're trying to create a JuMP extension, you need to implement `build_variable`. Read the docstring for more details.
+Stacktrace:
+[...]
+```
+
+Instead, pass [`PSDCone`](@ref) via the `x in Set` syntax:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2] in PSDCone())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> set = PSDCone();
+
+julia> @variable(model, y[1:2, 1:2] in set)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
+```
+or via the `set` keyword:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2], set = PSDCone())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> set = PSDCone();
+
+julia> @variable(model, y[1:2, 1:2], set = set)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
+```
 
 ## Symmetric variables
 
-Declare a square matrix of JuMP variables to be symmetric by passing
-`Symmetric`  as an optional positional argument:
-```jldoctest; setup=:(model=Model())
+Declare a square matrix of JuMP variables to be symmetric (but not necessarily
+positive semidefinite) by passing `Symmetric`  as an optional positional
+argument:
+
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2], Symmetric)
 2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
  x[1,1]  x[1,2]
  x[1,2]  x[2,2]
 ```
 
+The `Symmetric` argument must provided explicitly to the macro. Passing it via a
+variable throws an error:
+```jldoctest
+julia> model = Model();
+
+julia> type = :Symmetric
+:Symmetric
+
+julia> @variable(model, x[1:2, 1:2], type)
+ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`: Unrecognized positional arguments: (:Symmetric,). (You may have passed it as a positional argument, or as a keyword value to `variable_type`.)
+
+If you're trying to create a JuMP extension, you need to implement `build_variable`. Read the docstring for more details.
+Stacktrace:
+[...]
+```
+
+Instead, pass [`SymmetricMatrixSpace`](@ref) via the `x in Set` syntax:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2] in SymmetricMatrixSpace())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> set = SymmetricMatrixSpace();
+
+julia> @variable(model, y[1:2, 1:2] in set)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
+```
+or via the `set` keyword:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2], set = SymmetricMatrixSpace())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> set = SymmetricMatrixSpace();
+
+julia> @variable(model, y[1:2, 1:2], set = set)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
+```
+
 ## [The `@variables` macro](@id variables)
 
 If you have many [`@variable`](@ref) calls, JuMP provides the macro
 [`@variables`](@ref) that can improve readability:
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variables(model, begin
            x
            y[i=1:2] >= i, (start = i, base_name = "Y_$i")
@@ -972,8 +1267,8 @@ julia> @variables(model, begin
 julia> print(model)
 Feasibility
 Subject to
- Y_1[1] ≥ 1.0
- Y_2[2] ≥ 2.0
+ Y_1[1] ≥ 1
+ Y_2[2] ≥ 2
  z binary
 ```
 The [`@variables`](@ref) macro returns a tuple of the variables that were
@@ -989,10 +1284,15 @@ separate calls for variable creation and the adding of any bound or integrality
 constraints.
 
 For example, `@variable(model, x >= 0, Int)`, is equivalent to:
-```julia
-@variable(model, x)
-set_lower_bound(x, 0.0)
-set_integer(x)
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> set_lower_bound(x, 0.0)
+
+julia> set_integer(x)
 ```
 Importantly, the bound and integrality constraints are added _after_ the
 variable has been created.
@@ -1006,7 +1306,9 @@ constraining variables on creation.
 
 For example, the following creates a vector of variables that belong to the
 [`SecondOrderCone`](@ref):
-```jldoctest constrained_variables; setup=:(model=Model())
+```jldoctest constrained_variables
+julia> model = Model();
+
 julia> @variable(model, y[1:3] in SecondOrderCone())
 3-element Vector{VariableRef}:
  y[1]
@@ -1028,45 +1330,106 @@ julia> @constraint(model, x in SecondOrderCone())
 
 An alternate syntax to `x in Set` is to use the `set` keyword of
 [`@variable`](@ref). This is most useful when creating anonymous variables:
-```julia
-x = @variable(model, [1:3], set = SecondOrderCone())
+```jldoctest constrained_variables
+julia> model = Model();
+
+julia> x = @variable(model, [1:3], set = SecondOrderCone())
+3-element Vector{VariableRef}:
+ _[1]
+ _[2]
+ _[3]
 ```
 
 !!! note
     You cannot delete the constraint associated with a variable constrained on
     creation.
 
+To check if a variable was constrained on creation, use [`is_variable_in_set`](@ref),
+and use [`VariableInSetRef`](@ref) to obtain the associated constraint reference:
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2], PSD)
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ x[1,1]  x[1,2]
+ x[1,2]  x[2,2]
+
+julia> is_variable_in_set(x)
+true
+
+julia> c = VariableInSetRef(x)
+[x[1,1]  x[1,2]
+ ⋯       x[2,2]] ∈ PSDCone()
+
+julia> @variable(model, y)
+y
+
+julia> is_variable_in_set(y)
+false
+
+julia> @variable(model, z in Semicontinuous(1, 2))
+z
+
+julia> is_variable_in_set(z)
+true
+
+julia> c_z = VariableInSetRef(z)
+z ∈ MathOptInterface.Semicontinuous{Int64}(1, 2)
+```
+
 ### Example: positive semidefinite variables
 
 An alternative to the syntax in [Semidefinite variables](@ref), declare a matrix
 of JuMP variables to be positive semidefinite using [`PSDCone`](@ref):
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2] in PSDCone())
 2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
  x[1,1]  x[1,2]
  x[1,2]  x[2,2]
+
+julia> @variable(model, y[1:2, 1:2], set = PSDCone())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
 ```
 
 ### Example: symmetric variables
 
 As an alternative to the syntax in [Symmetric variables](@ref), declare a matrix
 of JuMP variables to be symmetric using [`SymmetricMatrixSpace`](@ref):
-```jldoctest; setup=:(model=Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2] in SymmetricMatrixSpace())
 2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
  x[1,1]  x[1,2]
  x[1,2]  x[2,2]
+
+julia> @variable(model, y[1:2, 1:2], set = SymmetricMatrixSpace())
+2×2 LinearAlgebra.Symmetric{VariableRef, Matrix{VariableRef}}:
+ y[1,1]  y[1,2]
+ y[1,2]  y[2,2]
 ```
 
 ### Example: skew-symmetric variables
 
 Declare a matrix of JuMP variables to be skew-symmetric using
 [`SkewSymmetricMatrixSpace`](@ref):
-```jldoctest skewsymmetric; setup=:(model=Model())
+```jldoctest skewsymmetric
+julia> model = Model();
+
 julia> @variable(model, x[1:2, 1:2] in SkewSymmetricMatrixSpace())
 2×2 Matrix{AffExpr}:
  0        x[1,2]
  -x[1,2]  0
+
+julia> @variable(model, y[1:2, 1:2], set = SkewSymmetricMatrixSpace())
+2×2 Matrix{AffExpr}:
+ 0        y[1,2]
+ -y[1,2]  0
 ```
 
 !!! note
@@ -1074,27 +1437,60 @@ julia> @variable(model, x[1:2, 1:2] in SkewSymmetricMatrixSpace())
     `model`; the remaining elements in `x` are linear transformations of the
     single variable.
 
-Because the returned matrix `x` is `Matrix{AffExpr}`, you cannot use
-variable-related functions on its elements:
-```jldoctest skewsymmetric
-julia> set_lower_bound(x[1, 2], 0.0)
-ERROR: MethodError: no method matching set_lower_bound(::AffExpr, ::Float64)
-[...]
+### Example: Hermitian positive semidefinite variables
+
+Declare a matrix of JuMP variables to be Hermitian positive semidefinite using
+[`HermitianPSDCone`](@ref):
+
+```jldoctest hermitian_psd
+julia> model = Model();
+
+julia> @variable(model, H[1:2, 1:2] in HermitianPSDCone())
+2×2 LinearAlgebra.Hermitian{GenericAffExpr{ComplexF64, VariableRef}, Matrix{GenericAffExpr{ComplexF64, VariableRef}}}:
+ real(H[1,1])                    real(H[1,2]) + imag(H[1,2]) im
+ real(H[1,2]) - imag(H[1,2]) im  real(H[2,2])
 ```
 
-However, you can convert the matrix into one in which the upper triangular
-elements are `VariableRef` and the lower triangular elements are `AffExpr` as
-follows:
-```jldoctest skewsymmetric
-julia> y = Union{VariableRef,AffExpr}[
-           j > i ? first(keys(x[i, j].terms)) : x[i, j]
-           for i in 1:size(x, 1), j in 1:size(x, 2)
-       ]
-2×2 Matrix{Union{VariableRef, AffExpr}}:
- 0        x[1,2]
- -x[1,2]  0
+This adds 4 real variables in the [`MOI.HermitianPositiveSemidefiniteConeTriangle`](@ref):
 
-julia> set_lower_bound(y[1, 2], 0.0)
+```jldoctest hermitian_psd
+julia> c = VariableInSetRef(H)
+[real(H[1,1])                    real(H[1,2]) + imag(H[1,2]) im
+ real(H[1,2]) - imag(H[1,2]) im  real(H[2,2])] ∈ HermitianPSDCone()
+
+julia> o = constraint_object(c);
+
+julia> o.func
+4-element Vector{VariableRef}:
+ real(H[1,1])
+ real(H[1,2])
+ real(H[2,2])
+ imag(H[1,2])
+
+julia> o.set
+MathOptInterface.HermitianPositiveSemidefiniteConeTriangle(2)
+```
+
+### Example: Hermitian variables
+
+Declare a matrix of JuMP variables to be Hermitian using the `Hermitian` tag:
+```jldoctest hermitian
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2], Hermitian)
+2×2 LinearAlgebra.Hermitian{GenericAffExpr{ComplexF64, VariableRef}, Matrix{GenericAffExpr{ComplexF64, VariableRef}}}:
+ real(x[1,1])                    real(x[1,2]) + imag(x[1,2]) im
+ real(x[1,2]) - imag(x[1,2]) im  real(x[2,2])
+```
+
+This is equivalent to declaring the variable in [`HermitianMatrixSpace`](@ref):
+```jldoctest hermitian
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:2] in HermitianMatrixSpace())
+2×2 LinearAlgebra.Hermitian{GenericAffExpr{ComplexF64, VariableRef}, Matrix{GenericAffExpr{ComplexF64, VariableRef}}}:
+ real(x[1,1])                    real(x[1,2]) + imag(x[1,2]) im
+ real(x[1,2]) - imag(x[1,2]) im  real(x[2,2])
 ```
 
 ### Why use variables constrained on creation?
@@ -1112,3 +1508,183 @@ standard JuMP syntax is that variables constrained on creation calls
 
 Consult the implementation of solver package you are using to see if your solver
 requires `MOI.add_constrained_variables`.
+
+## [Parameters](@id variables_parameters)
+
+Some solvers have explicit support for parameters, which are constants in the
+model that can be efficiently updated between solves.
+
+JuMP implements parameters by a decision variable constrained on creation to a
+value of the [`Parameter`](@ref) set. For example, the following creates two
+parameters, `p[1]` and `p[2]`, with parameter values `2.0` and `4.0`:
+
+```jldoctest nonlinear_parameters
+julia> model = Model();
+
+julia> @variable(model, x);
+
+julia> @variable(model, p[i in 1:2] in Parameter(2.0 * i))
+2-element Vector{VariableRef}:
+ p[1]
+ p[2]
+```
+
+Use [`parameter_value`](@ref) and [`set_parameter_value`](@ref) to query or
+update the value of a parameter.
+
+```jldoctest nonlinear_parameters
+julia> parameter_value.(p)
+2-element Vector{Float64}:
+ 2.0
+ 4.0
+
+julia> set_parameter_value(p[2], 3.0)
+
+julia> parameter_value.(p)
+2-element Vector{Float64}:
+ 2.0
+ 3.0
+```
+
+Use [`is_parameter`](@ref) and [`ParameterRef`](@ref) to check if the variable
+is a parameter and to get the constraint that makes the variable a parameter.
+
+```jldoctest nonlinear_parameters
+julia> is_parameter(p[1])
+true
+
+julia> is_parameter(x)
+false
+
+julia> ParameterRef(p[2])
+p[2] ∈ MathOptInterface.Parameter{Float64}(3.0)
+```
+
+Create anonymous parameters using the `set` keyword:
+```jldoctest nonlinear_parameters
+julia> anon_parameter = @variable(model, set = Parameter(1.0))
+_[4]
+```
+
+### Limitations
+
+Parameters are implemented as decision variables belonging to the [`Parameter`](@ref)
+set. If the solver supports the [`MOI.Parameter`](@ref) set, it may decide to
+replace all instances of the parameter variable by the associated constant. If
+the solver does not support parameters, it will add the parameter as a decision
+variable with fixed bounds.
+
+The most important implication of this design is that JuMP treats a parameter
+multiplied by a decision variable as a quadratic expression, even though it is
+equivalent to a linear expression.
+
+```jldoctest
+julia> begin
+           model = Model()
+           @variable(model, x >= 3)
+           @variable(model, p in Parameter(2))
+           @objective(model, Min, p * x)
+           objective_function_type(model)
+       end
+QuadExpr (alias for GenericQuadExpr{Float64, GenericVariableRef{Float64}})
+```
+
+As a consequence, solving a "linear" program with a solver like HiGHS fails:
+```jldoctest
+julia> using HiGHS
+
+julia> begin
+           model = Model(HiGHS.Optimizer)
+           set_silent(model)
+           @variable(model, x >= 3)
+           @variable(model, p in Parameter(2))
+           @objective(model, Min, p * x)
+           optimize!(model)
+           is_solved_and_feasible(model)
+       end
+false
+```
+because the model is equivalent to a quadratic program with an indefinite
+objective:
+```jldoctest
+julia> using HiGHS
+
+julia> begin
+           model = Model(HiGHS.Optimizer)
+           set_silent(model)
+           @variable(model, x >= 3)
+           @variable(model, p == 2)
+           @objective(model, Min, p * x)
+           optimize!(model)
+           is_solved_and_feasible(model)
+       end
+false
+```
+
+!!! note
+    The quadratic limitation affects only models with multiplicative parameters
+    such as `p * x`. Functions that depend additively on parameters such as
+    `p + x` do not have the limitation because the resulting function is still
+    affine.
+
+### ParametricOptInterface
+
+To avoid the problem of `p * x` being an indefinite quadratic, use
+[ParametricOptInterface.jl](@ref). ParametricOptInterface provides a
+`POI.Optimizer` layer that will substitute each parameter with its numeric value
+prior to solving. Thus, in the following example, HiGHS will successfully solve
+a linear program instead of failing to solve a quadratic program.
+
+```jldoctest
+julia> using HiGHS
+
+julia> import ParametricOptInterface as POI
+
+julia> begin
+           model = Model(() -> POI.Optimizer(HiGHS.Optimizer()))
+           set_silent(model)
+           @variable(model, x >= 3)
+           @variable(model, p in Parameter(2))
+           @objective(model, Min, p * x)
+           optimize!(model)
+       end
+
+julia> is_solved_and_feasible(model)
+true
+
+julia> objective_value(model)
+6.0
+```
+
+If you use `Parameter`, then in most cases you should also use
+[ParametricOptInterface.jl](@ref). There are two main exceptions:
+
+ 1. your solver natively supports the [`MOI.Parameter`](@ref) set (for example,
+    [Ipopt.jl](@ref))
+ 2. you have only additive parameters (for example, `x + p`), and your solver
+    supports some sort of presolve that can remove fixed variables.
+
+### When to use a parameter
+
+Parameters are most useful when solving models in a sequence. For example:
+
+```@repl
+using JuMP, Ipopt
+model = Model(Ipopt.Optimizer);
+set_silent(model)
+@variable(model, x)
+@variable(model, p in Parameter(1.0))
+@objective(model, Min, (x - p)^2)
+solution = Dict{Int,Float64}();
+for p_value in 1:5
+    set_parameter_value(p, p_value)
+    optimize!(model)
+    assert_is_solved_and_feasible(model)
+    solution[p_value] = value(x)
+end
+solution
+```
+
+Using parameters can be faster than creating a new model from scratch with
+updated data because JuMP is able to avoid repeating a number of steps in
+processing the model before handing it off to the solver.

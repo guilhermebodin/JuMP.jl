@@ -6,7 +6,14 @@ end
 DocTestFilters = [r"≤|<=", r"≥|>=", r" == | = ", r" ∈ | in ", r"MathOptInterface|MOI"]
 ```
 
-# Nonlinear Modeling
+# Nonlinear Modeling (Legacy)
+
+!!! warning
+    This page describes the legacy nonlinear interface to JuMP. It has a number
+    of quirks and limitations that prompted the development of a new nonlinear
+    interface. The new interface is documented at [Nonlinear Modeling](@ref).
+    This legacy interface will remain for all future `v1.X` releases of JuMP.
+    The two nonlinear interfaces cannot be combined.
 
 JuMP has support for general smooth nonlinear (convex and nonconvex)
 optimization problems. JuMP is able to provide exact, sparse second-order
@@ -26,14 +33,24 @@ There are three main changes to solve nonlinear programs in JuMP.
 
 Use [`@NLobjective`](@ref) to set a nonlinear objective.
 
-```jldoctest; setup=:(model = Model(); @variable(model, x[1:2]))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
 julia> @NLobjective(model, Min, exp(x[1]) - sqrt(x[2]))
 ```
+To modify a nonlinear objective, call [`@NLobjective`](@ref) again.
+
 ## Add a nonlinear constraint
 
 Use [`@NLconstraint`](@ref) to add a nonlinear constraint.
 
-```jldoctest; setup=:(model = Model(); @variable(model, x[1:2]))
+```jldoctest nonlinear_constraint
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
 julia> @NLconstraint(model, exp(x[1]) <= 1)
 exp(x[1]) - 1.0 ≤ 0
 
@@ -52,13 +69,22 @@ julia> @NLconstraint(model, con[i = 1:2], prod(x[j] for j = 1:i) == i)
     You can only create nonlinear constraints with `<=`, `>=`, and `==`.
     More general `Nonlinear`-in-`Set` constraints are not supported.
 
+Delete a nonlinear constraint using [`delete`](@ref):
+```jldoctest nonlinear_constraint
+julia> delete(model, con[1])
+```
+
 ## Create a nonlinear expression
 
 Use [`@NLexpression`](@ref) to create nonlinear expression objects. The syntax
 is identical to [`@expression`](@ref), except that the expression can contain
 nonlinear terms.
 
-```jldoctest nl_expression; setup=:(model = Model(); @variable(model, x[1:2]))
+```jldoctest nl_expression
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
 julia> expr = @NLexpression(model, exp(x[1]) + sqrt(x[2]))
 subexpression[1]: exp(x[1]) + sqrt(x[2])
 
@@ -90,6 +116,17 @@ julia> @NLexpression(model, nested[i = 1:2], sin(my_expr[i]))
  subexpression[7]: sin(subexpression[5])
 ```
 
+Use [`value`](@ref) to query the value of a nonlinear expression:
+```jldoctest nl_expression
+julia> set_start_value(x[1], 1.0)
+
+julia> value(start_value, nested[1])
+0.7456241416655579
+
+julia> sin(sin(1.0))
+0.7456241416655579
+```
+
 ## Create a nonlinear parameter
 
 For nonlinear models only, JuMP offers a syntax for explicit "parameter" objects,
@@ -102,7 +139,11 @@ expressions.
 The initial value of the parameter must be provided on the right-hand side of
 the `==` sign.
 
-```jldoctest nonlinear_parameters; setup=:(model = Model(); @variable(model, x))
+```jldoctest nonlinear_parameters
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> @NLparameter(model, p[i = 1:2] == i)
 2-element Vector{NonlinearParameter}:
  parameter[1] == 1.0
@@ -138,23 +179,7 @@ julia> value.(p)
  3.0
 ```
 
-Nonlinear parameters can be used *within nonlinear macros* only:
-
-```jldoctest nonlinear_parameters
-julia> @objective(model, Max, p[1] * x)
-ERROR: MethodError: no method matching *(::NonlinearParameter, ::VariableRef)
-[...]
-
-julia> @NLobjective(model, Max, p[1] * x)
-
-julia> @expression(model, my_expr, p[1] * x^2)
-ERROR: MethodError: no method matching *(::NonlinearParameter, ::QuadExpr)
-Closest candidates are:
-[...]
-
-julia> @NLexpression(model, my_nl_expr, p[1] * x^2)
-subexpression[1]: parameter[1] * x ^ 2.0
-```
+Nonlinear parameters must be used *within nonlinear macros* only.
 
 ### When to use a parameter
 
@@ -187,31 +212,22 @@ nothing #hide
 The syntax accepted in nonlinear macros is more restricted than the syntax
 for linear and quadratic macros. We note some important points below.
 
-### No operator overloading
-
-There is no operator overloading provided to build up nonlinear expressions.
-For example, if `x` is a JuMP variable, the code `3x` will return an
-`AffExpr` object that can be used inside of future expressions and linear
-constraints. However, the code `sin(x)` is an error. All nonlinear
-expressions must be inside of macros.
-
-```jldoctest; setup=:(model = Model(); @variable(model, x))
-julia> expr = sin(x) + 1
-ERROR: sin is not defined for type AbstractVariableRef. Are you trying to build a nonlinear problem? Make sure you use @NLconstraint/@NLobjective.
-[...]
-
-julia> expr = @NLexpression(model, sin(x) + 1)
-subexpression[1]: sin(x) + 1.0
-```
-
 ### Scalar operations only
 
 Except for the splatting syntax discussed below, all expressions
 must be simple scalar operations. You cannot use `dot`, matrix-vector products,
 vector slices, etc.
-```jldoctest nlp_scalar_only; setup=:(model = Model(); @variable(model, x[1:2]); @variable(model, y); c = [1, 2])
+```jldoctest nlp_scalar_only
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
+julia> @variable(model, y);
+
+julia> c = [1, 2];
+
 julia> @NLobjective(model, Min, c' * x + 3y)
-ERROR: Unexpected array [1 2] in nonlinear expression. Nonlinear expressions may contain only scalar expressions.
+ERROR: Unexpected array adjoint([1, 2]) in nonlinear expression. Nonlinear expressions may contain only scalar expressions.
 [...]
 ```
 
@@ -250,34 +266,27 @@ ERROR: Unsupported use of the splatting operator. JuMP supports splatting only s
 
 ## User-defined Functions
 
-JuMP's library of recognized univariate functions is derived from the
-[Calculus.jl](https://github.com/johnmyleswhite/Calculus.jl) package.
+JuMP natively supports the set of univariate and multivariate functions recognized by the
+`MOI.Nonlinear` submodule. In addition to this list of functions, it is possible
+to register custom *user-defined* nonlinear functions. User-defined functions
+can be used anywhere in [`@NLobjective`](@ref), [`@NLconstraint`](@ref), and
+[`@NLexpression`](@ref).
 
-In addition to this list of functions, it is possible to register custom
-*user-defined* nonlinear functions.
-
-!!! tip
-    User-defined functions can be used anywhere in [`@NLobjective`](@ref),
-    [`@NLconstraint`](@ref), and [`@NLexpression`](@ref).
-
-!!! tip
-    JuMP will attempt to automatically register functions it detects in your
-    nonlinear expressions, which usually means manually registering
-    a function is not needed. Two exceptions are if you want to provide custom
-    derivatives, or if the function is not available in the scope of the
-    nonlinear expression.
+JuMP will attempt to automatically register functions it detects in your
+nonlinear expressions, which usually means manually registering a function is
+not needed. Two exceptions are if you want to provide custom derivatives, or if
+the function is not available in the scope of the nonlinear expression.
 
 !!! warning
     User-defined functions must return a scalar output. For a work-around, see
-    [User-defined functions with vector outputs](@ref).
+    [User-defined operators with vector outputs](@ref).
 
 ### Automatic differentiation
 
 JuMP does not support black-box optimization, so all user-defined functions must
-provide derivatives in some form.
-
-Fortunately, JuMP supports **automatic differentiation of user-defined functions**,
-a feature to our knowledge not available in any comparable modeling systems.
+provide derivatives in some form. Fortunately, JuMP supports **automatic
+differentiation of user-defined functions**, a feature to our knowledge not
+available in any comparable modeling systems.
 
 !!! info
     Automatic differentiation is *not* finite differencing. JuMP's automatically
@@ -288,6 +297,8 @@ perform automatic differentiation; see the ForwardDiff.jl
 [documentation](https://www.juliadiff.org/ForwardDiff.jl/v0.10.2/user/limitations.html)
 for a description of how to write a function suitable for automatic
 differentiation.
+
+#### Common mistakes when writing a user-defined function
 
 !!! warning
     Get an error like `No method matching Float64(::ForwardDiff.Dual)`? Read
@@ -357,12 +368,6 @@ The above code creates a JuMP model with the objective function
     and not `f` in the macros.
 
 !!! warning
-    If you use multi-variate user-defined functions, JuMP will disable
-    second-derivative information. This can lead to significant slow-downs in
-    some cases. Only use a user-defined function if you cannot write out the
-    expression algebraically in the macro.
-
-!!! warning
     User-defined functions cannot be re-registered and will not update if you
     modify the underlying Julia function. If you want to change a user-defined
     function between solves, rebuild the model or use a different name. To use
@@ -417,13 +422,13 @@ register(model, :my_square, 2, f, ∇f)
 
 ### Register a function, gradient, and hessian
 
-!!! warning
-    The ability to explicitly register a hessian is only available for
-    univariate functions.
+You can also register a function with the second-order derivative information,
+which is a scalar for univariate functions, and a symmetric matrix for
+multivariate functions.
 
-Instead of automatically differentiating the hessian, you can instead pass a
-function which returns a number representing the second-order derivative.
+#### Univariate functions
 
+Pass a function which returns a number representing the second-order derivative:
 ```@example
 using JuMP #hide
 f(x) = x^2
@@ -434,6 +439,43 @@ register(model, :my_square, 1, f, ∇f, ∇²f)
 @variable(model, x >= 0)
 @NLobjective(model, Min, my_square(x))
 ```
+
+#### Multivariate functions
+
+For multivariate functions, the hessian function `∇²f` must take an
+`AbstractMatrix` as the first argument, the lower-triangular of which is filled
+in-place:
+```@example
+using JuMP #hide
+f(x...) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2
+function ∇f(g, x...)
+    g[1] = 400 * x[1]^3 - 400 * x[1] * x[2] + 2 * x[1] - 2
+    g[2] = 200 * (x[2] - x[1]^2)
+    return
+end
+function ∇²f(H, x...)
+    H[1, 1] = 1200 * x[1]^2 - 400 * x[2] + 2
+    # H[1, 2] = -400 * x[1]  <-- Not needed. Fill the lower-triangular only.
+    H[2, 1] = -400 * x[1]
+    H[2, 2] = 200.0
+    return
+end
+
+model = Model()
+register(model, :rosenbrock, 2, f, ∇f, ∇²f)
+@variable(model, x[1:2])
+@NLobjective(model, Min, rosenbrock(x[1], x[2]))
+```
+
+!!! warning
+    You may assume the Hessian matrix `H` is initialized with zeros, and because
+    `H` is symmetric, you need only to fill in the non-zero of the
+    lower-triangular terms. The matrix type passed in as `H` depends on the
+    automatic differentiation system, so make sure the first argument to the
+    Hessian function supports an `AbstractMatrix` (it may be something other
+    than `Matrix{Float64}`). However, you may assume only that `H` supports
+    `size(H)` and `setindex!`. Finally, the matrix is treated as dense, so the
+    performance will be poor on functions with high-dimensional input.
 
 ### User-defined functions with vector inputs
 
@@ -480,8 +522,9 @@ solvers, see their respective documentation for performance tips.
 The function evaluation time, on the other hand, is the responsibility of the
 modeling language. JuMP computes derivatives by using reverse-mode automatic
 differentiation with graph coloring methods for exploiting sparsity of the
-Hessian matrix [^1]. As a conservative bound, JuMP's performance here currently
-may be expected to be within a factor of 5 of AMPL's.
+Hessian matrix. As a conservative bound, JuMP's performance here currently
+may be expected to be within a factor of 5 of AMPL's. Our [paper in
+SIAM Review](https://mlubin.github.io/pdf/jump-sirev.pdf) has more details.
 
 ## Querying derivatives from a JuMP model
 
@@ -496,30 +539,64 @@ in the `.value` field.)
 For example:
 
 ```jldoctest derivatives
-raw_index(v::MOI.VariableIndex) = v.value
-model = Model()
-@variable(model, x)
-@variable(model, y)
-@NLobjective(model, Min, sin(x) + sin(y))
-values = zeros(2)
-x_index = raw_index(JuMP.index(x))
-y_index = raw_index(JuMP.index(y))
-values[x_index] = 2.0
-values[y_index] = 3.0
-d = NLPEvaluator(model)
-MOI.initialize(d, [:Grad])
-MOI.eval_objective(d, values) # == sin(2.0) + sin(3.0)
+julia> raw_index(v::MOI.VariableIndex) = v.value
+raw_index (generic function with 1 method)
 
-# output
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> @variable(model, y)
+y
+
+julia> @NLobjective(model, Min, sin(x) + sin(y))
+
+julia> values = zeros(2)
+2-element Vector{Float64}:
+ 0.0
+ 0.0
+
+julia> x_index = raw_index(JuMP.index(x))
+1
+
+julia> y_index = raw_index(JuMP.index(y))
+2
+
+julia> values[x_index] = 2.0
+2.0
+
+julia> values[y_index] = 3.0
+3.0
+
+julia> d = NLPEvaluator(model)
+Nonlinear.Evaluator with available features:
+  * :Grad
+  * :Jac
+  * :JacVec
+  * :Hess
+  * :HessVec
+  * :ExprGraph
+
+julia> MOI.initialize(d, [:Grad])
+
+julia> MOI.eval_objective(d, values)
 1.0504174348855488
-```
 
-```jldoctest derivatives
-∇f = zeros(2)
-MOI.eval_objective_gradient(d, ∇f, values)
-(∇f[x_index], ∇f[y_index]) # == (cos(2.0), cos(3.0))
+julia> sin(2.0) + sin(3.0)
+1.0504174348855488
 
-# output
+julia> ∇f = zeros(2)
+2-element Vector{Float64}:
+ 0.0
+ 0.0
+
+julia> MOI.eval_objective_gradient(d, ∇f, values)
+
+julia> ∇f[x_index], ∇f[y_index]
+(-0.4161468365471424, -0.9899924966004454)
+
+julia> cos(2.0), cos(3.0)
 (-0.4161468365471424, -0.9899924966004454)
 ```
 
@@ -543,7 +620,7 @@ julia> @NLconstraint(model, cons1, sin(x) <= 1);
 julia> @NLconstraint(model, cons2, x + 5 == 10);
 
 julia> typeof(cons1)
-NonlinearConstraintRef{ScalarShape} (alias for ConstraintRef{Model, MathOptInterface.Nonlinear.ConstraintIndex, ScalarShape})
+NonlinearConstraintRef{ScalarShape} (alias for ConstraintRef{GenericModel{Float64}, MathOptInterface.Nonlinear.ConstraintIndex, ScalarShape})
 
 julia> index(cons1)
 MathOptInterface.Nonlinear.ConstraintIndex(1)
@@ -579,13 +656,17 @@ In addition to the [`@NLexpression`](@ref), [`@NLobjective`](@ref) and
 objects directly by using [`add_nonlinear_expression`](@ref),
 [`set_nonlinear_objective`](@ref) and [`add_nonlinear_constraint`](@ref).
 
-This input form may be useful if the expressions are generated programmatically.
+This input form may be useful if the expressions are generated programmatically,
+or if you experience compilation issues with the macro input (see
+[Known performance issues](@ref) for more information).
 
 ### Add a nonlinear expression
 
 Use [`add_nonlinear_expression`](@ref) to add a nonlinear expression to the model.
 
-```jldoctest; setup=:(using JuMP; model = Model())
+```jldoctest
+julia> model = Model();
+
 julia> @variable(model, x)
 x
 
@@ -596,7 +677,11 @@ julia> expr_ref = add_nonlinear_expression(model, expr)
 subexpression[1]: x + sin(x ^ 2.0)
 ```
 This is equivalent to
-```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> expr_ref = @NLexpression(model, x + sin(x^2))
 subexpression[1]: x + sin(x ^ 2.0)
 ```
@@ -608,14 +693,22 @@ subexpression[1]: x + sin(x ^ 2.0)
 
 Use [`set_nonlinear_objective`](@ref) to set a nonlinear objective.
 
-```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> expr = :($(x) + $(x)^2)
 :(x + x ^ 2)
 
 julia> set_nonlinear_objective(model, MIN_SENSE, expr)
 ```
 This is equivalent to
-```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> @NLobjective(model, Min, x + x^2)
 ```
 
@@ -626,7 +719,11 @@ julia> @NLobjective(model, Min, x + x^2)
 
 Use [`add_nonlinear_constraint`](@ref) to add a nonlinear constraint.
 
-```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> expr = :($(x) + $(x)^2)
 :(x + x ^ 2)
 
@@ -635,7 +732,11 @@ julia> add_nonlinear_constraint(model, :($(expr) <= 1))
 ```
 
 This is equivalent to
-```jldoctest; setup=:(using JuMP; model = Model(); @variable(model, x))
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x);
+
 julia> @NLconstraint(model, Min, x + x^2 <= 1)
 (x + x ^ 2.0) - 1.0 ≤ 0
 ```
@@ -692,4 +793,66 @@ Subject to
  (f_1(x) + f_2(x)) - 1.0 ≤ 0
 ```
 
-[^1]: Dunning, Huchette, and Lubin, "JuMP: A Modeling Language for Mathematical Optimization", SIAM Review, [PDF](https://mlubin.github.io/pdf/jump-sirev.pdf).
+### Registered functions with a variable number of arguments
+
+User defined functions require a fixed number of input arguments. However,
+sometimes you will want to use a registered function like:
+```jldoctest nlp_register_variable_arguments
+julia> f(x...) = sum(exp(x[i]^2) for i in 1:length(x));
+```
+with different numbers of arguments.
+
+The solution is to register the same function `f` for each unique number of
+input arguments, making sure to use a unique name each time. For example:
+
+```jldoctest nlp_register_variable_arguments
+julia> A = [[1], [1, 2], [2, 3, 4], [1, 3, 4, 5]];
+
+julia> model = Model();
+
+julia> @variable(model, x[1:5]);
+
+julia> funcs = Set{Symbol}();
+
+julia> for a in A
+           key = Symbol("f$(length(a))")
+           if !(key in funcs)
+               push!(funcs, key)
+               register(model, key, length(a), f; autodiff = true)
+           end
+           add_nonlinear_constraint(model, :($key($(x[a]...)) <= 1))
+       end
+
+julia> print(model)
+Feasibility
+Subject to
+ f1(x[1]) - 1.0 ≤ 0
+ f2(x[1], x[2]) - 1.0 ≤ 0
+ f3(x[2], x[3], x[4]) - 1.0 ≤ 0
+ f4(x[1], x[3], x[4], x[5]) - 1.0 ≤ 0
+```
+
+## Known performance issues
+
+The macro-based input to JuMP's nonlinear interface can cause a performance
+issue if you:
+
+ 1. write a macro with a large number (hundreds) of terms
+ 2. call that macro from within a function instead of from the top-level in
+    global scope.
+
+The first issue does not depend on the number of resulting terms in the
+mathematical expression, but rather the number of terms in the Julia `Expr`
+representation of that expression. For example, the expression
+`sum(x[i] for i in 1:1_000_000)` contains one million mathematical terms, but
+the `Expr` representation is just a single sum.
+
+The most common cause, other than a lot of tedious typing, is if you write a
+program that automatically writes a JuMP model as a text file, which you later
+execute. One example is [MINLPlib.jl](https://github.com/lanl-ansi/MINLPLib.jl)
+which automatically transpiled models in the GAMS scalar format into JuMP
+examples.
+
+As a rule of thumb, if you are writing programs to automatically generate
+expressions for the JuMP macros, you should target the [Raw expression input](@ref)
+instead. For more information, read [MathOptInterface Issue#1997](https://github.com/jump-dev/MathOptInterface.jl/issues/1997).

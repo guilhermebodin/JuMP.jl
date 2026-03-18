@@ -11,6 +11,9 @@ data of the new model `new_model`.
 
 A method should be added for any JuMP extension storing data in the `ext` field.
 
+This method should only be implemented by developers creating JuMP extensions.
+It should never be called by users of JuMP.
+
 !!! warning
     Do not engage in type piracy by implementing this method for types of `data`
     that you did not define! JuMP extensions should store types that they
@@ -29,26 +32,33 @@ function copy_extension_data(data, ::AbstractModel, ::AbstractModel)
 end
 
 """
-    ReferenceMap
+    GenericReferenceMap{T}
 
 Mapping between variable and constraint reference of a model and its copy. The
 reference of the copied model can be obtained by indexing the map with the
 reference of the corresponding reference of the original model.
 """
-struct ReferenceMap
-    model::Model
+struct GenericReferenceMap{T}
+    model::GenericModel{T}
     index_map::MOIU.IndexMap
 end
 
-function Base.getindex(map::ReferenceMap, vref::VariableRef)
-    return VariableRef(map.model, map.index_map[index(vref)])
+const ReferenceMap = GenericReferenceMap{Float64}
+
+# Some fallbacks for Base types that we should pass through un-changed
+Base.getindex(::GenericReferenceMap, x::Number) = x
+Base.getindex(::GenericReferenceMap, x::AbstractString) = x
+Base.getindex(::GenericReferenceMap, x::Symbol) = x
+
+function Base.getindex(map::GenericReferenceMap, vref::GenericVariableRef)
+    return GenericVariableRef(map.model, map.index_map[index(vref)])
 end
 
-function Base.getindex(map::ReferenceMap, cref::ConstraintRef)
+function Base.getindex(map::GenericReferenceMap, cref::ConstraintRef)
     return ConstraintRef(map.model, map.index_map[index(cref)], cref.shape)
 end
 
-function Base.getindex(map::ReferenceMap, expr::GenericAffExpr)
+function Base.getindex(map::GenericReferenceMap, expr::GenericAffExpr)
     result = zero(expr)
     for (coef, var) in linear_terms(expr)
         add_to_expression!(result, coef, map[var])
@@ -57,7 +67,7 @@ function Base.getindex(map::ReferenceMap, expr::GenericAffExpr)
     return result
 end
 
-function Base.getindex(map::ReferenceMap, expr::GenericQuadExpr)
+function Base.getindex(map::GenericReferenceMap, expr::GenericQuadExpr)
     aff = map[expr.aff]
     terms = [
         UnorderedPair(map[key.a], map[key.b]) => val for
@@ -66,12 +76,14 @@ function Base.getindex(map::ReferenceMap, expr::GenericQuadExpr)
     return GenericQuadExpr(aff, terms)
 end
 
-Base.getindex(map::ReferenceMap, val::AbstractArray) = getindex.(map, val)
+function Base.getindex(map::GenericReferenceMap, val::AbstractArray)
+    return getindex.(map, val)
+end
 
-Base.broadcastable(reference_map::ReferenceMap) = Ref(reference_map)
+Base.broadcastable(reference_map::GenericReferenceMap) = Ref(reference_map)
 
-# Return a Boolean if the filtering function (1st argument) indicates that the whole value should
-# be copied over.
+# Return a Boolean if the filtering function (first argument) indicates that the
+# whole value should be copied over.
 _should_copy_complete_object(_, _) = true
 function _should_copy_complete_object(
     filter_constraints::Function,
@@ -79,6 +91,7 @@ function _should_copy_complete_object(
 )
     return filter_constraints(value)
 end
+
 function _should_copy_complete_object(
     filter_constraints::Function,
     value::AbstractArray{T},
@@ -87,13 +100,13 @@ function _should_copy_complete_object(
 end # all(filter_constraints.(value))
 
 """
-    copy_model(model::Model; filter_constraints::Union{Nothing, Function}=nothing)
+    copy_model(model::GenericModel; filter_constraints::Union{Nothing, Function}=nothing)
 
-Return a copy of the model `model` and a [`ReferenceMap`](@ref) that can be used
-to obtain the variable and constraint reference of the new model corresponding
-to a given `model`'s reference. A [`Base.copy(::AbstractModel)`](@ref) method
-has also been implemented, it is similar to `copy_model` but does not return
-the reference map.
+Return a copy of the model `model` and a [`GenericReferenceMap`](@ref) that can
+be used to obtain the variable and constraint reference of the new model
+corresponding to a given `model`'s reference. A
+[`Base.copy(::AbstractModel)`](@ref) method has also been implemented, it is
+similar to `copy_model` but does not return the reference map.
 
 If the `filter_constraints` argument is given, only the constraints for which
 this function returns `true` will be copied. This function is given a
@@ -101,31 +114,40 @@ constraint reference as argument.
 
 ## Note
 
-Model copy is not supported in `DIRECT` mode, i.e. when a model is constructed
+Model copy is not supported in `DIRECT` mode, that is, when a model is constructed
 using the [`direct_model`](@ref) constructor instead of the [`Model`](@ref)
 constructor. Moreover, independently on whether an optimizer was provided at
-model construction, the new model will have no optimizer, i.e., an optimizer
+model construction, the new model will have no optimizer, that is, an optimizer
 will have to be provided to the new model in the [`optimize!`](@ref) call.
 
-## Examples
+## Example
 
 In the following example, a model `model` is constructed with a variable `x` and
 a constraint `cref`. It is then copied into a model `new_model` with the new
 references assigned to `x_new` and `cref_new`.
-```julia
-model = Model()
-@variable(model, x)
-@constraint(model, cref, x == 2)
 
-new_model, reference_map = copy_model(model)
-x_new = reference_map[x]
-cref_new = reference_map[cref]
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> @constraint(model, cref, x == 2)
+cref : x = 2
+
+julia> new_model, reference_map = copy_model(model);
+
+julia> x_new = reference_map[x]
+x
+
+julia> cref_new = reference_map[cref]
+cref : x = 2
 ```
 """
 function copy_model(
-    model::Model;
+    model::GenericModel{T};
     filter_constraints::Union{Nothing,Function} = nothing,
-)
+) where {T}
     if mode(model) == DIRECT
         error(
             "Cannot copy a model in `DIRECT` mode. Use the `Model` ",
@@ -133,7 +155,7 @@ function copy_model(
             "able to copy the constructed model.",
         )
     end
-    new_model = Model()
+    new_model = GenericModel{T}()
 
     # At JuMP's level, filter_constraints should work with JuMP.ConstraintRef,
     # whereas MOI.copy_to's filter_constraints works with MOI.ConstraintIndex.
@@ -159,7 +181,7 @@ function copy_model(
         )
     end
 
-    reference_map = ReferenceMap(new_model, index_map)
+    reference_map = GenericReferenceMap(new_model, index_map)
 
     for (name, value) in object_dictionary(model)
         if _should_copy_complete_object(filter_constraints, value)
@@ -196,25 +218,34 @@ and its copy.
 
 ## Note
 
-Model copy is not supported in `DIRECT` mode, i.e. when a model is constructed
+Model copy is not supported in `DIRECT` mode, that is, when a model is constructed
 using the [`direct_model`](@ref) constructor instead of the [`Model`](@ref)
 constructor. Moreover, independently on whether an optimizer was provided at
-model construction, the new model will have no optimizer, i.e., an optimizer
+model construction, the new model will have no optimizer, that is, an optimizer
 will have to be provided to the new model in the [`optimize!`](@ref) call.
 
-## Examples
+## Example
 
 In the following example, a model `model` is constructed with a variable `x` and
 a constraint `cref`. It is then copied into a model `new_model` with the new
 references assigned to `x_new` and `cref_new`.
-```julia
-model = Model()
-@variable(model, x)
-@constraint(model, cref, x == 2)
 
-new_model = copy(model)
-x_new = model[:x]
-cref_new = model[:cref]
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x)
+x
+
+julia> @constraint(model, cref, x == 2)
+cref : x = 2
+
+julia> new_model = copy(model);
+
+julia> x_new = model[:x]
+x
+
+julia> cref_new = model[:cref]
+cref : x = 2
 ```
 """
 function Base.copy(model::AbstractModel)
@@ -223,78 +254,147 @@ function Base.copy(model::AbstractModel)
 end
 
 """
-    copy_conflict(model::Model)
+    copy_conflict(model::GenericModel)
 
 Return a copy of the current conflict for the model `model` and a
-[`ReferenceMap`](@ref) that can be used to obtain the variable and constraint
-reference of the new model corresponding to a given `model`'s reference.
+[`GenericReferenceMap`](@ref) that can be used to obtain the variable and
+constraint reference of the new model corresponding to a given `model`'s
+reference.
 
 This is a convenience function that provides a filtering function for
 [`copy_model`](@ref).
 
 ## Note
 
-Model copy is not supported in `DIRECT` mode, i.e. when a model is constructed
+Model copy is not supported in `DIRECT` mode, that is, when a model is constructed
 using the [`direct_model`](@ref) constructor instead of the [`Model`](@ref)
 constructor. Moreover, independently on whether an optimizer was provided at
-model construction, the new model will have no optimizer, i.e., an optimizer
+model construction, the new model will have no optimizer, that is, an optimizer
 will have to be provided to the new model in the [`optimize!`](@ref) call.
 
-## Examples
+## Example
 
 In the following example, a model `model` is constructed with a variable `x` and
-two constraints `cref` and `cref2`. This model has no solution, as the two
+two constraints `c1` and `c2`. This model has no solution, as the two
 constraints are mutually exclusive. The solver is asked to compute a conflict
 with [`compute_conflict!`](@ref). The parts of `model` participating in the
-conflict are then copied into a model `new_model`.
+conflict are then copied into a model `iis_model`.
+
 ```julia
-model = Model() # You must use a solver that supports conflict refining/IIS
-# computation, like CPLEX or Gurobi
-@variable(model, x)
-@constraint(model, cref, x >= 2)
-@constraint(model, cref2, x <= 1)
+julia> using JuMP
 
-compute_conflict!(model)
-if MOI.get(model, MOI.ConflictStatus()) != MOI.CONFLICT_FOUND
-    error("No conflict could be found for an infeasible model.")
-end
+julia> import Gurobi
 
-new_model, reference_map = copy_conflict(model)
+julia> model = Model(Gurobi.Optimizer);
+
+julia> set_silent(model)
+
+julia> @variable(model, x >= 0)
+x
+
+julia> @constraint(model, c1, x >= 2)
+c1 : x ≥ 2
+
+julia> @constraint(model, c2, x <= 1)
+c2 : x ≤ 1
+
+julia> optimize!(model)
+
+julia> compute_conflict!(model)
+
+julia> if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+           iis_model, reference_map = copy_conflict(model)
+           print(iis_model)
+       end
+Feasibility
+Subject to
+ c1 : x ≥ 2
+ c2 : x ≤ 1
 ```
 """
-function copy_conflict(model::Model)
-    filter_constraints =
-        (cref) ->
-            MOI.get(model, MOI.ConstraintConflictStatus(), cref) !=
-            MOI.NOT_IN_CONFLICT
-    new_model, reference_map =
-        copy_model(model; filter_constraints = filter_constraints)
+function copy_conflict(model::GenericModel)
+    function filter_constraints(cref::ConstraintRef)
+        status = MOI.get(model, MOI.ConstraintConflictStatus(), cref)
+        return status != MOI.NOT_IN_CONFLICT
+    end
+    new_model, reference_map = copy_model(model; filter_constraints)
+    set_objective_sense(new_model, MOI.FEASIBILITY_SENSE)
     return new_model, reference_map
 end
 
 # Calling `deepcopy` over a JuMP model is not supported, nor planned to be
 # supported, because it would involve making a deep copy of the underlying
 # solver (behind a C pointer).
-function Base.deepcopy(::Model)
+function Base.deepcopy(::GenericModel)
     return error(
         "`JuMP.Model` does not support `deepcopy` as the reference to the underlying solver cannot be deep copied, use `copy` instead.",
     )
 end
 
-function MOI.copy_to(dest::MOI.ModelLike, src::Model)
-    if nonlinear_model(src) !== nothing
+function MOI.copy_to(dest::MOI.ModelLike, src::GenericModel)
+    nlp = nonlinear_model(src)
+    if nlp !== nothing
         # Re-set the NLP block in-case things have changed since last
         # solve.
         evaluator = MOI.Nonlinear.Evaluator(
-            nonlinear_model(src),
+            nlp,
             MOI.Nonlinear.SparseReverseMode(),
-            index.(all_variables(src)),
+            # Type annotation needed for JET.
+            index.(all_variables(src))::Vector{MOI.VariableIndex},
         )
         MOI.set(src, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
     end
     return MOI.copy_to(dest, backend(src))
 end
 
-function MOI.copy_to(dest::Model, src::MOI.ModelLike)
-    return MOI.copy_to(backend(dest), src)
+function MOI.copy_to(dest::GenericModel, src::MOI.ModelLike)
+    index_map = MOI.copy_to(backend(dest), src)
+    if MOI.NLPBlock() in MOI.get(src, MOI.ListOfModelAttributesSet())
+        block = MOI.get(src, MOI.NLPBlock())
+        dest.nlp_model = _nlp_model_from_nlpblock(block, block.evaluator)
+    end
+    return index_map
+end
+
+_lift_variable_from_expression(expr) = expr
+
+function _lift_variable_from_expression(expr::Expr)
+    if Meta.isexpr(expr, :ref, 2) && expr.args[1] == :x
+        return expr.args[2]
+    end
+    for i in 1:length(expr.args)
+        expr.args[i] = _lift_variable_from_expression(expr.args[i])
+    end
+    return expr
+end
+
+function _set_from_nlpboundspair(bound::MOI.NLPBoundsPair)
+    if bound.lower == bound.upper
+        return MOI.EqualTo(bound.lower)
+    elseif isfinite(bound.lower) && !isfinite(bound.upper)
+        return MOI.GreaterThan(bound.lower)
+    elseif isfinite(bound.upper) && !isfinite(bound.lower)
+        return MOI.LessThan(bound.upper)
+    else
+        return MOI.Interval(bound.lower, bound.upper)
+    end
+end
+
+function _nlp_model_from_nlpblock(block::MOI.NLPBlockData, evaluator)
+    MOI.initialize(evaluator, [:ExprGraph])
+    model = MOI.Nonlinear.Model()
+    for (i, bound) in enumerate(block.constraint_bounds)
+        expr = MOI.constraint_expr(evaluator, i)
+        f = Meta.isexpr(expr, :comparison) ? expr.args[3] : expr.args[2]
+        MOI.Nonlinear.add_constraint(
+            model,
+            _lift_variable_from_expression(f),
+            _set_from_nlpboundspair(bound),
+        )
+    end
+    if block.has_objective
+        expr = _lift_variable_from_expression(MOI.objective_expr(evaluator))
+        MOI.Nonlinear.set_objective(model, expr)
+    end
+    return model
 end

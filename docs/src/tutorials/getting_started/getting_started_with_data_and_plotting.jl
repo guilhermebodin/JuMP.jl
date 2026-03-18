@@ -34,7 +34,11 @@
 # Before we get started, we need this constant to point to where the data files
 # are.
 
-const DATA_DIR = joinpath(@__DIR__, "data")
+import JuMP
+const DATA_DIR = joinpath(
+    dirname(pathof(JuMP)),
+    joinpath("..", "docs", "src", "tutorials", "getting_started", "data"),
+);
 
 # ## Where to get help
 
@@ -121,7 +125,7 @@ Plots.scatter(
     ylims = (0, 3),
 )
 
-# Better!
+# That looks better.
 
 # !!! tip
 #     Read the [CSV documentation](https://csv.juliadata.org/stable/) for other
@@ -153,7 +157,7 @@ sort!(eyecolor_count, :count; rev = true)
 Plots.bar(
     eyecolor_count.Eyecolor,
     eyecolor_count.count;
-    xlabel = "Eyecolor",
+    xlabel = "Eye color",
     ylabel = "Number of characters",
     label = false,
 )
@@ -173,7 +177,7 @@ Plots.bar(
 
 ss_df = CSV.read(joinpath(DATA_DIR, "Cereal.txt"), DataFrames.DataFrame)
 
-# We can also specify the delimiter by passing the `delim` argument.
+# We can also specify the delimiter as follows:
 
 delim_df = CSV.read(
     joinpath(DATA_DIR, "Soccer.txt"),
@@ -276,7 +280,7 @@ csv_df
 passport_data = CSV.read(
     joinpath(DATA_DIR, "passport-index-matrix.csv"),
     DataFrames.DataFrame,
-)
+);
 
 # In this dataset, the first column represents a passport (=from) and each
 # remaining column represents a foreign country (=to).
@@ -305,8 +309,6 @@ end
 for country in passport_data.Passport
     passport_data[!, country] = modifier.(passport_data[!, country])
 end
-
-passport_data
 
 # The values in the cells now represent:
 # * 1 = no visa required for travel
@@ -347,12 +349,13 @@ C = passport_data.Passport
 # Then, create the model and initialize the decision variables:
 
 model = Model(HiGHS.Optimizer)
+set_silent(model)
 @variable(model, x[C], Bin)
 @objective(model, Min, sum(x))
 @constraint(model, [d in C], passport_data[!, d]' * x >= 1)
 model
 
-# Now optimize!
+# Now optimize:
 
 optimize!(model)
 
@@ -360,6 +363,10 @@ optimize!(model)
 # solution:
 
 solution_summary(model)
+
+# Just to be sure, check that the solver found an optimal solution:
+
+assert_is_solved_and_feasible(model)
 
 # ### Solution
 
@@ -376,9 +383,9 @@ for c in C
     end
 end
 
-# Interesting! We need some passports, like Australia and the United States,
-# which have widespread access to a large number of countries. However, we also
-# need passports like North Korea which only have visa-free access to a very
+# We need some passports, like New Zealand and the United States, which have
+# widespread access to a large number of countries. However, we also need
+# passports like North Korea which only have visa-free access to a very
 # limited number of countries.
 
 # !!! note

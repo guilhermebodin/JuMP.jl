@@ -102,7 +102,43 @@ julia> swap.(x)
  (1, 2)  (2, 2)  (3, 2)
 ```
 
-## DenseAxisArray
+### Tables
+
+Use [`Containers.rowtable`](@ref) to convert the `Array` into a
+[Tables.jl](https://github.com/JuliaData/Tables.jl) compatible
+`Vector{<:NamedTuple}`:
+
+```jldoctest containers_array
+julia> table = Containers.rowtable(x; header = [:I, :J, :value])
+6-element Vector{@NamedTuple{I::Int64, J::Int64, value::Tuple{Int64, Int64}}}:
+ (I = 1, J = 1, value = (1, 1))
+ (I = 2, J = 1, value = (2, 1))
+ (I = 1, J = 2, value = (1, 2))
+ (I = 2, J = 2, value = (2, 2))
+ (I = 1, J = 3, value = (1, 3))
+ (I = 2, J = 3, value = (2, 3))
+```
+
+Because it supports the [Tables.jl](https://github.com/JuliaData/Tables.jl)
+interface, you can pass it to any function which accepts a table as input:
+
+```jldoctest containers_array
+julia> import DataFrames;
+
+julia> DataFrames.DataFrame(table)
+6×3 DataFrame
+ Row │ I      J      value
+     │ Int64  Int64  Tuple…
+─────┼──────────────────────
+   1 │     1      1  (1, 1)
+   2 │     2      1  (2, 1)
+   3 │     1      2  (1, 2)
+   4 │     2      2  (2, 2)
+   5 │     1      3  (1, 3)
+   6 │     2      3  (2, 3)
+```
+
+## [DenseAxisArray](@id manual_dense_axis_array)
 
 A [`Containers.DenseAxisArray`](@ref) is created when the index sets are
 rectangular, but not of the form `1:n`. The index sets can be of any type.
@@ -119,7 +155,7 @@ And data, a 2×2 Matrix{Tuple{Int64, Symbol}}:
 
 ### Slicing
 
-DenseAxisArrays can be sliced
+A [`Containers.DenseAxisArray`](@ref) can be sliced:
 ```jldoctest containers_dense
 julia> x[:, :A]
 1-dimensional DenseAxisArray{Tuple{Int64, Symbol},1,...} with index sets:
@@ -159,7 +195,7 @@ julia> axes(x)
 
 ### Broadcasting
 
-Broadcasting over a DenseAxisArray returns a DenseAxisArray
+Broadcasting over a [`Containers.DenseAxisArray`](@ref) returns [`Containers.DenseAxisArray`](@ref):
 ```jldoctest containers_dense
 julia> swap(x::Tuple) = (last(x), first(x))
 swap (generic function with 1 method)
@@ -191,7 +227,55 @@ julia> x.data
  (2, :A)  (2, :B)
 ```
 
-## SparseAxisArray
+### Tables
+
+Use [`Containers.rowtable`](@ref) to convert a [`Containers.DenseAxisArray`](@ref)
+into a [Tables.jl](https://github.com/JuliaData/Tables.jl) compatible
+`Vector{<:NamedTuple}`:
+
+```jldoctest containers_dense
+julia> table = Containers.rowtable(x; header = [:I, :J, :value])
+4-element Vector{@NamedTuple{I::Int64, J::Symbol, value::Tuple{Int64, Symbol}}}:
+ (I = 1, J = :A, value = (1, :A))
+ (I = 2, J = :A, value = (2, :A))
+ (I = 1, J = :B, value = (1, :B))
+ (I = 2, J = :B, value = (2, :B))
+```
+
+Because it supports the [Tables.jl](https://github.com/JuliaData/Tables.jl)
+interface, you can pass it to any function which accepts a table as input:
+
+```jldoctest containers_dense
+julia> import DataFrames;
+
+julia> DataFrames.DataFrame(table)
+4×3 DataFrame
+ Row │ I      J       value
+     │ Int64  Symbol  Tuple…
+─────┼────────────────────────
+   1 │     1  A       (1, :A)
+   2 │     2  A       (2, :A)
+   3 │     1  B       (1, :B)
+   4 │     2  B       (2, :B)
+```
+
+### [Keyword indexing](@id dense_keyword_indexing)
+
+If all axes are named, you can use keyword indexing:
+
+```jldoctest containers_dense
+julia> x[i = 2, j = :A]
+(2, :A)
+
+julia> x[i = :, j = :B]
+1-dimensional DenseAxisArray{Tuple{Int64, Symbol},1,...} with index sets:
+    Dimension 1, Base.OneTo(2)
+And data, a 2-element Vector{Tuple{Int64, Symbol}}:
+ (1, :B)
+ (2, :B)
+```
+
+## [SparseAxisArray](@id manual_sparse_axis_array)
 
 A [`Containers.SparseAxisArray`](@ref) is created when the index sets are
 non-rectangular. This occurs in two circumstances:
@@ -207,25 +291,24 @@ JuMP.Containers.SparseAxisArray{Tuple{Int64, Int64}, 2, Tuple{Int64, Int64}} wit
 
 The `[indices; condition]` syntax is used:
 ```jldoctest containers_sparse
-julia> x = Containers.@container([i = 1:3, j = [:A, :B]; i > 1 && j == :B], (i, j))
-JuMP.Containers.SparseAxisArray{Tuple{Int64, Symbol}, 2, Tuple{Int64, Symbol}} with 2 entries:
+julia> x = Containers.@container([i = 1:3, j = [:A, :B]; i > 1], (i, j))
+JuMP.Containers.SparseAxisArray{Tuple{Int64, Symbol}, 2, Tuple{Int64, Symbol}} with 4 entries:
+  [2, A]  =  (2, :A)
   [2, B]  =  (2, :B)
+  [3, A]  =  (3, :A)
   [3, B]  =  (3, :B)
 ```
 Here we have the index sets `i = 1:3, j = [:A, :B]`, followed by `;`, and then a
-condition, which evaluates to `true` or `false`: `i > 1 && j == :B`.
+condition, which evaluates to `true` or `false`: `i > 1`.
 
 ### Slicing
 
-```@meta
-# TODO: This is included so we know to update the documentation when this is fixed.
-```
-
-Slicing is not supported.
+Slicing is supported:
 ```jldoctest containers_sparse
-julia> x[:, :B]
-ERROR: ArgumentError: Indexing with `:` is not supported by Containers.SparseAxisArray
-[...]
+julia> y = x[:, :B]
+JuMP.Containers.SparseAxisArray{Tuple{Int64, Symbol}, 1, Tuple{Int64}} with 2 entries:
+  [2]  =  (2, :B)
+  [3]  =  (3, :B)
 ```
 
 ### Looping
@@ -235,22 +318,85 @@ Use `eachindex` to loop over the elements:
 julia> for key in eachindex(x)
            println(x[key])
        end
+(2, :A)
+(2, :B)
+(3, :A)
+(3, :B)
+
+julia> for key in eachindex(y)
+           println(y[key])
+       end
 (2, :B)
 (3, :B)
 ```
 
+!!! warning
+    If you use a macro to construct a [`Containers.SparseAxisArray`](@ref), then
+    the iteration order is row-major, that is, indices are varied from right to
+    left. As an example, when iterating over `x` above, the `j` index is
+    iterated, keeping `i` constant. This order is in contrast to `Base.Array`,
+    which iterates in column-major order, that is, by varying indices from left
+    to right.
+
 ### Broadcasting
 
-Broadcasting over a SparseAxisArray returns a SparseAxisArray
+Broadcasting over a [`Containers.SparseAxisArray`](@ref) returns a
+[`Containers.SparseAxisArray`](@ref):
 
 ```jldoctest containers_sparse
 julia> swap(x::Tuple) = (last(x), first(x))
 swap (generic function with 1 method)
 
-julia> swap.(x)
-JuMP.Containers.SparseAxisArray{Tuple{Symbol, Int64}, 2, Tuple{Int64, Symbol}} with 2 entries:
-  [2, B]  =  (:B, 2)
-  [3, B]  =  (:B, 3)
+julia> swap.(y)
+JuMP.Containers.SparseAxisArray{Tuple{Symbol, Int64}, 1, Tuple{Int64}} with 2 entries:
+  [2]  =  (:B, 2)
+  [3]  =  (:B, 3)
+```
+
+### Tables
+
+Use [`Containers.rowtable`](@ref) to convert the [`Containers.SparseAxisArray`](@ref)
+into a [Tables.jl](https://github.com/JuliaData/Tables.jl) compatible
+`Vector{<:NamedTuple}`:
+
+```jldoctest containers_sparse
+julia> table = Containers.rowtable(x; header = [:I, :J, :value])
+4-element Vector{@NamedTuple{I::Int64, J::Symbol, value::Tuple{Int64, Symbol}}}:
+ (I = 2, J = :A, value = (2, :A))
+ (I = 2, J = :B, value = (2, :B))
+ (I = 3, J = :A, value = (3, :A))
+ (I = 3, J = :B, value = (3, :B))
+```
+
+Because it supports the [Tables.jl](https://github.com/JuliaData/Tables.jl)
+interface, you can pass it to any function which accepts a table as input:
+
+```jldoctest containers_sparse
+julia> import DataFrames;
+
+julia> DataFrames.DataFrame(table)
+4×3 DataFrame
+ Row │ I      J       value
+     │ Int64  Symbol  Tuple…
+─────┼────────────────────────
+   1 │     2  A       (2, :A)
+   2 │     2  B       (2, :B)
+   3 │     3  A       (3, :A)
+   4 │     3  B       (3, :B)
+```
+
+### Keyword indexing
+
+If all axes are named, you can use keyword indexing:
+
+```jldoctest containers_sparse
+julia> x[i = 2, j = :A]
+(2, :A)
+
+julia> x[i = :, j = :B]
+JuMP.Containers.SparseAxisArray{Tuple{Int64, Symbol}, 1, Tuple{Int64}} with 2 entries:
+  [2]  =  (2, :B)
+  [3]  =  (3, :B)
 ```
 
 ## Forcing the container type
@@ -285,7 +431,7 @@ julia> Containers.@container([i=1:3, j=1:5], i + j)
  4  5  6  7  8
 ```
 or an instance of `Base.OneTo`:
-```jldoctest; setup=:(model = Model())
+```jldoctest
 julia> set = Base.OneTo(3)
 Base.OneTo(3)
 

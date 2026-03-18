@@ -23,7 +23,7 @@ Returns the shape of the dual space of the space of objects of shape `shape`. By
 default, the `dual_shape` of a shape is itself. See the examples section below
 for an example for which this is not the case.
 
-## Examples
+## Example
 
 Consider polynomial constraints for which the dual is moment constraints and
 moment constraints for which the dual is polynomial constraints. Shapes for
@@ -64,13 +64,14 @@ dual_shape(shape::AbstractShape) = shape
 Return a set in its original shape `shape` given its vectorized form
 `vectorized_form`.
 
-## Examples
+## Example
 
 Given a [`SymmetricMatrixShape`](@ref) of vectorized form
 `[1, 2, 3] in MOI.PositiveSemidefinieConeTriangle(2)`, the
 following code returns the set of the original constraint
 `Symmetric(Matrix[1 2; 2 3]) in PSDCone()`:
-```jldoctest; setup = :(using JuMP)
+
+```jldoctest
 julia> reshape_set(MOI.PositiveSemidefiniteConeTriangle(2), SymmetricMatrixShape(2))
 PSDCone()
 ```
@@ -83,39 +84,119 @@ function reshape_set end
 Return an object in its original shape `shape` given its vectorized form
 `vectorized_form`.
 
-## Examples
+## Example
 
 Given a [`SymmetricMatrixShape`](@ref) of vectorized form `[1, 2, 3]`, the
 following code returns the matrix `Symmetric(Matrix[1 2; 2 3])`:
-```jldoctest; setup = :(using JuMP)
+
+```jldoctest
 julia> reshape_vector([1, 2, 3], SymmetricMatrixShape(2))
-2×2 LinearAlgebra.Symmetric{Int64,Array{Int64,2}}:
+2×2 LinearAlgebra.Symmetric{Int64, Matrix{Int64}}:
  1  2
  2  3
 ```
 """
 function reshape_vector end
 
+reshape_vector(::Nothing, ::AbstractShape) = nothing
+
 """
     shape(c::AbstractConstraint)::AbstractShape
 
 Return the shape of the constraint `c`.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
+julia> c = @constraint(model, x[2] <= 1);
+
+julia> shape(constraint_object(c))
+ScalarShape()
+
+julia> d = @constraint(model, x in SOS1());
+
+julia> shape(constraint_object(d))
+VectorShape()
+```
 """
 function shape end
 
 """
-    ScalarShape
+    ScalarShape()
 
-Shape of scalar constraints.
+An [`AbstractShape`](@ref) that represents scalar constraints.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
+julia> c = @constraint(model, x[2] <= 1);
+
+julia> shape(constraint_object(c))
+ScalarShape()
+```
 """
 struct ScalarShape <: AbstractShape end
+
 reshape_vector(α, ::ScalarShape) = α
 
-"""
-    VectorShape
+reshape_vector(::Nothing, ::ScalarShape) = nothing
 
-Vector for which the vectorized form corresponds exactly to the vector given.
+"""
+    VectorShape()
+
+An [`AbstractShape`](@ref) that represents vector-valued constraints.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2]);
+
+julia> c = @constraint(model, x in SOS1());
+
+julia> shape(constraint_object(c))
+VectorShape()
+```
 """
 struct VectorShape <: AbstractShape end
-reshape_vector(vectorized_form, ::VectorShape) = vectorized_form
+
+reshape_vector(x::Vector, ::VectorShape) = x
+
 vectorize(x, ::VectorShape) = x
+
+"""
+    ArrayShape{N}(dims::NTuple{N,Int}) where {N}
+
+An [`AbstractShape`](@ref) that represents array-valued constraints.
+
+## Example
+
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x[1:2, 1:3]);
+
+julia> c = @constraint(model, x >= 0, Nonnegatives())
+[x[1,1]  x[1,2]  x[1,3]
+ x[2,1]  x[2,2]  x[2,3]] ∈ Nonnegatives()
+
+julia> shape(constraint_object(c))
+ArrayShape{2}((2, 3))
+```
+"""
+struct ArrayShape{N} <: AbstractShape
+    dims::NTuple{N,Int}
+end
+
+reshape_vector(x::Vector, shape::ArrayShape) = reshape(x, shape.dims)
+
+vectorize(x, ::ArrayShape) = vec(x)

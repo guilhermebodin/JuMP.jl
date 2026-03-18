@@ -20,14 +20,14 @@
 
 # # Financial modeling problems
 
-# **Originally Contributed by**: Arpit Bhatia
+# **This tutorial was originally contributed by Arpit Bhatia.**
 
 # Optimization models play an increasingly important role in financial
 # decisions. Many computational finance problems can be solved efficiently using
 # modern optimization techniques.
 #
-# In this tutorial we will discuss two such examples taken from the book
-# [Optimization Methods in Finance](https://doi.org/10.1017/9781107297340).
+# In this tutorial we will discuss two such examples taken from
+# [Cornuejols2018](@cite).
 
 # This tutorial uses the following packages
 using JuMP
@@ -92,7 +92,7 @@ end)
 )
 
 optimize!(financing)
-
+assert_is_solved_and_feasible(financing)
 objective_value(financing)
 
 # ## Combinatorial auctions
@@ -136,9 +136,8 @@ auction = Model(HiGHS.Optimizer)
 for i in 1:6
     @constraint(auction, sum(y[j] for j in 1:6 if i in bid_items[j]) <= 1)
 end
-
 optimize!(auction)
-
+assert_is_solved_and_feasible(auction)
 objective_value(auction)
 
 #-

@@ -5,7 +5,7 @@
 
 # # Power Systems
 
-# **Originally Contributed by**: Yury Dvorkin and Miles Lubin
+# **This tutorial was originally contributed by Yury Dvorkin and Miles Lubin.**
 
 # This tutorial demonstrates how to formulate basic power systems engineering
 # models in JuMP.
@@ -52,7 +52,7 @@ import StatsPlots
 #   where $d^f$ is the demand forecast.
 
 # Further reading on ED models can be found in A. J. Wood, B. F. Wollenberg, and
-# G. B. Sheblé, "Power Generation, Operation and Control", Wiley, 2013.
+# G. B. Sheblé, "Power Generation, Operation and Control," Wiley, 2013.
 
 # Define some input data about the test system.
 
@@ -91,42 +91,43 @@ end
 
 scenario = Scenario(1500.0, 200.0)
 
-# Create a function `solve_ed`, which solves the economic dispatch problem for a
-# given set of input parameters.
+# Create a function `solve_economic_dispatch`, which solves the economic
+# dispatch problem for a given set of input parameters.
 
-function solve_ed(generators::Vector, wind, scenario)
+function solve_economic_dispatch(generators::Vector, wind, scenario)
     ## Define the economic dispatch (ED) model
-    ed = Model(HiGHS.Optimizer)
-    set_silent(ed)
+    model = Model(HiGHS.Optimizer)
+    set_silent(model)
     ## Define decision variables
     ## power output of generators
     N = length(generators)
-    @variable(ed, generators[i].min <= g[i = 1:N] <= generators[i].max)
+    @variable(model, generators[i].min <= g[i=1:N] <= generators[i].max)
     ## wind power injection
-    @variable(ed, 0 <= w <= scenario.wind)
+    @variable(model, 0 <= w <= scenario.wind)
     ## Define the objective function
     @objective(
-        ed,
+        model,
         Min,
         sum(generators[i].variable_cost * g[i] for i in 1:N) +
         wind.variable_cost * w,
     )
     ## Define the power balance constraint
-    @constraint(ed, sum(g[i] for i in 1:N) + w == scenario.demand)
+    @constraint(model, sum(g[i] for i in 1:N) + w == scenario.demand)
     ## Solve statement
-    optimize!(ed)
+    optimize!(model)
+    assert_is_solved_and_feasible(model)
     ## return the optimal value of the objective function and its minimizers
     return (
         g = value.(g),
         w = value(w),
         wind_spill = scenario.wind - value(w),
-        total_cost = objective_value(ed),
+        total_cost = objective_value(model),
     )
 end
 
 # Solve the economic dispatch problem
 
-solution = solve_ed(generators, wind_generator, scenario);
+solution = solve_economic_dispatch(generators, wind_generator, scenario);
 
 println("Dispatch of Generators: ", solution.g, " MW")
 println("Dispatch of Wind: ", solution.w, " MW")
@@ -160,8 +161,8 @@ c_g_scale_df = DataFrames.DataFrame(;
 for c_g1_scale in 0.5:0.1:3.0
     ## Update the incremental cost of the first generator at every iteration.
     new_generators = scale_generator_cost.(generators, [c_g1_scale, 1.0])
-    ## Solve the ed problem with the updated incremental cost
-    sol = solve_ed(new_generators, wind_generator, scenario)
+    ## Solve the economic-dispatch problem with the updated incremental cost
+    sol = solve_economic_dispatch(new_generators, wind_generator, scenario)
     push!(
         c_g_scale_df,
         (c_g1_scale, sol.g[1], sol.g[2], sol.w, sol.wind_spill, sol.total_cost),
@@ -178,12 +179,12 @@ c_g_scale_df
 # Note that in the previous exercise we entirely rebuilt the optimization model
 # at every iteration of the internal loop, which incurs an additional
 # computational burden. This burden can be alleviated if instead of re-building
-# the entire model, we modify a specific constraint(s) or the objective
+# the entire model, we modify the constraints or objective
 # function, as it shown in the example below.
 
 # Compare the computing time in case of the above and below models.
 
-function solve_ed_inplace(
+function solve_economic_dispatch_inplace(
     generators::Vector,
     wind,
     scenario,
@@ -195,28 +196,29 @@ function solve_ed_inplace(
     g2_out = Float64[]
     ## This function only works for two generators
     @assert length(generators) == 2
-    ed = Model(HiGHS.Optimizer)
-    set_silent(ed)
+    model = Model(HiGHS.Optimizer)
+    set_silent(model)
     N = length(generators)
-    @variable(ed, generators[i].min <= g[i = 1:N] <= generators[i].max)
-    @variable(ed, 0 <= w <= scenario.wind)
+    @variable(model, generators[i].min <= g[i=1:N] <= generators[i].max)
+    @variable(model, 0 <= w <= scenario.wind)
     @objective(
-        ed,
+        model,
         Min,
         sum(generators[i].variable_cost * g[i] for i in 1:N) +
         wind.variable_cost * w,
     )
-    @constraint(ed, sum(g[i] for i in 1:N) + w == scenario.demand)
+    @constraint(model, sum(g[i] for i in 1:N) + w == scenario.demand)
     for c_g1_scale in scale
         @objective(
-            ed,
+            model,
             Min,
             c_g1_scale * generators[1].variable_cost * g[1] +
             generators[2].variable_cost * g[2] +
             wind.variable_cost * w,
         )
-        optimize!(ed)
-        push!(obj_out, objective_value(ed))
+        optimize!(model)
+        assert_is_solved_and_feasible(model)
+        push!(obj_out, objective_value(model))
         push!(w_out, value(w))
         push!(g1_out, value(g[1]))
         push!(g2_out, value(g[2]))
@@ -233,11 +235,18 @@ function solve_ed_inplace(
 end
 
 start = time()
-inplace_df = solve_ed_inplace(generators, wind_generator, scenario, 0.5:0.1:3.0)
+inplace_df = solve_economic_dispatch_inplace(
+    generators,
+    wind_generator,
+    scenario,
+    0.5:0.1:3.0,
+)
 print(string("elapsed time: ", time() - start, " seconds"))
 
-# Adjusting specific constraints or the objective function is faster than
-# re-building the entire model.
+# For small models, adjusting specific constraints or the objective function is
+# sometimes faster and sometimes slower than re-building the entire model.
+# However, as the problem size increases, updating the model in-place is usually
+# faster.
 
 inplace_df
 
@@ -247,7 +256,7 @@ inplace_df
 # assumes that all generators must be dispatched at least at their minimum power
 # output limit. This approach is not cost efficient and may lead to absurd
 # decisions. For example, if $d = \sum_{i \in I} g^{\min}_{i}$, the wind power
-# injection must be zero, i.e. all available wind generation is spilled, to meet
+# injection must be zero, that is, all available wind generation is spilled, to meet
 # the minimum power output constraints on generators.
 
 # In the following example, we adjust the total demand and observed how it
@@ -268,7 +277,7 @@ end
 
 for demand_scale in 0.2:0.1:1.4
     new_scenario = scale_demand(scenario, demand_scale)
-    sol = solve_ed(generators, wind_generator, new_scenario)
+    sol = solve_economic_dispatch(generators, wind_generator, new_scenario)
     push!(
         demand_scale_df,
         (
@@ -322,15 +331,15 @@ Plots.plot(dispatch_plot, wind_plot)
 
 # For further reading on the interplay between wind generation and the minimum
 # power output constraints of generators, we refer interested readers to R.
-# Baldick, "Wind and Energy Markets: A Case Study of Texas," IEEE Systems
+# Baldick, "Wind and energy markets: a case study of Texas," IEEE Systems
 # Journal, vol. 6, pp. 27-34, 2012.
 
 # ## Unit commitment
 
 # The Unit Commitment (UC) model can be obtained from ED model by introducing
 # binary variable associated with each generator. This binary variable can
-# attain two values: if it is "1", the generator is synchronized and, thus, can
-# be dispatched, otherwise, i.e. if the binary variable is "0", that generator
+# attain two values: if it is "1," the generator is synchronized and, thus, can
+# be dispatched, otherwise, that is, if the binary variable is "0," that generator
 # is not synchronized and its power output is set to 0.
 
 # To obtain the mathematical formulation of the UC model, we will modify the
@@ -351,42 +360,44 @@ Plots.plot(dispatch_plot, wind_plot)
 # In the following example we convert the ED model explained above to the UC
 # model.
 
-function solve_uc(generators::Vector, wind, scenario)
-    uc = Model(HiGHS.Optimizer)
-    set_silent(uc)
+function solve_unit_commitment(generators::Vector, wind, scenario)
+    model = Model(HiGHS.Optimizer)
+    set_silent(model)
     N = length(generators)
-    @variable(uc, generators[i].min <= g[i = 1:N] <= generators[i].max)
-    @variable(uc, 0 <= w <= scenario.wind)
-    @constraint(uc, sum(g[i] for i in 1:N) + w == scenario.demand)
+    @variable(model, 0 <= g[i=1:N] <= generators[i].max)
+    @variable(model, 0 <= w <= scenario.wind)
+    @constraint(model, sum(g[i] for i in 1:N) + w == scenario.demand)
     ## !!! New: add binary on-off variables for each generator
-    @variable(uc, u[i = 1:N], Bin)
-    @constraint(uc, [i = 1:N], g[i] <= generators[i].max * u[i])
-    @constraint(uc, [i = 1:N], g[i] >= generators[i].min * u[i])
+    @variable(model, u[i=1:N], Bin)
+    @constraint(model, [i = 1:N], g[i] <= generators[i].max * u[i])
+    @constraint(model, [i = 1:N], g[i] >= generators[i].min * u[i])
     @objective(
-        uc,
+        model,
         Min,
         sum(generators[i].variable_cost * g[i] for i in 1:N) +
         wind.variable_cost * w +
         ## !!! new
         sum(generators[i].fixed_cost * u[i] for i in 1:N)
     )
-    optimize!(uc)
-    status = termination_status(uc)
+    optimize!(model)
+    status = termination_status(model)
     if status != OPTIMAL
         return (status = status,)
     end
+    @assert primal_status(model) == FEASIBLE_POINT
     return (
         status = status,
         g = value.(g),
         w = value(w),
         wind_spill = scenario.wind - value(w),
         u = value.(u),
-        total_cost = objective_value(uc),
+        total_cost = objective_value(model),
     )
 end
 
-# Solve the economic dispatch problem
-solution = solve_uc(generators, wind_generator, scenario)
+# Solve the unit commitment problem
+
+solution = solve_unit_commitment(generators, wind_generator, scenario)
 
 println("Dispatch of Generators: ", solution.g, " MW")
 println("Commitments of Generators: ", solution.u)
@@ -396,8 +407,9 @@ println("Total cost: \$", solution.total_cost)
 
 # ## Unit commitment as a function of demand
 
-# After implementing the UC model, we can now assess the interplay between the
-# minimum power output constraints on generators and wind generation.
+# After implementing the unit commitment model, we can now assess the interplay
+# between the minimum power output constraints on generators and wind
+# generation.
 
 uc_df = DataFrames.DataFrame(;
     demand = Float64[],
@@ -412,7 +424,7 @@ uc_df = DataFrames.DataFrame(;
 
 for demand_scale in 0.2:0.1:1.4
     new_scenario = scale_demand(scenario, demand_scale)
-    sol = solve_uc(generators, wind_generator, new_scenario)
+    sol = solve_unit_commitment(generators, wind_generator, new_scenario)
     if sol.status == OPTIMAL
         push!(
             uc_df,
@@ -443,7 +455,7 @@ commitment_plot = StatsPlots.@df(
         :demand,
         [:commitment_G1, :commitment_G2],
         labels = ["G1" "G2"],
-        title = "Committment",
+        title = "Commitment",
         legend = :bottomright,
         linewidth = 3,
         xlabel = "Demand [MW]",
@@ -494,7 +506,7 @@ function thermal_cost_function(g)
     end
 end
 
-function solve_nonlinear_ed(
+function solve_nonlinear_economic_dispatch(
     generators::Vector,
     wind,
     scenario;
@@ -504,18 +516,19 @@ function solve_nonlinear_ed(
     if silent
         set_silent(model)
     end
-    register(model, :tcf, 1, thermal_cost_function; autodiff = true)
+    @operator(model, op_tcf, 1, thermal_cost_function)
     N = length(generators)
-    @variable(model, generators[i].min <= g[i = 1:N] <= generators[i].max)
+    @variable(model, generators[i].min <= g[i=1:N] <= generators[i].max)
     @variable(model, 0 <= w <= scenario.wind)
-    @NLobjective(
+    @objective(
         model,
         Min,
-        sum(generators[i].variable_cost * tcf(g[i]) for i in 1:N) +
+        sum(generators[i].variable_cost * op_tcf(g[i]) for i in 1:N) +
         wind.variable_cost * w,
     )
-    @NLconstraint(model, sum(g[i] for i in 1:N) + sqrt(w) == scenario.demand)
+    @constraint(model, sum(g[i] for i in 1:N) + sqrt(w) == scenario.demand)
     optimize!(model)
+    assert_is_solved_and_feasible(model)
     return (
         g = value.(g),
         w = value(w),
@@ -524,14 +537,15 @@ function solve_nonlinear_ed(
     )
 end
 
-solution = solve_nonlinear_ed(generators, wind_generator, scenario)
+solution =
+    solve_nonlinear_economic_dispatch(generators, wind_generator, scenario)
 
 # Now let's see how the wind is dispatched as a function of the cost:
 
 wind_cost = 0.0:1:100
 wind_dispatch = Float64[]
 for c in wind_cost
-    sol = solve_nonlinear_ed(
+    sol = solve_nonlinear_economic_dispatch(
         generators,
         WindGenerator(c),
         scenario;

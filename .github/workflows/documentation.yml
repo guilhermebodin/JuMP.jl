@@ -11,15 +11,43 @@ jobs:
     env:
       GKSwstype: nul
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@latest
         with:
-          # Build documentation on Julia 1.6
-          version: '1.6'
+          # Fix the Julia version, because Enzyme doesn't always like being updated
+          # to `latest`.
+          version: '1.12'
+      - uses: julia-actions/cache@v3
+      - name: Install Gurobi license
+        env:
+          SECRET_GUROBI_LICENSE: ${{ secrets.GUROBI_LICENSE }}
+        shell: bash
+        run: |
+          mkdir -p /opt/gurobi
+          echo "${SECRET_GUROBI_LICENSE}" > /opt/gurobi/gurobi.lic
       - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+        shell: julia --color=yes --project=docs/ {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # For authentication with SSH deploy key
-        run: julia --project=docs/ docs/make.jl
+          DOCUMENTER_LATEX_DEBUG: ${{ github.workspace }}/latex-debug-logs
+        run: julia --color=yes --project=docs -p 2 docs/make.jl
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: PDF build logs
+          path: ${{ github.workspace }}/latex-debug-logs
+      - uses: errata-ai/vale-action@reviewdog
+        with:
+          version: 3.3.1
+          files: all
+          fail_on_error: true
+          filter_mode: nofilter
+          vale_flags: "--config=.vale.ini"
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

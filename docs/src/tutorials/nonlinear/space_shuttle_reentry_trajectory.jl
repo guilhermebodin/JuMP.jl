@@ -20,20 +20,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE   #src
 # SOFTWARE.                                                                       #src
 
-# # Optimal control for a Space Shuttle reentry trajectory
+# # Example: optimal control for a Space Shuttle reentry trajectory
 
-# **Originally Contributed by**: Henrique Ferrolho
+# **This tutorial was originally contributed by Henrique Ferrolho.**
 
 # This tutorial demonstrates how to compute a reentry trajectory for the
-# [Space Shuttle](https://en.wikipedia.org/wiki/Space_Shuttle),
-# by formulating and solving a nonlinear programming problem.
-# The problem was drawn from Chapter 6 of
-# ["Practical Methods for Optimal Control and Estimation Using Nonlinear Programming"](https://epubs.siam.org/doi/book/10.1137/1.9780898718577),
-# by John T. Betts.
+# [Space Shuttle](https://en.wikipedia.org/wiki/Space_Shuttle), by formulating
+# and solving a nonlinear programming problem. The problem was drawn from
+# Chapter 6 of [Betts2010](@cite).
+
+# !!! info
+#     The JuMP extension [InfiniteOpt.jl](../../packages/InfiniteOpt.md) can also be
+#     used to model and solve optimal control problems.
 
 # !!! tip
-#     This tutorial is a more-complicated version of the [Rocket Control](@ref) example.
-#     If you are new to solving nonlinear programs in JuMP, you may want to start there instead.
+#     This tutorial is a more-complicated version of the [Example: nonlinear optimal control of a rocket](@ref)
+#     tutorial. If you are new to solving nonlinear programs in JuMP, you may
+#     want to start there instead.
+
+# ## Required packages
+
+# This tutorial uses the following packages:
+
+using JuMP
+import Interpolations
+import Ipopt
+import Plots
+
+# ## Formulation
 
 # The motion of the vehicle is defined by the following set of DAEs:
 #
@@ -102,7 +116,7 @@
 
 # As explained in the book, our goal is to maximize the final cross-range,
 # which is equivalent to maximizing the final latitude of the vehicle,
-# i.e., $J = \theta(t_F)$.
+# that is, $J = \theta(t_F)$.
 
 # ![Max cross-range shuttle reentry](../../assets/space_shuttle.png)
 
@@ -116,14 +130,10 @@
 # or [trapezoidal](http://en.wikipedia.org/wiki/Trapezoidal_rule) integration.
 
 # !!! warning
-#     Do not try to actually land a Space Shuttle using this notebook! There's
+#     Do not try to actually land a Space Shuttle using this notebook. There's
 #     no mesh refinement going on, which can lead to unrealistic trajectories
 #     having position and velocity errors with orders of magnitude $10^4$ ft and
 #     $10^2$ ft/sec, respectively.
-
-using JuMP
-import Interpolations
-import Ipopt
 
 ## Global variables
 const w = 203000.0  # weight (lb)
@@ -177,7 +187,7 @@ nothing #hide
 #     For the best results, it is advised to experiment different linear solvers.
 #
 #     For example, the linear solver `MA27` is outdated and can be quite slow.
-#     `MA57` is a much better alternative, especially for highly-sparse problems
+#     `MA57` is a much better alternative, especially for highly sparse problems
 #     (such as trajectory optimization problems).
 
 ## Uncomment the lines below to pass user options to the solver
@@ -200,7 +210,7 @@ model = Model(optimizer_with_attributes(Ipopt.Optimizer, user_options...))
     deg2rad(-89) ≤ β[1:n] ≤ deg2rad(1)  # bank angle (rad)
     ##        3.5 ≤       Δt[1:n] ≤ 4.5          # time step (sec)
     Δt[1:n] == 4.0         # time step (sec)
-end)
+end);
 
 # !!! info
 #     Above you can find two alternatives for the `Δt` variables.
@@ -237,40 +247,32 @@ initial_guess = mapreduce(transpose, vcat, interp_linear.(1:n))
 set_start_value.(all_variables(model), vec(initial_guess))
 
 ## Functions to restore `h` and `v` to their true scale
-@NLexpression(model, h[j = 1:n], scaled_h[j] * 1e5)
-@NLexpression(model, v[j = 1:n], scaled_v[j] * 1e4)
+@expression(model, h[j=1:n], scaled_h[j] * 1e5)
+@expression(model, v[j=1:n], scaled_v[j] * 1e4)
 
 ## Helper functions
-@NLexpression(model, c_L[j = 1:n], a₀ + a₁ * rad2deg(α[j]))
-@NLexpression(
-    model,
-    c_D[j = 1:n],
-    b₀ + b₁ * rad2deg(α[j]) + b₂ * rad2deg(α[j])^2
-)
-@NLexpression(model, ρ[j = 1:n], ρ₀ * exp(-h[j] / hᵣ))
-@NLexpression(model, D[j = 1:n], 0.5 * c_D[j] * S * ρ[j] * v[j]^2)
-@NLexpression(model, L[j = 1:n], 0.5 * c_L[j] * S * ρ[j] * v[j]^2)
-@NLexpression(model, r[j = 1:n], Rₑ + h[j])
-@NLexpression(model, g[j = 1:n], μ / r[j]^2)
+@expression(model, c_L[j=1:n], a₀ + a₁ * rad2deg(α[j]))
+@expression(model, c_D[j=1:n], b₀ + b₁ * rad2deg(α[j]) + b₂ * rad2deg(α[j])^2)
+@expression(model, ρ[j=1:n], ρ₀ * exp(-h[j] / hᵣ))
+@expression(model, D[j=1:n], 0.5 * c_D[j] * S * ρ[j] * v[j]^2)
+@expression(model, L[j=1:n], 0.5 * c_L[j] * S * ρ[j] * v[j]^2)
+@expression(model, r[j=1:n], Rₑ + h[j])
+@expression(model, g[j=1:n], μ / r[j]^2)
 
 ## Motion of the vehicle as a differential-algebraic system of equations (DAEs)
-@NLexpression(model, δh[j = 1:n], v[j] * sin(γ[j]))
-@NLexpression(
+@expression(model, δh[j=1:n], v[j] * sin(γ[j]))
+@expression(model, δϕ[j=1:n], (v[j] / r[j]) * cos(γ[j]) * sin(ψ[j]) / cos(θ[j]))
+@expression(model, δθ[j=1:n], (v[j] / r[j]) * cos(γ[j]) * cos(ψ[j]))
+@expression(model, δv[j=1:n], -(D[j] / m) - g[j] * sin(γ[j]))
+@expression(
     model,
-    δϕ[j = 1:n],
-    (v[j] / r[j]) * cos(γ[j]) * sin(ψ[j]) / cos(θ[j])
-)
-@NLexpression(model, δθ[j = 1:n], (v[j] / r[j]) * cos(γ[j]) * cos(ψ[j]))
-@NLexpression(model, δv[j = 1:n], -(D[j] / m) - g[j] * sin(γ[j]))
-@NLexpression(
-    model,
-    δγ[j = 1:n],
+    δγ[j=1:n],
     (L[j] / (m * v[j])) * cos(β[j]) +
     cos(γ[j]) * ((v[j] / r[j]) - (g[j] / v[j]))
 )
-@NLexpression(
+@expression(
     model,
-    δψ[j = 1:n],
+    δψ[j=1:n],
     (1 / (m * v[j] * cos(γ[j]))) * L[j] * sin(β[j]) +
     (v[j] / (r[j] * cos(θ[j]))) * cos(γ[j]) * sin(ψ[j]) * sin(θ[j])
 )
@@ -281,20 +283,20 @@ for j in 2:n
 
     if integration_rule == "rectangular"
         ## Rectangular integration
-        @NLconstraint(model, h[j] == h[i] + Δt[i] * δh[i])
-        @NLconstraint(model, ϕ[j] == ϕ[i] + Δt[i] * δϕ[i])
-        @NLconstraint(model, θ[j] == θ[i] + Δt[i] * δθ[i])
-        @NLconstraint(model, v[j] == v[i] + Δt[i] * δv[i])
-        @NLconstraint(model, γ[j] == γ[i] + Δt[i] * δγ[i])
-        @NLconstraint(model, ψ[j] == ψ[i] + Δt[i] * δψ[i])
+        @constraint(model, h[j] == h[i] + Δt[i] * δh[i])
+        @constraint(model, ϕ[j] == ϕ[i] + Δt[i] * δϕ[i])
+        @constraint(model, θ[j] == θ[i] + Δt[i] * δθ[i])
+        @constraint(model, v[j] == v[i] + Δt[i] * δv[i])
+        @constraint(model, γ[j] == γ[i] + Δt[i] * δγ[i])
+        @constraint(model, ψ[j] == ψ[i] + Δt[i] * δψ[i])
     elseif integration_rule == "trapezoidal"
         ## Trapezoidal integration
-        @NLconstraint(model, h[j] == h[i] + 0.5 * Δt[i] * (δh[j] + δh[i]))
-        @NLconstraint(model, ϕ[j] == ϕ[i] + 0.5 * Δt[i] * (δϕ[j] + δϕ[i]))
-        @NLconstraint(model, θ[j] == θ[i] + 0.5 * Δt[i] * (δθ[j] + δθ[i]))
-        @NLconstraint(model, v[j] == v[i] + 0.5 * Δt[i] * (δv[j] + δv[i]))
-        @NLconstraint(model, γ[j] == γ[i] + 0.5 * Δt[i] * (δγ[j] + δγ[i]))
-        @NLconstraint(model, ψ[j] == ψ[i] + 0.5 * Δt[i] * (δψ[j] + δψ[i]))
+        @constraint(model, h[j] == h[i] + 0.5 * Δt[i] * (δh[j] + δh[i]))
+        @constraint(model, ϕ[j] == ϕ[i] + 0.5 * Δt[i] * (δϕ[j] + δϕ[i]))
+        @constraint(model, θ[j] == θ[i] + 0.5 * Δt[i] * (δθ[j] + δθ[i]))
+        @constraint(model, v[j] == v[i] + 0.5 * Δt[i] * (δv[j] + δv[i]))
+        @constraint(model, γ[j] == γ[i] + 0.5 * Δt[i] * (δγ[j] + δγ[i]))
+        @constraint(model, ψ[j] == ψ[i] + 0.5 * Δt[i] * (δψ[j] + δψ[i]))
     else
         @error "Unexpected integration rule '$(integration_rule)'"
     end
@@ -305,7 +307,7 @@ end
 
 set_silent(model)  # Hide solver's verbose output
 optimize!(model)  # Solve for the control and state
-@assert termination_status(model) == LOCALLY_SOLVED
+assert_is_solved_and_feasible(model)
 
 ## Show final cross-range of the solution
 println(
@@ -316,44 +318,54 @@ println(
 
 # ### Plotting the results
 
-using Plots
+# Let's plot the results to visualize the optimal trajectory:
 
-#-
-
-ts = cumsum([0; value.(Δt)])[1:end-1]
-nothing #hide
-
-#-
-
-plt_altitude = plot(
+ts = cumsum([0; value.(Δt)])[1:(end-1)]
+plt_altitude = Plots.plot(
     ts,
     value.(scaled_h);
     legend = nothing,
     title = "Altitude (100,000 ft)",
 )
-plt_longitude =
-    plot(ts, rad2deg.(value.(ϕ)); legend = nothing, title = "Longitude (deg)")
-plt_latitude =
-    plot(ts, rad2deg.(value.(θ)); legend = nothing, title = "Latitude (deg)")
-plt_velocity = plot(
+plt_longitude = Plots.plot(
+    ts,
+    rad2deg.(value.(ϕ));
+    legend = nothing,
+    title = "Longitude (deg)",
+)
+plt_latitude = Plots.plot(
+    ts,
+    rad2deg.(value.(θ));
+    legend = nothing,
+    title = "Latitude (deg)",
+)
+plt_velocity = Plots.plot(
     ts,
     value.(scaled_v);
     legend = nothing,
     title = "Velocity (1000 ft/sec)",
 )
-plt_flight_path =
-    plot(ts, rad2deg.(value.(γ)); legend = nothing, title = "Flight Path (deg)")
-plt_azimuth =
-    plot(ts, rad2deg.(value.(ψ)); legend = nothing, title = "Azimuth (deg)")
+plt_flight_path = Plots.plot(
+    ts,
+    rad2deg.(value.(γ));
+    legend = nothing,
+    title = "Flight Path (deg)",
+)
+plt_azimuth = Plots.plot(
+    ts,
+    rad2deg.(value.(ψ));
+    legend = nothing,
+    title = "Azimuth (deg)",
+)
 
-plt = plot(
+Plots.plot(
     plt_altitude,
     plt_velocity,
     plt_longitude,
     plt_flight_path,
     plt_latitude,
     plt_azimuth;
-    layout = grid(3, 2),
+    layout = Plots.grid(3, 2),
     linewidth = 2,
     size = (700, 700),
 )
@@ -368,37 +380,37 @@ function q(h, v, a)
     return qₐ(a) * qᵣ(h, v)
 end
 
-plt_attack_angle = plot(
-    ts[1:end-1],
-    rad2deg.(value.(α)[1:end-1]);
+plt_attack_angle = Plots.plot(
+    ts[1:(end-1)],
+    rad2deg.(value.(α)[1:(end-1)]);
     legend = nothing,
     title = "Angle of Attack (deg)",
 )
-plt_bank_angle = plot(
-    ts[1:end-1],
-    rad2deg.(value.(β)[1:end-1]);
+plt_bank_angle = Plots.plot(
+    ts[1:(end-1)],
+    rad2deg.(value.(β)[1:(end-1)]);
     legend = nothing,
     title = "Bank Angle (deg)",
 )
-plt_heating = plot(
+plt_heating = Plots.plot(
     ts,
     q.(value.(scaled_h) * 1e5, value.(scaled_v) * 1e4, value.(α));
     legend = nothing,
     title = "Heating (BTU/ft/ft/sec)",
 )
 
-plt = plot(
+Plots.plot(
     plt_attack_angle,
     plt_bank_angle,
     plt_heating;
-    layout = grid(3, 1),
+    layout = Plots.grid(3, 1),
     linewidth = 2,
     size = (700, 700),
 )
 
 #-
 
-plt = plot(
+Plots.plot(
     rad2deg.(value.(ϕ)),
     rad2deg.(value.(θ)),
     value.(scaled_h);

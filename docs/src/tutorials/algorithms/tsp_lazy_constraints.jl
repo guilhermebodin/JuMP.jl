@@ -20,7 +20,7 @@
 
 # # [Traveling Salesperson Problem](@id tsp_lazy)
 
-# **Originally Contributed by**: Daniel Schermer
+# **This tutorial was originally contributed by Daniel Schermer.**
 
 # This tutorial describes how to implement the
 # [Traveling Salesperson Problem](https://en.wikipedia.org/wiki/Travelling_salesman_problem)
@@ -31,9 +31,19 @@
 # It uses the following packages:
 
 using JuMP
-import GLPK
-import Random
+import HiGHS  #hide
+import Gurobi
 import Plots
+import Random
+import Test
+
+HAS_GUROBI = try    #hide
+    Gurobi.Env(Dict{String,Any}("output_flag" => 0))  #hide
+    true            #hide
+catch               #hide
+    false           #hide
+end                 #hide
+nothing             #hide
 
 # ## [Mathematical Formulation](@id tsp_model)
 
@@ -47,7 +57,7 @@ import Plots
 
 # In the Traveling Salesperson Problem, we are tasked with finding a tour with
 # minimal length that visits every vertex exactly once and then returns to the
-# point of origin, that is, a *hamiltonian cycle* with minimal weight.
+# point of origin, that is, a *Hamiltonian cycle* with minimal weight.
 #
 # To model the problem, we introduce a binary variable,
 # $x_{ij} \in \{0,1\} \; \forall i, j \in V$, that indicates if edge $(i,j)$ is
@@ -59,7 +69,7 @@ import Plots
 # The objective is to minimize the length of the tour (due to the assumed
 # symmetry, the second sum only contains $i<j$):
 # ```math
-# \text{min\ } \sum_{i \in V}  \sum_{j \in V, i < j} d_{ij} x_{ij}.
+# \text{min } \sum_{i \in V}  \sum_{j \in V, i < j} d_{ij} x_{ij}.
 # ```
 
 # Note that it is also possible to use the following objective function instead:
@@ -124,7 +134,7 @@ function generate_distance_matrix(n; random_seed = 1)
     return X, Y, d
 end
 
-n = 40
+n = 100
 X, Y, d = generate_distance_matrix(n)
 
 # For the JuMP model, we first initialize the model object. Then, we create the
@@ -132,8 +142,9 @@ X, Y, d = generate_distance_matrix(n)
 # defining the `x` matrix as `Symmetric`, we do not need to add explicit
 # constraints that `x[i, j] == x[j, i]`.
 
-function build_tsp_model(d, n)
-    model = Model(GLPK.Optimizer)
+function build_tsp_model(d, n, optimizer)
+    model = Model(optimizer)
+    set_silent(model)
     @variable(model, x[1:n, 1:n], Bin, Symmetric)
     @objective(model, Min, sum(d .* x) / 2)
     @constraint(model, [i in 1:n], sum(x[i, :]) == 2)
@@ -184,11 +195,11 @@ subtour(x::AbstractMatrix{VariableRef}) = subtour(value.(x))
 # An iterative way of eliminating subtours is the following.
 
 # However, it is reasonable to assume that this is not the most efficient way:
-# Whenever a new subtour elimination constraint is added to the model, the
+# whenever a new subtour elimination constraint is added to the model, the
 # optimization has to start from the very beginning.
 
 # That way, the solver will repeatedly discard useful information encountered
-# during previous solves (e.g., all cuts, the incumbent solution, or lower
+# during previous solves (for example, all cuts, the incumbent solution, or lower
 # bounds).
 
 # !!! info
@@ -197,8 +208,13 @@ subtour(x::AbstractMatrix{VariableRef}) = subtour(value.(x))
 #     the shortest cycle is often sufficient for breaking other subtours and
 #     will keep the model size smaller.
 
-iterative_model = build_tsp_model(d, n)
+optimizer = Gurobi.Optimizer
+if !HAS_GUROBI                    #hide
+    optimizer = HiGHS.Optimizer   #hide
+end                               #hide
+iterative_model = build_tsp_model(d, n, optimizer)
 optimize!(iterative_model)
+assert_is_solved_and_feasible(iterative_model)
 time_iterated = solve_time(iterative_model)
 cycle = subtour(iterative_model[:x])
 while 1 < length(cycle) < n
@@ -209,9 +225,12 @@ while 1 < length(cycle) < n
         sum(iterative_model[:x][i, j] for (i, j) in S) <= length(cycle) - 1,
     )
     optimize!(iterative_model)
+    assert_is_solved_and_feasible(iterative_model)
     global time_iterated += solve_time(iterative_model)
     global cycle = subtour(iterative_model[:x])
 end
+
+#-
 
 objective_value(iterative_model)
 
@@ -223,11 +242,11 @@ time_iterated
 # subtour is present:
 
 function plot_tour(X, Y, x)
-    plt = Plots.plot()
+    plot = Plots.plot()
     for (i, j) in selected_edges(x, size(x, 1))
         Plots.plot!([X[i], X[j]], [Y[i], Y[j]]; legend = false)
     end
-    return plt
+    return plot
 end
 
 plot_tour(X, Y, value.(iterative_model[:x]))
@@ -238,7 +257,14 @@ plot_tour(X, Y, value.(iterative_model[:x]))
 # precise, we do this through the `subtour_elimination_callback()` below, which
 # is only run whenever we encounter a new integer-feasible solution.
 
-lazy_model = build_tsp_model(d, n)
+# !!! tip
+#     We use Gurobi for this model because HiGHS does not support lazy
+#     constraints. For more information on callbacks, read the page
+#     [Solver-independent callbacks](@ref callbacks_manual).
+
+# As before, we construct the same first-stage subproblem:
+
+lazy_model = build_tsp_model(d, n, optimizer)
 function subtour_elimination_callback(cb_data)
     status = callback_node_status(cb_data, lazy_model)
     if status != MOI.CALLBACK_NODE_STATUS_INTEGER
@@ -248,7 +274,6 @@ function subtour_elimination_callback(cb_data)
     if !(1 < length(cycle) < n)
         return  # Only add a constraint if there is a cycle
     end
-    println("Found cycle of length $(length(cycle))")
     S = [(i, j) for (i, j) in Iterators.product(cycle, cycle) if i < j]
     con = @build_constraint(
         sum(lazy_model[:x][i, j] for (i, j) in S) <= length(cycle) - 1,
@@ -256,18 +281,29 @@ function subtour_elimination_callback(cb_data)
     MOI.submit(lazy_model, MOI.LazyConstraint(cb_data), con)
     return
 end
-MOI.set(lazy_model, MOI.LazyConstraintCallback(), subtour_elimination_callback)
+set_attribute(
+    lazy_model,
+    MOI.LazyConstraintCallback(),
+    subtour_elimination_callback,
+)
+if !HAS_GUROBI                                                        #hide
+    set_attribute(lazy_model, MOI.LazyConstraintCallback(), nothing)  #hide
+end                                                                   #hide
 optimize!(lazy_model)
+assert_is_solved_and_feasible(lazy_model)
 objective_value(lazy_model)
+
+#-
+
+time_lazy = solve_time(lazy_model)
 
 # This finds the same optimal tour:
 
 plot_tour(X, Y, value.(lazy_model[:x]))
 
-# Surprisingly, for this particular model with GLPK, the solution time is worse
-# than the iterative method:
+# The solution time is faster than the iterative approach:
 
-time_lazy = solve_time(lazy_model)
-
-# In most other cases and solvers, however, the lazy time should be faster than
-# the iterative method.
+if !HAS_GUROBI       #hide
+    time_lazy = 0.0  #hide
+end                  #hide
+Test.@test time_lazy < time_iterated

@@ -17,9 +17,7 @@ necessarily integers.
 """
 module Containers
 
-# Arbitrary typed indices. Linear indexing not supported.
-struct IndexAnyCartesian <: Base.IndexStyle end
-Base.IndexStyle(::IndexAnyCartesian, ::IndexAnyCartesian) = IndexAnyCartesian()
+import OrderedCollections
 
 export DenseAxisArray, SparseAxisArray
 
@@ -54,5 +52,6 @@ include("nested_iterator.jl")
 include("no_duplicate_dict.jl")
 include("container.jl")
 include("macro.jl")
+include("tables.jl")
 
 end

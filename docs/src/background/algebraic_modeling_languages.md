@@ -138,6 +138,9 @@ julia> function algebraic_knapsack(c, w, b)
            @objective(model, Max, sum(c[i] * x[i] for i = 1:n))
            @constraint(model, sum(w[i] * x[i] for i = 1:n) <= b)
            optimize!(model)
+           if termination_status(model) != OPTIMAL
+               error("Not solved correctly")
+           end
            return value.(x)
        end
 algebraic_knapsack (generic function with 1 method)
@@ -179,6 +182,9 @@ julia> function nonalgebraic_knapsack(c, w, b)
            con = build_constraint(error, lhs, MOI.LessThan(b))
            add_constraint(model, con)
            optimize!(model)
+           if termination_status(model) != OPTIMAL
+               error("Not solved correctly")
+           end
            return value.(x)
        end
 nonalgebraic_knapsack (generic function with 1 method)
@@ -189,16 +195,16 @@ julia> nonalgebraic_knapsack([1, 2], [0.5, 0.5], 1.25)
  2.0
 ```
 
-Hopefully you agree that the macro version is much easier to read!
+Hopefully you agree that the macro version is much easier to read.
 
 ### Part III: JuMP to MathOptInterface
 
-In the third step, JuMP converts the functional form of the problem, i.e.,
+In the third step, JuMP converts the functional form of the problem, that is,
 `nonalgebraic_knapsack`, into the MathOptInterface API:
 ```jldoctest
-julia> using MathOptInterface, HiGHS
+julia> import MathOptInterface as MOI
 
-julia> const MOI = MathOptInterface;
+julia> import HiGHS
 
 julia> function mathoptinterface_knapsack(optimizer, c, w, b)
            n = length(c)
@@ -219,6 +225,9 @@ julia> function mathoptinterface_knapsack(optimizer, c, w, b)
                MOI.LessThan(b),
            )
            MOI.optimize!(model)
+           if MOI.get(model, MOI.TerminationStatus()) != MOI.OPTIMAL
+               error("Not solved correctly")
+           end
            return MOI.get.(model, MOI.VariablePrimal(), x)
        end
 mathoptinterface_knapsack (generic function with 1 method)
@@ -234,7 +243,7 @@ formulation that we started with.
 ### Step IV: MathOptInterface to HiGHS
 
 As a final step, the [HiGHS.jl](https://github.com/jump-dev/HiGHS.jl) package
-converts the MathOptInterface form, i.e., `mathoptinterface_knapsack`, into a
+converts the MathOptInterface form, that is, `mathoptinterface_knapsack`, into a
 HiGHS-specific API:
 ```jldoctest
 julia> using HiGHS
@@ -257,6 +266,9 @@ julia> function highs_knapsack(c, w, b)
                w,
            )
            Highs_run(model)
+           if Highs_getModelStatus(model) != kHighsModelStatusOptimal
+               error("Not solved correctly")
+           end
            x = fill(NaN, 2)
            Highs_getSolution(model, x, C_NULL, C_NULL, C_NULL)
            Highs_destroy(model)
