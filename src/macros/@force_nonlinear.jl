@@ -84,10 +84,10 @@ julia> @expression(model, @force_nonlinear(x * 2.0 * (1 + x) * x))
 x * 2 * (1 + x) * x
 
 julia> @allocated @expression(model, x * 2.0 * (1 + x) * x)
-3264
+3200
 
 julia> @allocated @expression(model, @force_nonlinear(x * 2.0 * (1 + x) * x))
-944
+784
 ```
 """
 macro force_nonlinear(expr)
@@ -115,7 +115,12 @@ _force_nonlinear(::F, ret::GenericNonlinearExpr) where {F} = ret
 
 function _force_nonlinear(error_fn::F, ret::Any) where {F}
     return error_fn(
-        "expression did not produce a `GenericNonlinearExpr`. Got a " *
-        "`$(typeof(ret))`: $(ret)",
+        """
+        The expression did not produce a `GenericNonlinearExpr`. Got a \
+        `$(typeof(ret))`: $(ret).
+
+        `@force_nonlinear` requires that the expression evaluates to a \
+        nonlinear expression.
+        """,
     )
 end

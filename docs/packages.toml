@@ -35,61 +35,63 @@
 # ============================= jump-dev packages ============================ #
 
 [AmplNLWriter]
-    rev = "v1.3.0"
+    rev = "v1.4.1"
 [BARON]
     rev = "v0.8.6"
 [Cbc]
-    rev = "v1.3.0"
+    rev = "v1.4.0"
 [Clp]
-    rev = "v1.3.0"
+    rev = "v1.4.0"
 [CPLEX]
-    rev = "v1.1.1"
+    rev = "v1.2.0"
 [CSDP]
     rev = "v1.1.2"
 [cuOpt]
-    rev = "v0.1.2"
+    rev = "v0.4.0"
 [DiffOpt]
-    rev = "v0.5.5"
+    rev = "v0.6.2"
     extension = true
 # There are number of known issues with DSDP
 # [DSDP]
 #     rev = "v0.2.1"
 [Dualization]
-    rev = "v0.7.1"
+    rev = "v0.7.7"
 [ECOS]
     rev = "v1.1.3"
 [GLPK]
     rev = "v1.2.1"
 [Gurobi]
-    rev = "v1.9.2"
+    rev = "v1.9.3"
 [HiGHS]
-    rev = "v1.21.1"
+    rev = "v1.26.0"
 [Hypatia]
-    rev = "v0.9.1"
+    rev = "v0.11.0"
     has_html = true
 [Ipopt]
-    rev = "v1.14.1"
+    rev = "v1.16.0"
 [KNITRO]
-    rev = "v1.2.0"
+    rev = "v1.3.1"
 [MathOptAnalyzer]
-    rev = "v0.1.1"
-[MathOptIIS]
     rev = "v0.1.2"
+[MathOptIIS]
+    rev = "v0.2.0"
+[MathOptLazy]
+    rev = "v1.0.0"
 [MiniZinc]
-    rev = "v0.3.14"
+    rev = "v0.3.16"
 [MosekTools]
     rev = "v0.15.10"
 [MultiObjectiveAlgorithms]
-    rev = "v1.9.0"
+    rev = "v1.12.0"
     has_html = true
 [NEOSServer]
     rev = "v1.2.0"
 [NLopt]
     rev = "v1.2.1"
 [Pajarito]
-    rev = "4c7efa915bdc900b51d1c8290dc771403b11230a"
+    rev = "v0.8.3"
 [ParametricOptInterface]
-    rev = "v0.15.0"
+    rev = "v0.15.3"
     extension = true
 [Pavito]
     rev = "v0.3.9"
@@ -100,10 +102,10 @@
     rev = "f674332f09b8f4c1216a9c4cf309fa27cbad9e1b"
     extension = true
 [PolyJuMP]
-    rev = "v0.7.6"
+    rev = "v0.8.3"
     extension = true
 [SCS]
-    rev = "v2.6.2"
+    rev = "v2.7.0"
 [SDPA]
     rev = "v0.6.1"
 [SDPLR]
@@ -115,10 +117,10 @@
 [SeDuMi]
     rev = "v0.4.4"
 [SumOfSquares]
-    rev = "v0.7.6"
+    rev = "v0.8.1"
     extension = true
 [Xpress]
-    rev = "v0.17.2"
+    rev = "v0.18.2"
 
 # =========================== non-jump-dev packages ========================== #
 
@@ -127,85 +129,96 @@
     rev = "v0.5.8"
 [BilevelJuMP]
     user = "joaquimg"
-    rev = "v0.6.2"
+    rev = "v0.6.3"
     extension = true
 [CATrustRegionMethod]
     user = "fadihamad94"
+    rev = "v0.1.0"
+[CCOpt]
+    user = "madsuite-org"
     rev = "v0.1.0"
 [CDCS]
     user = "oxfordcontrol"
     rev = "6d165e8e8f59b14e36e99c8efb19f0e775bbd292"
 [CDDLib]
     user = "JuliaPolyhedra"
-    rev = "v0.10.2"
+    rev = "v0.10.4"
 [Clarabel]
     user = "oxfordcontrol"
-    rev = "v0.11.0"
+    rev = "v0.11.1"
     has_html = true
+[ConicIP]
+    user = "MPF-Optimization-Laboratory"
+    rev = "v0.6.0"
 [CoolPDLP]
     user = "JuliaDecisionFocusedLearning"
+    rev = "v0.2.1"
+[CONOPT]
+    user = "GAMS-dev"
     rev = "v0.1.0"
 [COPT]
     user = "COPT-Public"
-    rev = "v1.1.32"
+    rev = "v1.1.34"
 [COSMO]
     user = "oxfordcontrol"
-    rev = "v0.8.9"
+    rev = "v0.8.11"
     has_html = true
 [CuPDLPx]
     user = "MIT-Lu-Lab"
-    rev = "v0.2.5"
+    rev = "v0.3.0"
 [DAQP]
     user = "darnstrom"
-    rev = "v0.7.1"
+    rev = "v0.9.2"
 [DisjunctiveProgramming]
-    user = "hdavid16"
-    rev = "6a4d0ac4a7484e52b1dbff9cee310a73d2d23e81"
+    user = "infiniteopt"
+    rev = "v0.7.0"
     filename = "docs/jump/README.md"
     extension = true
 [EAGO]
     user = "PSORLab"
-    rev = "v0.9.0"
+    rev = "v0.9.2"
     filename = "docs/src/jump/README.md"
 [GAMS]
     user = "GAMS-dev"
     rev = "dc2bcebb58b1bbeae69453084ff437905eb2463d"
 [InfiniteOpt]
     user = "infiniteopt"
-    rev = "v0.6.1"
+    rev = "v0.6.3"
     filename = "docs/jump/README.md"
     extension = true
+[JaCoP]
+    user = "JuliaConstraints"
+    rev = "v0.1.0"
 [Juniper]
     user = "lanl-ansi"
-    rev = "v0.9.4"
+    rev = "v0.9.5"
 [Loraine]
     user = "kocvara"
-    rev = "v0.2.5"
+    rev = "v0.2.8"
 [MadNLP]
-    user = "MadNLP"
-    rev = "v0.9.1"
+    user = "madsuite-org"
+    rev = "v0.10.1"
     has_html = true
 [MAiNGO]
     user = "MAiNGO-github"
     rev  = "v0.2.2"
-[Manopt]
-    user = "JuliaManifolds"
-    rev = "v0.5.33"
-    filename = "Readme.md"
 [MathOptAI]
     user = "lanl-ansi"
-    rev = "v0.2.2"
+    rev = "v1.0.0"
     extension = true
 [MathOptChordalDecomposition]
     user = "samuelsonric"
     rev = "v0.2.0"
-[MathOptSymbolicAD]
-    user = "lanl-ansi"
-    rev = "v0.2.2"
-    extension = true
+[MFAOA]
+    user = "Quicopt"
+    rev = "88c1173a9fd2e91aa6f60031e1f2262f473adcec"
+    has_html = true
+[NLPModelsAlgencan]
+    user = "pjssilva"
+    rev = "v0.10.3"
 [Optim]
     user = "JuliaNLSolvers"
-    rev = "v2.0.1"
+    rev = "v2.3.2"
 [OSQP]
     user = "osqp"
     rev = "v0.8.1"
@@ -214,10 +227,10 @@
     rev = "v1.7.9"
 [Percival]
     user = "JuliaSmoothOptimizers"
-    rev = "0448763a5f8aa9d43a5ad684309c839f70d10fbf"
+    rev = "v0.7.7"
 [Plasmo]
     user = "plasmo-dev"
-    rev = "v0.7.1"
+    rev = "v0.7.2"
     has_html = true
     extension = true
 [ProxSDP]
@@ -229,18 +242,18 @@
     rev = "v0.12.8"
 [SDDP]
     user = "odow"
-    rev = "v1.13.1"
+    rev = "v1.15.0"
     has_html = true
     extension = true
 [SDPLRPlus]
     user = "luotuoqingshan"
-    rev = "537e6d576876c6a98086b563fe806299499581bc"
+    rev = "v0.2.0"
 [Tulip]
     user = "ds4dm"
     rev = "v0.9.8"
 [Uno]
     user = "cvanaret"
     package = "UnoSolver"
-    rev = "v2.3.0"
+    rev = "v2.8.0"
     filename = "interfaces/Julia/README.md"
     ext = ""

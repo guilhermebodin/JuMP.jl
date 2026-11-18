@@ -852,6 +852,7 @@ function test_print_summary_min_sense()
     @variable(model, x)
     @objective(model, Min, x)
     @test occursin("objective_sense: MIN_SENSE", sprint(show, model))
+    return
 end
 
 function test_show_latex_parameter()
@@ -953,6 +954,20 @@ function test_print_huge_integer_string_round()
         2*Float64(typemin(Int64))=>"-1.8446744073709552e19",
     ]
         @test JuMP._string_round(MIME("text/plain"), test) == result
+    end
+    return
+end
+
+function test_string_round_latex()
+    for (test, result) in Any[
+        1=>"1",
+        -1=>"-1",
+        1e-5=>"1.0 \\times 10^{-5}",
+        -1e-5=>"-1.0 \\times 10^{-5}",
+        1.234e19=>"1.234 \\times 10^{19}",
+        -1.234e19=>"-1.234 \\times 10^{19}",
+    ]
+        @test JuMP._string_round(MIME("text/latex"), test) == result
     end
     return
 end

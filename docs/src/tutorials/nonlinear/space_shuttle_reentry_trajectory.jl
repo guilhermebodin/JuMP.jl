@@ -24,10 +24,19 @@
 
 # **This tutorial was originally contributed by Henrique Ferrolho.**
 
-# This tutorial demonstrates how to compute a reentry trajectory for the
-# [Space Shuttle](https://en.wikipedia.org/wiki/Space_Shuttle), by formulating
-# and solving a nonlinear programming problem. The problem was drawn from
-# Chapter 6 of [Betts2010](@cite).
+# This tutorial demonstrates how to compute a [Space Shuttle](https://en.wikipedia.org/wiki/Space_Shuttle)
+# reentry trajectory by formulating and solving a nonlinear optimal control
+# problem in JuMP. It is
+# a more complex version of the rocket control tutorial and uses data from
+# [Betts2010](@cite).
+#
+# **Learning intentions:**
+# * Discretize a six-state continuous-time trajectory model and encode the
+#   equations of motion as nonlinear equality constraints in JuMP
+# * Interpolate between known boundary conditions and use [`set_start_value`](@ref)
+#   to give the solver a good initial guess for every variable
+# * Visualise the optimal state and control profiles to interpret the physical
+#   behaviour of the reentry trajectory
 
 # !!! info
 #     The JuMP extension [InfiniteOpt.jl](../../packages/InfiniteOpt.md) can also be
@@ -59,11 +68,12 @@ import Plots
 # \dot{v} & = -\frac{D}{m} - g \sin \gamma , \\
 # \dot{\gamma} & = \frac{L}{m v} \cos(\beta) + \cos \gamma \left ( \frac{v}{r} - \frac{g}{v} \right ) , \\
 # \dot{\psi} & = \frac{1}{m v \cos \gamma} L \sin(\beta) + \frac{v}{r \cos \theta} \cos \gamma \sin \psi \sin \theta , \\
-# q & \le q_U , \\
 # \end{aligned}
 # ```
 
 # where the aerodynamic heating on the vehicle wing leading edge is $q = q_a q_r$
+# (this tutorial computes and plots $q$, but it does not impose an upper bound
+# on the heating)
 # and the dynamic variables are
 #
 # ```math
@@ -130,7 +140,7 @@ import Plots
 # or [trapezoidal](http://en.wikipedia.org/wiki/Trapezoidal_rule) integration.
 
 # !!! warning
-#     Do not try to actually land a Space Shuttle using this notebook. There's
+#     Do not try to actually land a Space Shuttle using this tutorial. There's
 #     no mesh refinement going on, which can lead to unrealistic trajectories
 #     having position and velocity errors with orders of magnitude $10^4$ ft and
 #     $10^2$ ft/sec, respectively.
@@ -184,7 +194,7 @@ nothing #hide
 # !!! tip "Choose a good linear solver"
 #     Picking a good linear solver is **extremely important**
 #     to maximize the performance of nonlinear solvers.
-#     For the best results, it is advised to experiment different linear solvers.
+#     For the best results, it is advised to experiment with different linear solvers.
 #
 #     For example, the linear solver `MA27` is outdated and can be quite slow.
 #     `MA57` is a much better alternative, especially for highly sparse problems
@@ -343,7 +353,7 @@ plt_velocity = Plots.plot(
     ts,
     value.(scaled_v);
     legend = nothing,
-    title = "Velocity (1000 ft/sec)",
+    title = "Velocity (10,000 ft/sec)",
 )
 plt_flight_path = Plots.plot(
     ts,

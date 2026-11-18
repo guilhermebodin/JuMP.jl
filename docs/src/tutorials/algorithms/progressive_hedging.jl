@@ -5,13 +5,24 @@
 
 # # Progressive Hedging
 
-# The purpose of this tutorial is to demonstrate the Progressive Hedging
-# algorithm. It may be helpful to read [Two-stage stochastic programs](@ref)
-# first.
+# This tutorial demonstrates the Progressive Hedging (PH) algorithm, a
+# decomposition method for stochastic programming that solves scenario
+# subproblems iteratively. It may be helpful to read [Two-stage stochastic
+# programs](@ref) first.
+#
+# **Learning intentions:**
+# * Understand how Progressive Hedging decomposes a stochastic program into
+#   per-scenario subproblems linked by a quadratic penalty toward the current
+#   consensus first-stage decision
+# * Use [`Parameter`](@ref) variables and [`set_parameter_value`](@ref) to
+#   update penalty coefficients and dual prices between iterations without
+#   rebuilding the model
+# * Extend the basic algorithm with an adaptive penalty rule that balances
+#   primal and dual residuals to speed convergence
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import Distributions
@@ -47,7 +58,7 @@ import Printf
 # iterations (the dual residual).
 
 # ``\rho`` can be optionally updated between iterations. How to do so is an open
-# question. There is a large literature on different updates strategies.
+# question. There is a large literature on different update strategies.
 
 # In this tutorial we use parameters for $\rho$, $w$, and $\bar{x}$ to
 # efficiently modify each scenario's subproblem between PH iterations.
@@ -145,7 +156,7 @@ x̄
 # ## Progressive Hedging with an adaptive penalty parameter
 
 # You can also make the penalty parameter $\rho$ adaptive. How to do so is an
-# open question. There is a large literature on different updates strategies.
+# open question. There is a large literature on different update strategies.
 # One approach is to increase $\rho$ if the primal residual is much larger than
 # the dual residual, and to decrease $\rho$ if the dual residual is much larger
 # than the primal residual.

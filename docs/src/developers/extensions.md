@@ -11,7 +11,7 @@ DocTestFilters = [r"≤|<=", r"≥|>=", r" == | = ", r" ∈ | in ", r"MathOptInt
 JuMP provides a variety of ways to extend the basic modeling functionality.
 
 !!! tip
-    This documentation in this section is still a work-in-progress. The best
+    The documentation in this section is still a work-in-progress. The best
     place to look for ideas and help when writing a new JuMP extension are
     existing JuMP extensions. Examples include:
      * [BilevelJuMP.jl](https://github.com/joaquimg/BilevelJuMP.jl)
@@ -95,7 +95,7 @@ julia> @constraint(model, x in NewVectorSet())
 
 Just as `Bin` and `Int` create binary and integer variables, you can extend
 the [`@variable`](@ref) macro to create new types of variables. Here is an
-explanation by example, where we create a `AddTwice` type, that creates a tuple
+explanation by example, where we create an `AddTwice` type, that creates a tuple
 of two JuMP variables instead of a single variable.
 
 First, create a new struct. This can be anything. Our struct holds a
@@ -236,10 +236,9 @@ julia> function JuMP.parse_constraint_call(
            println("Rewriting my_equal_to to ==")
            new_lhs, parse_code = MutableArithmetics.rewrite(lhs)
            build_code = if is_vectorized
-               :(build_constraint($(error_fn), $(new_lhs), MOI.EqualTo($(rhs)))
-           )
-           else
                :(build_constraint.($(error_fn), $(new_lhs), MOI.EqualTo($(rhs))))
+           else
+               :(build_constraint($(error_fn), $(new_lhs), MOI.EqualTo($(rhs))))
            end
            return parse_code, build_code
        end
@@ -431,6 +430,10 @@ for (root, dirs, files) in walkdir(joinpath(pkgdir(JuMP), "test"))
 end
 ```
 
+The JuMP test files load some additional packages, so you must also add
+`DimensionalData`, `LinearAlgebra`, `MutableArithmetics`, `OrderedCollections`,
+and `SparseArrays` to the test dependencies of your extension.
+
 ## Set an `optimize!` hook
 
 Some extensions require modification to the problem after the user has finished
@@ -475,8 +478,8 @@ Integer infeasibilities      0            0            0
 Row     infeasibilities      0            0            0
 Row     residuals            0            0            0
 Presolving model
-0 rows, 0 cols, 0 nonzeros  0s
-0 rows, 0 cols, 0 nonzeros  0s
+0 rows, 0 cols, 0 nonzeros 0s
+0 rows, 0 cols, 0 nonzeros 0s
 Presolve reductions: rows 0(-0); columns 0(-1); nonzeros 0(-0) - Reduced to empty
 Presolve: Optimal
 
@@ -502,6 +505,9 @@ Solving report
                     0 (int. viol.)
                     0 (row viol.)
   Timing            0.00
+                    0.00 (Presolve)
+                    0.00 (Solve)
+                    0.00 (Postsolve)
   Max sub-MIP depth 0
   Nodes             0
   Repair LPs        0
@@ -513,7 +519,8 @@ Solving report
 JuMP macros (for example, [`@variable`](@ref)) accept a `container` keyword
 argument to force the type of container that is chosen. By default, JuMP
 supports `container = Array`, `container = DenseAxisArray`,
-`container = SparseAxisArray` and `container = Auto`. You can extend support to
+`container = SparseAxisArray`, `container = Auto`, and subtypes of
+`AbstractDict` such as `container = Dict`. You can extend support to
 user-defined types by implementing [`Containers.container`](@ref).
 
 For example, here is a container that reverses the order of the indices:
@@ -583,7 +590,7 @@ For example, instead of:
 ```julia
 function all_names_slow(model)
     names = Set{String}()
-    for ci in all_constraints(model)
+    for ci in all_constraints(model; include_variable_in_set_constraints = true)
         push!(names, name(ci))
     end
     return names

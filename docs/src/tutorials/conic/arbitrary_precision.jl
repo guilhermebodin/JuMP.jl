@@ -5,8 +5,18 @@
 
 # # Arbitrary precision arithmetic
 
-# The purpose of this tutorial is to explain how to use a solver which supports
-# arithmetic using a number type other than `Float64`.
+# This tutorial explains how to create a JuMP model that uses arithmetic with
+# a number type other than `Float64`, using `BigFloat` as a worked example with
+# the CDDLib and Clarabel solvers.
+#
+# **Learning intentions:**
+# * Create a [`GenericModel`](@ref) with a non-default number type such as
+#   `BigFloat`, where all bounds, coefficients, and solution values
+#   automatically follow that type
+# * Tighten solver tolerances to squeeze more precision from a `BigFloat`
+#   solver, and use [`primal_feasibility_report`](@ref) to verify the result
+# * Solve with exact rational arithmetic using a `Rational{BigInt}`-capable
+#   solver, eliminating rounding error entirely
 
 # ## Required packages
 
@@ -63,7 +73,7 @@ typeof(constraint.func)
 
 typeof(constraint.set)
 
-# The syntax for adding and objective is the same as a normal JuMP model, except
+# The syntax for adding an objective is the same as a normal JuMP model, except
 # that coefficients are converted to `BigFloat`:
 
 @objective(model, Min, 3x[1]^2 + 2x[2]^2 - x[1] - big"4" * x[2])

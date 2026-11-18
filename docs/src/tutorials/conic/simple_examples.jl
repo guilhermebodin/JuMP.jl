@@ -5,8 +5,19 @@
 
 # # Simple semidefinite programming examples
 
-# The purpose of this tutorial is to provide a collection of examples of small
-# conic programs from the field of [semidefinite programming](https://en.wikipedia.org/wiki/Semidefinite_programming) (SDP).
+# This tutorial is a collection of small conic programs from the field of
+# [semidefinite programming](https://en.wikipedia.org/wiki/Semidefinite_programming),
+# including the max-cut relaxation, max-satisfiability, and the Lovász theta
+# number of a graph.
+#
+# **Learning intentions:**
+# * Formulate the SDP relaxation of the maximum cut problem using the graph
+#   Laplacian, and round the SDP solution to a feasible cut
+# * Model a variety of problems—low-rank matrix completion, k-means
+#   clustering, correlation bounds, and minimum metric distortion—as
+#   semidefinite programs
+# * Compute the Lovász theta number of a graph as an SDP and use it to bound
+#   the clique number and chromatic number
 
 # ## Required packages
 
@@ -35,7 +46,7 @@ import Test
 # For more details, see [Goemans1995](@cite).
 
 """
-    svd_cholesky(X::AbstractMatrix, rtol)
+    svd_cholesky(X::AbstractMatrix)
 
 Return the matrix `U` of the Cholesky decomposition of `X` as `U' * U`.
 Note that we do not use the `LinearAlgebra.cholesky` function because it
@@ -47,7 +58,7 @@ We use the convention `U' * U` instead of `U * U'` to be consistent with
 """
 function svd_cholesky(X::AbstractMatrix)
     F = LinearAlgebra.svd(X)
-    ## We now have `X ≈ `F.U * D² * F.U'` where:
+    ## We now have `X ≈ F.U * D² * F.U'` where:
     D = LinearAlgebra.Diagonal(sqrt.(F.S))
     ## So `X ≈ U' * U` where `U` is:
     return (F.U * D)'
@@ -83,7 +94,8 @@ end
 # ```raw
 # [1] --- 5 --- [2]
 # ```
-# The solution is `(S, T)  = ({1}, {2})`
+# The solution is `(S, T)  = ({1}, {2})` (or `({2}, {1})`, since swapping the
+# labels doesn't change the cut).
 
 S, T = solve_max_cut_sdp([0 5; 5 0])
 
@@ -261,7 +273,7 @@ example_correlation_problem()
 # ```math
 #     D[a, b] \leq ||f(a) - f(b)|| \leq c \; D[a, b]
 # ```
-# for all edges ``(a, b)`` in the graph, where ``D[a, b]`` is the distance in the graph metric space.
+# for all pairs of vertices ``(a, b)``, where ``D[a, b]`` is the distance in the graph metric space.
 #
 # Any embedding ``f`` can be characterized by a Gram matrix ``Q``, which is PSD and
 # such that
@@ -274,7 +286,7 @@ example_correlation_problem()
 # ```math
 #     D[a, b]^2 \leq Q[a, a] + Q[b, b] - 2 Q[a, b] \leq c^2 \; D[a, b]^2
 # ```
-# for all edges ``(a, b)`` in the graph and minimize ``c^2``,
+# for all pairs of vertices ``(a, b)`` and minimize ``c^2``,
 # which gives us the SDP formulation below.
 # Since we may choose any point to be the origin, we fix the first vertex at 0.
 #
@@ -328,7 +340,7 @@ example_minimum_distortion()
 # of a graph, also known as Lovász's theta-function, is a number that
 # lies between two important and related numbers that are computationally
 # hard to determine, namely the chromatic and clique numbers of the graph.
-# It is possible however to efficient compute the Lovász number as the
+# It is possible however to efficiently compute the Lovász number as the
 # optimal value of a semidefinite program.
 
 # Consider the pentagon graph:

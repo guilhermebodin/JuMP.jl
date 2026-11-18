@@ -7,16 +7,20 @@
 
 # **This tutorial was originally contributed by Louis Luangkesorn.**
 
-# This tutorial solves the cannery problem from Dantzig,
-# _Linear Programming and Extensions_, Princeton University Press, Princeton,
-# NJ, 1963. This class of problem is known as a transshipment problem.
-
-# The purpose of this tutorial is to demonstrate how to use JSON data in the
-# formulation of a JuMP model.
+# This tutorial solves the cannery problem—a classic transportation problem
+# from Dantzig's _Linear Programming and Extensions_—using JSON data to supply
+# the model parameters. It demonstrates how to build a JuMP model from
+# structured external data.
+#
+# **Learning intentions:**
+# * Formulate a classic transportation problem as a linear program with per-plant
+#   supply limits, per-market demand requirements, and a cost-minimising objective
+# * Load problem data from a JSON source and derive the index sets and parameters
+#   that drive the JuMP model, rather than hard-coding them
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
@@ -30,7 +34,7 @@ import Test
 
 # Each production plant ``p`` has a capacity ``c_p``, and each market ``m``
 # has a demand ``d_m``. The shipping cost per case of cans from plant ``p``
-# to market ``m`` is ``d_{p,m}``.
+# to market ``m`` is ``t_{p,m}``.
 
 # We wish to find the distribution plan ``x_{p,m}``, the number of cases of cans
 # to ship from plant ``p`` to market ``m``, for ``p \in P`` and ``m \in M``
@@ -38,7 +42,7 @@ import Test
 # following linear program:
 # ```math
 # \begin{aligned}
-# \min & \sum\limits_{p \in P}\sum\limits_{m \in M} d_{p,m} x_{p,m} \\
+# \min & \sum\limits_{p \in P}\sum\limits_{m \in M} t_{p,m} x_{p,m} \\
 # \text{s.t.} & \sum\limits_{m \in M} x_{p,m} \le c_p, && \forall p \in P \\
 #             & \sum\limits_{p \in P} x_{p,m} \ge d_m, && \forall m \in M \\
 #             & x_{p,m} \ge 0, && \forall p \in P, m \in M
@@ -108,7 +112,7 @@ model = Model(HiGHS.Optimizer)
 
 @constraint(model, [m in M], sum(x[:, m]) >= data["markets"][m]["demand"])
 
-# Finally, our objective is to minimize the transportation distance:
+# Finally, our objective is to minimize the shipping cost:
 
 @objective(model, Min, sum(distance(p, m) * x[p, m] for p in P, m in M));
 

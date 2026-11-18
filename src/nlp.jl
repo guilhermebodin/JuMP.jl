@@ -37,9 +37,13 @@ end
 
 function _init_NLP(m::AbstractModel)
     return error(
-        "Encountered an error parsing nonlinear expression: we don't support " *
-        "models of type $(typeof(m)). In general, JuMP's nonlinear features " *
-        "don't work with JuMP-extensions.",
+        """
+        Encountered an error parsing a nonlinear expression because JuMP's \
+        legacy nonlinear interface does not support models of type `$(typeof(m))`.
+
+        In general, JuMP's nonlinear features do not work with JuMP \
+        extensions. Use a standard `JuMP.Model` instead.
+        """,
     )
 end
 
@@ -48,9 +52,12 @@ function MOI.Nonlinear.check_return_type(
     ret::AbstractJuMPScalar,
 ) where {T}
     return error(
-        "Expected return type of $T from a user-defined function, but got " *
-        "$(typeof(ret)). Make sure your user-defined function only depends " *
-        "on variables passed as arguments.",
+        """
+        Expected return type `$T` from a user-defined function, but got `$(typeof(ret))`.
+
+        Ensure that your user-defined function only depends on variables \
+        passed as arguments, and does not close over any JuMP variables.
+        """,
     )
 end
 
@@ -211,9 +218,10 @@ struct NonlinearParameter <: AbstractJuMPScalar
     index::Int
 end
 
-function check_belongs_to_model(arg::NonlinearParameter, model::AbstractModel)
-    return arg.model === model
-end
+# A pass-through. This is needed to catch wben a parameter is used with the new
+# nonlinear API. It doesn't matter what the model is, because we're going to
+# throw an error regardless.
+check_belongs_to_model(::NonlinearParameter, ::AbstractModel) = nothing
 
 variable_ref_type(arg::NonlinearParameter) = variable_ref_type(arg.model)
 
@@ -337,9 +345,10 @@ struct NonlinearExpression <: AbstractJuMPScalar
     index::Int
 end
 
-function check_belongs_to_model(arg::NonlinearExpression, model::AbstractModel)
-    return arg.model === model
-end
+# A pass-through. This is needed to catch wben an expression is used with the
+# new nonlinear API. It doesn't matter what the model is, because we're going to
+# throw an error regardless.
+check_belongs_to_model(::NonlinearExpression, ::AbstractModel) = nothing
 
 variable_ref_type(arg::NonlinearExpression) = variable_ref_type(arg.model)
 
@@ -480,9 +489,12 @@ end
 
 function _normalize_constraint_expr(lhs, body, rhs)
     return error(
-        "Interval constraint contains non-constant left- or right-hand " *
-        "sides. Reformulate as two separate constraints, or move all " *
-        "variables into the central term.",
+        """
+        Interval constraint contains non-constant left- or right-hand sides.
+
+        Reformulate as two separate constraints, or move all variables into \
+        the central term.
+        """,
     )
 end
 
@@ -742,7 +754,7 @@ end
         op::Symbol,
         dimension::Integer,
         f::Function;
-        autodiff:Bool = false,
+        autodiff::Bool = false,
     )
 
 Register the user-defined function `f` that takes `dimension` arguments in
@@ -803,7 +815,15 @@ function register(
     autodiff::Bool = false,
 )
     if autodiff == false
-        error("If only the function is provided, must set autodiff=true")
+        error(
+            """
+            Cannot register a user-defined function without providing a gradient \
+            unless `autodiff = true`.
+
+            Either set `autodiff = true` to compute derivatives automatically, \
+            or provide derivative functions as additional arguments.
+            """,
+        )
     end
     nlp = nonlinear_model(model; force = true)::MOI.Nonlinear.Model
     MOI.Nonlinear.register_operator(nlp, op, dimension, f)
@@ -817,13 +837,13 @@ end
         dimension::Integer,
         f::Function,
         ∇f::Function;
-        autodiff:Bool = false,
+        autodiff::Bool = false,
     )
 
 Register the user-defined function `f` that takes `dimension` arguments in
 `model` as the symbol `s`. In addition, provide a gradient function `∇f`.
 
-The functions `f`and `∇f` must support all subtypes of `Real` as arguments. Do
+The functions `f` and `∇f` must support all subtypes of `Real` as arguments. Do
 not assume that the inputs are `Float64`.
 
 !!! compat
@@ -837,9 +857,8 @@ not assume that the inputs are `Float64`.
  * If the function `f` is multi-variate, `∇f` must have a signature matching
    `∇f(g::AbstractVector{T}, args::T...) where {T<:Real}`, where the first
    argument is a vector `g` that is modified in-place with the gradient.
- * If `autodiff = true` and `dimension == 1`, use automatic differentiation to
-   compute the second-order derivative information. If `autodiff = false`, only
-   first-order derivative information will be used.
+ * If `dimension == 1`, you must set `autodiff = true`, since there is no way to
+   implement only first-order derivatives for univariate functions.
  * `s` does not have to be the same symbol as `f`, but it is generally more
    readable if it is.
 
@@ -897,7 +916,13 @@ function register(
     if dimension == 1
         if autodiff == false
             error(
-                "Currently must provide 2nd order derivatives of univariate functions. Try setting autodiff=true.",
+                """
+                Registering a univariate user-defined function with a gradient \
+                requires also providing a second-order derivative.
+
+                Either provide a Hessian function as a third argument, or set \
+                `autodiff = true` to compute derivatives automatically.
+                """,
             )
         end
         MOI.Nonlinear.register_operator(nlp, op, dimension, f, ∇f)
@@ -935,7 +960,6 @@ derivatives of the function `f` respectively.
 
  * Because automatic differentiation is not used, you can assume the inputs are
    all `Float64`.
- * This method will throw an error if `dimension > 1`.
  * `s` does not have to be the same symbol as `f`, but it is generally more
    readable if it is.
 
@@ -977,12 +1001,12 @@ end
 
 """
     NLPEvaluator(
-        model::Model,
+        model::Model;
         _differentiation_backend::MOI.Nonlinear.AbstractAutomaticDifferentiation =
             MOI.Nonlinear.SparseReverseMode(),
     )
 
-Return an [`MOI.AbstractNLPEvaluator`](@ref) constructed from `model`
+Return an [`MOI.AbstractNLPEvaluator`](@ref) constructed from `model`.
 
 !!! warning
     Before using, you must initialize the evaluator using

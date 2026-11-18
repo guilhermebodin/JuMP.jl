@@ -394,7 +394,7 @@ zero element, and then creates an appropriately sized array filled with the same
 element.
 
 Note that this behaviour is not JuMP-specific. For example, `zeros(BigInt, 2)`
-will create two copies of the same instance of `BigInt`:
+will create an array containing the same instance of `BigInt` twice:
 ```jldoctest
 julia> x = zeros(BigInt, 2)
 2-element Vector{BigInt}:
@@ -462,3 +462,57 @@ julia> x
 ```
 Note that for large expressions this will be slower due to the allocation of
 additional temporary objects.
+
+## Initializing empty summations
+
+A common error occurs when you attempt to sum over an empty index set:
+```jldoctest
+julia> sum(2 for i in 2:0)
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+Stacktrace:
+[...]
+```
+The solution is to use the `init` keyword:
+```jldoctest
+julia> sum(2 for i in 2:0; init = 0)
+0
+```
+
+This also applies to other operators that reduce over a collection such as
+`prod`:
+```jldoctest
+julia> prod(2 for i in 2:0; init = 1)
+1
+```
+
+Because summing over empty sets is relatively common in mathematical
+programming, JuMP special cases `sum` inside a macro so that you do not need to
+use the `init` keyword inside a JuMP macro, even if the index set is empty:
+```jldoctest
+julia> model = Model();
+
+julia> @expression(model, sum(2 for i in 2:0))
+0.0
+```
+
+You still need to use `init` keyword inside a JuMP macro for other operators
+that reduce over a collection such as `prod`:
+```jldoctest
+julia> model = Model();
+
+julia> @expression(model, prod(2 for i in 2:0; init = 1.0))
+1.0
+```
+
+There are also cases where you may need to use `init`, for example, when the element
+type of the summation is not a scalar:
+```jldoctest
+julia> model = Model();
+
+julia> @expression(model, sum(Int[1] for i in 2:0))
+0.0
+
+julia> @expression(model, sum(Int[1] for i in 2:0; init = Int[0]))
+1-element Vector{Int64}:
+ 0
+```

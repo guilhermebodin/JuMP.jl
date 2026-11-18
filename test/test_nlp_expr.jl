@@ -81,11 +81,11 @@ function test_extension_expression(
     @test string(@expression(model, sin(x)^2.0)) == "sin(x) ^ 2"
     @test string(@expression(model, 2 * sin(x)^2.0)) == "2 * (sin(x) ^ 2)"
     @test string(@expression(model, 1 + sin(x))) == "1 + sin(x)"
-    @test string(@expression(model, 1 + 2 * sin(x))) == "1 + (2 * sin(x))"
+    @test string(@expression(model, 1 + 2 * sin(x))) == "1 + 2 * sin(x)"
     @test string(@expression(model, 2.0 * sin(x)^2 + cos(x) / x)) ==
-          "(2 * (sin(x) ^ 2)) + (cos(x) / x)"
+          "2 * (sin(x) ^ 2) + cos(x) / x"
     @test string(@expression(model, 2.0 * sin(x)^2 - cos(x) / x)) ==
-          "(2 * (sin(x) ^ 2)) - (cos(x) / x)"
+          "2 * (sin(x) ^ 2) - cos(x) / x"
     return
 end
 
@@ -124,6 +124,17 @@ function test_extension_flatten_nary(
     return
 end
 
+function test_extension_flatten_nary_order_maintained(
+    ModelType = Model,
+    VariableRefType = VariableRef,
+)
+    model = ModelType()
+    @variable(model, x[1:3])
+    @test sum(log(x[i]) for i in 1:3) |> flatten! |> string ==
+          "log(x[1]) + log(x[2]) + log(x[3])"
+    return
+end
+
 function test_extension_zero_one(
     ModelType = Model,
     VariableRefType = VariableRef,
@@ -151,7 +162,7 @@ function test_extension_latex(ModelType = Model, VariableRefType = VariableRef)
 
     @expression(model, g, ifelse(x > 0, sin(x), x + cos(x)^2))
     @test function_string(MIME("text/latex"), g) ==
-          raw"\textsf{ifelse}\left({{x} > {0}}, {\textsf{sin}\left({x}\right)}, {{x} + {\left({\textsf{cos}\left({x}\right)} ^ {2}\right)}}\right)"
+          raw"\textsf{ifelse}\left({{x} > {0}}, {\textsf{sin}\left({x}\right)}, {{x} + {{\textsf{cos}\left({x}\right)} ^ {2}}}\right)"
     return
 end
 
@@ -178,13 +189,12 @@ function test_extension_expression_addmul(
 )
     model = ModelType()
     @variable(model, x)
-    @test string(@expression(model, x + 3 * sin(x))) == "x + (3 * sin(x))"
-    @test string(@expression(model, 2 * x + 3 * sin(x))) ==
-          "(2 x) + (3 * sin(x))"
+    @test string(@expression(model, x + 3 * sin(x))) == "x + 3 * sin(x)"
+    @test string(@expression(model, 2 * x + 3 * sin(x))) == "(2 x) + 3 * sin(x)"
     @test string(@expression(model, x^2 + 3 * sin(x))) ==
-          "($(x^2)) + (3 * sin(x))"
+          "($(x^2)) + 3 * sin(x)"
     @test string(@expression(model, sin(x) + 3 * sin(x))) ==
-          "sin(x) + (3 * sin(x))"
+          "sin(x) + 3 * sin(x)"
     @test string(@expression(model, sin(x) + 3 * x)) == "sin(x) + (3 x)"
     @test string(@expression(model, sin(x) + 3 * x * x)) ==
           "sin(x) + (3 $(x^2))"
@@ -198,12 +208,12 @@ function test_extension_expression_explicit_add_mul(
     model = ModelType()
     @variable(model, x)
     f = sin(x)
-    @test string(MA.operate!!(MA.add_mul, 1, 2, f)) == "1 + (2 * $f)"
-    @test string(MA.operate!!(MA.add_mul, 1, f, 2)) == "1 + ($f * 2)"
-    @test string(MA.operate!!(MA.add_mul, 1, f, f)) == "1 + ($f * $f)"
-    @test string(MA.operate!!(MA.add_mul, f, 2, f)) == "$f + (2 * $f)"
-    @test string(MA.operate!!(MA.add_mul, f, f, 2)) == "$f + ($f * 2)"
-    @test string(MA.operate!!(MA.add_mul, f, f, f)) == "$f + ($f * $f)"
+    @test string(MA.operate!!(MA.add_mul, 1, 2, f)) == "1 + 2 * $f"
+    @test string(MA.operate!!(MA.add_mul, 1, f, 2)) == "1 + $f * 2"
+    @test string(MA.operate!!(MA.add_mul, 1, f, f)) == "1 + $f * $f"
+    @test string(MA.operate!!(MA.add_mul, f, 2, f)) == "$f + 2 * $f"
+    @test string(MA.operate!!(MA.add_mul, f, f, 2)) == "$f + $f * 2"
+    @test string(MA.operate!!(MA.add_mul, f, f, f)) == "$f + $f * $f"
     return
 end
 
@@ -213,13 +223,12 @@ function test_extension_expression_submul(
 )
     model = ModelType()
     @variable(model, x)
-    @test string(@expression(model, x - 3 * sin(x))) == "x - (3 * sin(x))"
-    @test string(@expression(model, 2 * x - 3 * sin(x))) ==
-          "(2 x) - (3 * sin(x))"
+    @test string(@expression(model, x - 3 * sin(x))) == "x - 3 * sin(x)"
+    @test string(@expression(model, 2 * x - 3 * sin(x))) == "(2 x) - 3 * sin(x)"
     @test string(@expression(model, x^2 - 3 * sin(x))) ==
-          "($(x^2)) - (3 * sin(x))"
+          "($(x^2)) - 3 * sin(x)"
     @test string(@expression(model, sin(x) - 3 * sin(x))) ==
-          "sin(x) - (3 * sin(x))"
+          "sin(x) - 3 * sin(x)"
     @test string(@expression(model, sin(x) - 3 * x)) == "sin(x) - (3 x)"
     @test string(@expression(model, sin(x) - 3 * x * x)) ==
           "sin(x) - (3 $(x^2))"
@@ -236,7 +245,7 @@ function test_extension_aff_expr_convert(
     @test _to_string(AffExpr(0.0)) == "+(0)"
     @test _to_string(AffExpr(1.0)) == "+(1)"
     @test _to_string(x + 1) == "x + 1"
-    @test _to_string(2x + 1) == "(2 * x) + 1"
+    @test _to_string(2x + 1) == "2 * x + 1"
     @test _to_string(2x) == "2 * x"
     return
 end
@@ -250,15 +259,15 @@ function test_extension_quad_expr_convert(
     _to_string(x) = string(convert(GenericNonlinearExpr{VariableRefType}, x))
     @test _to_string(QuadExpr(AffExpr(0.0))) == "+(0)"
     @test _to_string(QuadExpr(AffExpr(1.0))) == "+(1)"
-    @test _to_string(x^2 + 1) == "(x * x) + 1"
-    @test _to_string(2x^2 + 1) == "(2 * x * x) + 1"
+    @test _to_string(x^2 + 1) == "x * x + 1"
+    @test _to_string(2x^2 + 1) == "2 * x * x + 1"
     @test _to_string(2x^2) == "2 * x * x"
-    @test _to_string(x^2 + x + 1) == "x + (x * x) + 1"
-    @test _to_string(2x^2 + x + 1) == "x + (2 * x * x) + 1"
-    @test _to_string(2x^2 + x) == "x + (2 * x * x)"
-    @test _to_string(x^2 + 2x + 1) == "(2 * x) + (x * x) + 1"
-    @test _to_string(2x^2 + 2x + 1) == "(2 * x) + (2 * x * x) + 1"
-    @test _to_string(2x^2 + 2x) == "(2 * x) + (2 * x * x)"
+    @test _to_string(x^2 + x + 1) == "x + x * x + 1"
+    @test _to_string(2x^2 + x + 1) == "x + 2 * x * x + 1"
+    @test _to_string(2x^2 + x) == "x + 2 * x * x"
+    @test _to_string(x^2 + 2x + 1) == "2 * x + x * x + 1"
+    @test _to_string(2x^2 + 2x + 1) == "2 * x + 2 * x * x + 1"
+    @test _to_string(2x^2 + 2x) == "2 * x + 2 * x * x"
     return
 end
 
@@ -447,7 +456,7 @@ function test_extension_expr_mle(
         sum((data[i] - x)^2 for i in 1:n) / (2 * y^2)
     )
     @test string(obj) ==
-          "(2 * log(1 / (2 $(y^2)))) - ((4 $(x^2) - 30 x + 85) / (2 $(y^2)))"
+          "2 * log(1 / (2 $(y^2))) - (4 $(x^2) - 30 x + 85) / (2 $(y^2))"
     return
 end
 
@@ -609,10 +618,13 @@ function test_register_errors()
     f = x -> x^2
     @test_throws(
         ErrorException(
-            "Unable to add operator foo: invalid number of " *
-            "functions provided. Got 4, but expected 1 (if function only), " *
-            "2 (if function and gradient), or 3 (if function, gradient, and " *
-            "hesssian provided)",
+            """
+            Unable to add operator `foo`: invalid number of functions provided.
+
+            Got 4, but expected 1 (function only), 2 (function and gradient), or 3 (function, gradient, and Hessian).
+
+            Pass 1, 2, or 3 functions as positional arguments after the operator dimension.
+            """,
         ),
         @operator(model, foo, 2, f, f, f, f),
     )
@@ -646,8 +658,14 @@ function test_value_expression()
     bad_udf = NonlinearOperator(f, :bad_udf)
     @test_throws(
         ErrorException(
-            "Unable to evaluate nonlinear operator bad_udf because it was " *
-            "not added as an operator.",
+            """
+            Unable to evaluate nonlinear operator `bad_udf` because it was \
+            not added as an operator.
+
+            Add the operator to the model using \
+            `@operator(model, bad_udf, n, f)`, where `n` is the number of \
+            arguments and `f` is the implementing function.
+            """,
         ),
         value(f, bad_udf(x)),
     )
@@ -715,10 +733,15 @@ function test_error_both_nl_interfaces_constraint()
     @NLconstraint(model, log(x) <= 1)
     @test_throws(
         ErrorException(
-            "Cannot optimize a model which contains the features from " *
-            "both the legacy (macros beginning with `@NL`) and new " *
-            "(`NonlinearExpr`) nonlinear interfaces. You must use one or " *
-            "the other.",
+            """
+            Cannot optimize a model that uses both the legacy \
+            (`@NL` macros) and the new (`NonlinearExpr`) nonlinear \
+            interfaces simultaneously.
+
+            Use one nonlinear interface throughout the model. Migrate \
+            legacy `@NL` macros to the new interface, or remove all \
+            `NonlinearExpr` expressions.
+            """,
         ),
         optimize!(model),
     )
@@ -732,10 +755,15 @@ function test_error_both_nl_interfaces_objective()
     @NLconstraint(model, log(x) <= 1)
     @test_throws(
         ErrorException(
-            "Cannot optimize a model which contains the features from " *
-            "both the legacy (macros beginning with `@NL`) and new " *
-            "(`NonlinearExpr`) nonlinear interfaces. You must use one or " *
-            "the other.",
+            """
+            Cannot optimize a model that uses both the legacy \
+            (`@NL` macros) and the new (`NonlinearExpr`) nonlinear \
+            interfaces simultaneously.
+
+            Use one nonlinear interface throughout the model. Migrate \
+            legacy `@NL` macros to the new interface, or remove all \
+            `NonlinearExpr` expressions.
+            """,
         ),
         optimize!(model),
     )
@@ -818,36 +846,61 @@ function test_operator_overload_complex_error()
     f = (1 + 2im) * x
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($f)::$(typeof(f))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($f)::$(typeof(f))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         sin(f),
     )
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($(1 + 2im))::$(typeof(1 + 2im))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($(1 + 2im))::$(typeof(1 + 2im))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         +(sin(x), 1 + 2im),
     )
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($(1 + 2im))::$(typeof(1 + 2im))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($(1 + 2im))::$(typeof(1 + 2im))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         +(1 + 2im, sin(x)),
     )
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($f)::$(typeof(f))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($f)::$(typeof(f))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         +(f, sin(x)),
     )
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($f)::$(typeof(f))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($f)::$(typeof(f))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         +(sin(x), f),
     )
@@ -934,15 +987,35 @@ function test_generic_nonlinear_expr_infer_variable_type()
     @test isequal_canonical(GenericNonlinearExpr(:<=, Any[1, x]), g)
     @test_throws(
         ErrorException(
-            "Unable to create a nonlinear expression because it did not " *
-            "contain any JuMP scalars. head = `:sin`, args = `(1,)`.",
+            """
+            Unable to create a nonlinear expression because it did not contain \
+            any JuMP scalars.
+
+            Ensure that at least one argument is a JuMP variable or expression, \
+            not a plain Julia value.
+
+            The expression was:
+
+                head = `:sin`
+                args = `(1,)`
+            """,
         ),
         GenericNonlinearExpr(:sin, 1),
     )
     @test_throws(
         ErrorException(
-            "Unable to create a nonlinear expression because it did not " *
-            "contain any JuMP scalars. head = `:sin`, args = `Any[1]`.",
+            """
+            Unable to create a nonlinear expression because it did not contain \
+            any JuMP scalars.
+
+            Ensure that at least one argument is a JuMP variable or expression, \
+            not a plain Julia value.
+
+            The expression was:
+
+                head = `:sin`
+                args = `Any[1]`
+            """,
         ),
         GenericNonlinearExpr(:sin, Any[1]),
     )
@@ -1006,11 +1079,11 @@ function test_printing_truncation()
     @variable(model, x[1:100])
     y = @expression(model, sum(sin.(x) .* 2))
     @test occursin(
-        "(sin(x[72]) * 2) + [[...41 terms omitted...]] + (sin(x[30]) * 2)",
+        "sin(x[30]) * 2 + [[...40 terms omitted...]] + sin(x[71]) * 2",
         function_string(MIME("text/plain"), y),
     )
     @test occursin(
-        "{\\left({\\textsf{sin}\\left({x_{72}}\\right)} * {2}\\right) + {[[\\ldots\\text{41 terms omitted}\\ldots]]} + {\\left({\\textsf{sin}\\left({x_{30}}\\right)} * {2}\\right)}",
+        "{\\textsf{sin}\\left({x_{30}}\\right)} * {2} + {[[\\ldots\\text{40 terms omitted}\\ldots]]} + {{\\textsf{sin}\\left({x_{71}}\\right)} * {2}}",
         function_string(MIME("text/latex"), y),
     )
     return
@@ -1060,7 +1133,7 @@ function test_nlp_matrix_adjoint()
     y = sin.(x)
     @test isequal_canonical(
         @expression(model, expr, y' * y),
-        NonlinearExpr(:+, Any[0.0, y[2]*y[2], y[1]*y[1]]),
+        NonlinearExpr(:+, Any[y[1]*y[1], y[2]*y[2]]),
     )
     return
 end
@@ -1070,8 +1143,13 @@ function test_error_complex_literal_pow()
     @variable(model, x in ComplexPlane())
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($x)::$(typeof(x))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($x)::$(typeof(x))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         x^3,
     )
@@ -1083,15 +1161,25 @@ function test_error_nonlinear_expr_complex_constructor()
     @variable(model, x in ComplexPlane())
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($x)::$(typeof(x))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($x)::$(typeof(x))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         NonlinearExpr(:^, Any[x, 3]),
     )
     @test_throws(
         ErrorException(
-            "Cannot build `GenericNonlinearExpr` because a term is complex-" *
-            "valued: `($x)::$(typeof(x))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is \
+            complex-valued: `($x)::$(typeof(x))`.
+
+            JuMP does not support complex-valued nonlinear expressions. \
+            Remove or replace the complex-valued term.
+            """,
         ),
         NonlinearExpr(:^, x, 3),
     )
@@ -1154,7 +1242,13 @@ function test_promote_type()
     G = GenericNonlinearExpr{GenericVariableRef{Float64}}
     @test_throws(
         ErrorException(
-            "Unable to promote two different types of nonlinear expression",
+            """
+            Unable to promote two different types of nonlinear expression: \
+            `$F` and `$G`.
+
+            Ensure that all variables in the expression belong to the same \
+            model and have the same variable reference type.
+            """,
         ),
         MA.promote_operation(+, F, G),
     )
@@ -1229,6 +1323,223 @@ function test_extension_euler_to_exp(
     @test isequal_canonical(ℯ^(sum(xy)), exp(x + y))
     @test isequal_canonical(sum(ℯ^xᵢ for xᵢ in xy), exp(x) + exp(y))
     @test isequal_canonical(ℯ^prod(xy), exp(x*y))
+    return
+end
+
+function test_array_det()
+    model = Model()
+    @variable(model, x)
+    op_det = NonlinearOperator(LinearAlgebra.det, :det)
+    @objective(model, Min, op_det([x]))
+    @test isapprox(
+        MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarNonlinearFunction}()),
+        MOI.ScalarNonlinearFunction(:det, Any[moi_function([x])]),
+    )
+    return
+end
+
+function test_array_dot()
+    model = Model()
+    @variable(model, x)
+    op_dot = NonlinearOperator(LinearAlgebra.dot, :dot)
+    @objective(model, Min, op_dot([x], [2.0]))
+    @test isapprox(
+        MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarNonlinearFunction}()),
+        MOI.ScalarNonlinearFunction(:dot, Any[moi_function([x]), [2.0]]),
+    )
+    return
+end
+
+# Inspired from contiguous arrays in ArrayDiff and GenOpt
+struct ContiguousVectorOfVariableRefs <: AbstractVector{JuMP.VariableRef}
+    offset::Int
+    length::Int
+end
+
+struct Contiguous end
+
+function JuMP.Containers.container(
+    _,
+    axes::JuMP.Containers.VectorizedProductIterator{Tuple{Base.OneTo{Int}}},
+    ::Contiguous,
+)
+    # Correctness don't matter, it's not for the sake of this test
+    return ContiguousVectorOfVariableRefs(0, length(axes))
+end
+
+struct ContiguousVectorOfVariableIndices <: MOI.AbstractVectorFunction
+    offset::Int
+    length::Int
+end
+
+Base.copy(x::ContiguousVectorOfVariableIndices) = x
+
+function JuMP.moi_function(x::ContiguousVectorOfVariableRefs)
+    return ContiguousVectorOfVariableIndices(x.offset, x.length)
+end
+
+function JuMP.check_belongs_to_model(
+    ::ContiguousVectorOfVariableRefs,
+    ::JuMP.AbstractModel,
+)
+    return
+end
+
+function test_custom_array()
+    model = Model()
+    @variable(model, x[1:2], container = Contiguous())
+    @test x === ContiguousVectorOfVariableRefs(0, 2)
+    op_norm = NonlinearOperator(LinearAlgebra.norm, :norm)
+    @objective(model, Min, op_norm(x))
+    f = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarNonlinearFunction}())
+    @test f.head == :norm
+    @test only(f.args) == ContiguousVectorOfVariableIndices(0, 2)
+    return
+end
+
+function test_scalar_nonlinear_moi_function()
+    model = Model()
+    @variable(model, x)
+    y1 = atan(x, 2)
+    y1_moi = MOI.ScalarNonlinearFunction(:atan, Any[index(x), 2])
+    y2 = y1 + y1
+    y2_moi = MOI.ScalarNonlinearFunction(:+, Any[y1_moi, y1_moi])
+    y3 = exp(y2)
+    y3_moi = MOI.ScalarNonlinearFunction(:exp, Any[y2_moi])
+    # Test y1
+    @test isapprox(moi_function(y1), y1_moi)
+    @test length(model.subexpressions) == 1
+    @test isapprox(moi_function(model, y1), y1_moi)
+    @test length(model.subexpressions) == 1
+    @test isapprox(model.subexpressions[y1], y1_moi)
+    # Test y2
+    @test isapprox(moi_function(y2), y2_moi)
+    @test length(model.subexpressions) == 2
+    @test isapprox(moi_function(model, y2), y2_moi)
+    @test length(model.subexpressions) == 2
+    @test isapprox(model.subexpressions[y1], y1_moi)
+    @test isapprox(model.subexpressions[y2], y2_moi)
+    # Test y3
+    @test isapprox(moi_function(y3), y3_moi)
+    @test length(model.subexpressions) == 3
+    @test isapprox(moi_function(model, y3), y3_moi)
+    @test length(model.subexpressions) == 3
+    @test isapprox(model.subexpressions[y1], y1_moi)
+    @test isapprox(model.subexpressions[y2], y2_moi)
+    @test isapprox(model.subexpressions[y3], y3_moi)
+    return
+end
+
+function test_scalar_nonlinear_moi_function_checks_model_with_aliases()
+    model = Model()
+    other_model = Model()
+    @variable(model, x)
+    @variable(other_model, y)
+    shared = sin(x)
+    expression = shared + shared
+    @test moi_function(model, expression).args[1] ===
+          moi_function(model, expression).args[2]
+    @test_throws VariableNotOwned moi_function(model, shared + sin(y))
+    @test_throws VariableNotOwned @constraint(model, shared + sin(y) == 0)
+    @test_throws VariableNotOwned @objective(model, Min, shared + sin(y))
+    return
+end
+
+function test_check_belongs_to_model_nonlinear_expression()
+    model = Model()
+    other_model = Model()
+    @variable(model, x)
+    @variable(other_model, y)
+    shared = sin(x)
+    expression = shared + shared
+    @test isnothing(check_belongs_to_model(expression, model))
+    @test_throws VariableNotOwned check_belongs_to_model(
+        expression + sin(y),
+        model,
+    )
+    return
+end
+
+function test_addition_with_zero_Base_sum()
+    model = Model()
+    @variable(model, x[1:3])
+    y = sin.(x)
+    # Calling `sum(y)` naively results in `zero(NonlinearExpr) + y[1] + ...`
+    # We don't have this problem in the macros, but we do when called outside
+    # them.
+    z = sum(y) |> flatten!
+    @test z.head == :+
+    @test length(z.args) == 3
+    @test isequal_canonical(z, @expression(model, sum(sin(x[i]) for i in 1:3)))
+    return
+end
+
+function test_addition_with_iszero()
+    model = Model()
+    @variable(model, x)
+    y = log(x)
+    @test +(0.0, y) === y
+    @test +(y, 0.0) === y
+    z = zero(NonlinearExpr)
+    @test +(y, z) === y
+    @test +(z, y) === y
+    @test iszero(z)
+    @test !iszero(y)
+    # We check only for canonical representations
+    @test !iszero(NonlinearExpr(:+, 0.0, z))
+    return
+end
+
+function test_moi_function_no_owner_model()
+    f = NonlinearExpr(:+, Any[0.0, 1.0])
+    f_moi = MOI.ScalarNonlinearFunction(:+, Any[0.0, 1.0])
+    g = NonlinearExpr(:*, Any[f, f])
+    g_moi = MOI.ScalarNonlinearFunction(:*, Any[f_moi, f_moi])
+    h = NonlinearExpr(:^, Any[g, -2])
+    h_moi = MOI.ScalarNonlinearFunction(:^, Any[g_moi, -2])
+    @test isapprox(moi_function(h), h_moi)
+    return
+end
+
+function test_extension_expression_bedmas_parentheses(
+    ModelType = Model,
+    VariableRefType = VariableRef,
+)
+    model = ModelType()
+    @variable(model, x)
+    @expression(model, y, sin(x))
+    @test string(@expression(model, y + 2 * y)) == "sin(x) + 2 * sin(x)"
+    @test string(@expression(model, y + 2 / y)) == "sin(x) + 2 / sin(x)"
+    @test string(@expression(model, y + 2 ^ y)) == "sin(x) + 2 ^ sin(x)"
+    @test string(@expression(model, y + 2 - y)) == "(sin(x) + 2) - sin(x)"
+    @test string(@expression(model, y - 2 * y)) == "sin(x) - 2 * sin(x)"
+    @test string(@expression(model, y - 2 / y)) == "sin(x) - 2 / sin(x)"
+    @test string(@expression(model, y - 2 ^ y)) == "sin(x) - 2 ^ sin(x)"
+    @test string(@expression(model, y - 2 + y)) == "(sin(x) - 2) + sin(x)"
+    return
+end
+
+function test_issue_4203()
+    n = 25_000
+    model = Model()
+    @variable(model, x)
+    cons = @constraint(model, [i in 1:n], sin(x) * i <= 0)
+    for i in 1:n
+        @test isequal_canonical(constraint_object(cons[i]).func, sin(x) * i - 0)
+    end
+    return model
+end
+
+function test_extension_flatten_left_and_right(
+    ModelType = Model,
+    VariableRefType = VariableRef,
+)
+    model = ModelType()
+    @variable(model, x[1:5])
+    y = log.(x)
+    f = +(y[1], +(y[2], +(y[3], +(y[4], y[5]))))
+    g = +(+(+(+(y[1], y[2]), y[3]), y[4]), y[5])
+    @test string(flatten!(f)) == string(flatten!(g))
     return
 end
 

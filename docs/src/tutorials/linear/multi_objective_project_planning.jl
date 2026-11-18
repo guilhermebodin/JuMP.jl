@@ -5,14 +5,24 @@
 
 # # Multi-objective project planning
 
-# The purpose of this tutorial is to demonstrate how to create and solve a
-# multi-objective linear program.
-
 # **This tutorial was originally contributed by Xavier Gandibleux. It was
 # adapted from an example created by Begoña Vitoriano from the Universidad
 # Complutense de Madrid and originally presented at the EURO PhD School on
 # multicriteria decision making with mathematical programming, held February
 # 17-28, 2014 in Madrid.**
+
+# This tutorial solves a project-planning problem with three competing objectives
+# —minimising makespan, cost, and labour—as a multi-objective integer program.
+# It shows how to visualise the Pareto frontier and individual Gantt-chart
+# schedules to support decision-making.
+#
+# **Learning intentions:**
+# * Model a project schedule with task-start-time variables, acceleration
+#   decisions, and precedence constraints in a multi-objective integer program
+# * Enumerate non-dominated solutions across three competing objectives—
+#   makespan, cost, and labour—using `MultiObjectiveAlgorithms.jl`
+# * Plot the objective space and Gantt-chart schedules to communicate trade-offs
+#   and support a decision maker in choosing a preferred plan
 
 # ## Required packages
 
@@ -44,7 +54,7 @@ import Test
 
 # We study how to optimize the project schedule for building a house. There are
 # many tasks that need to be completed to build the house. Each task has a given
-# duration and a number staff required to perform it. Some tasks can be
+# duration and a number of staff required to perform it. Some tasks can be
 # accelerated (for a fixed cost per day) by hiring 20% more people (rounding
 # up). Tasks have a precedence order. Here's the data we're going to use:
 
@@ -195,7 +205,7 @@ function plot_solution(; result::Int)
         color = permutedims(colors),
         linewidth = 0,
         legend = false,
-        title = "makespan = $(obj[1]), cost = €$(obj[2])k, people =$(obj[3])",
+        title = "makespan = $(obj[1]), cost = €$(obj[2])k, people = $(obj[3])",
         xlabel = "Time",
         ylabel = "Task",
         yticks = (1.5:19.5, 'A':'S'),

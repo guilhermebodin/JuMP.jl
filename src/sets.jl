@@ -68,10 +68,14 @@ function _MA.operate!!(
 )
     if !iszero(y)
         error(
-            "Operation `sub_mul` between `$(typeof(x))` and `$(typeof(y))` " *
-            "is not allowed. This most often happens when you write a " *
-            "constraint like `x >= y` where `x` is an array and `y` is a " *
-            "constant. Use the broadcast syntax `x .- y >= 0` instead.",
+            """
+            Operation `sub_mul` between `$(typeof(x))` and `$(typeof(y))` is not allowed.
+
+            This most often happens when you write a constraint like `x >= y` \
+            where `x` is an array and `y` is a constant.
+
+            Use the broadcast syntax `x .- y >= 0` instead.
+            """,
         )
     end
     return x
@@ -85,10 +89,14 @@ function _MA.operate!!(
 )
     if !iszero(y)
         error(
-            "Operation `sub_mul` between `$(typeof(y))` and `$(typeof(x))` " *
-            "is not allowed. This most often happens when you write a " *
-            "constraint like `x >= y` where `x` is a constant and `y` is an " *
-            "array. Use the broadcast syntax `x .- y >= 0` instead.",
+            """
+            Operation `sub_mul` between `$(typeof(y))` and `$(typeof(x))` is not allowed.
+
+            This most often happens when you write a constraint like `x >= y` \
+            where `x` is a constant and `y` is an array.
+
+            Use the broadcast syntax `x .- y >= 0` instead.
+            """,
         )
     end
     return _MA.operate!!(*, -1, x)
@@ -197,8 +205,21 @@ function moi_set(set::SOS1{T}, dim::Int) where {T}
     elseif length(set.weights) == dim
         return MOI.SOS1{T}(set.weights)
     else
-        error("Weight vector in SOS1 is not of length $(dim).")
+        error(
+            """
+            Weight vector in SOS1 has length $(length(set.weights)), but must be of \
+            length $dim to match the variable vector.
+
+            Either omit the weight vector to use the default ordering `1:$dim`, \
+            or provide a weight vector with one entry per variable.
+            """,
+        )
     end
+end
+
+function model_convert(model::AbstractModel, set::MOI.SOS1)
+    T = value_type(typeof(model))
+    return MOI.SOS1{T}(convert(Vector{T}, set.weights))
 end
 
 """
@@ -251,8 +272,21 @@ function moi_set(set::SOS2{T}, dim::Int) where {T}
     elseif length(set.weights) == dim
         return MOI.SOS2{T}(set.weights)
     else
-        error("Weight vector in SOS2 is not of length $(dim).")
+        error(
+            """
+            Weight vector in SOS2 has length $(length(set.weights)), but must be of \
+            length $dim to match the variable vector.
+
+            Either omit the weight vector to use the default ordering `1:$dim`, \
+            or provide a weight vector with one entry per variable.
+            """,
+        )
     end
+end
+
+function model_convert(model::AbstractModel, set::MOI.SOS2)
+    T = value_type(typeof(model))
+    return MOI.SOS2{T}(convert(Vector{T}, set.weights))
 end
 
 """
@@ -318,7 +352,7 @@ x
 julia> print(model)
 Feasibility
 Subject to
- x ∈ MathOptInterface.Semicontinuous{Int64}(1, 2)
+ x ∈ MathOptInterface.Semicontinuous{Float64}(1.0, 2.0)
 ```
 """
 struct Semicontinuous{T} <: AbstractScalarSet
@@ -331,6 +365,11 @@ struct Semicontinuous{T} <: AbstractScalarSet
 end
 
 function moi_set(set::Semicontinuous{T}) where {T}
+    return MOI.Semicontinuous{T}(set.lower, set.upper)
+end
+
+function model_convert(model::AbstractModel, set::MOI.Semicontinuous)
+    T = value_type(typeof(model))
     return MOI.Semicontinuous{T}(set.lower, set.upper)
 end
 
@@ -354,7 +393,7 @@ x
 julia> print(model)
 Feasibility
 Subject to
- x ∈ MathOptInterface.Semiinteger{Int64}(3, 5)
+ x ∈ MathOptInterface.Semiinteger{Float64}(3.0, 5.0)
 ```
 """
 struct Semiinteger{T} <: AbstractScalarSet
@@ -367,6 +406,11 @@ struct Semiinteger{T} <: AbstractScalarSet
 end
 
 function moi_set(set::Semiinteger{T}) where {T}
+    return MOI.Semiinteger{T}(set.lower, set.upper)
+end
+
+function model_convert(model::AbstractModel, set::MOI.Semiinteger)
+    T = value_type(typeof(model))
     return MOI.Semiinteger{T}(set.lower, set.upper)
 end
 

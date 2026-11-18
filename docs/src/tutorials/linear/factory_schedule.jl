@@ -7,16 +7,24 @@
 
 # **This tutorial was originally contributed by `@Crghilardi`.**
 
-# This tutorial is a Julia translation of Part 5 from [Introduction to Linear
-# Programming with Python](https://github.com/benalexkeen/Introduction-to-linear-programming).
-
-# The purpose of this tutorial is to demonstrate how to use DataFrames and
-# delimited files, and to structure your code that is robust to infeasibilities
-# and permits running with different datasets.
+# This tutorial demonstrates a mixed-integer factory scheduling problem using
+# DataFrames and delimited file input. It is a Julia translation of Part 5 from
+# [Introduction to Linear Programming with Python](https://github.com/benalexkeen/Introduction-to-linear-programming)
+# and shows how to design a model that stays feasible even when demand cannot
+# be fully met.
+#
+# **Learning intentions:**
+# * Validate external data before building a model, and wrap the full
+#   build-solve-extract cycle in a reusable function that accepts data and
+#   returns structured results
+# * Keep a model always feasible by adding a penalty variable for unmet demand,
+#   so infeasibility signals a data error rather than a solver failure
+# * Run parametric experiments by re-solving the same model under a grid of
+#   input values and visualising how the optimal cost responds
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import CSV
@@ -39,14 +47,14 @@ import Test
 # ``z_{m,f}`` is ``1`` if factory ``f`` runs in month ``m``. The factory must
 # produce enough units to satisfy demand ``d_m``.
 
-# With a little effort, we can formulate our problem as the following linear
-# program:
+# With a little effort, we can formulate our problem as the following
+# mixed-integer linear program:
 # ```math
 # \begin{aligned}
 # \min & \sum\limits_{f \in F, m \in M} a_f z_{m,f} + c_f x_{m,f} \\
 # \text{s.t.} & x_{m,f} \le u_f z_{m,f} && \forall f \in F, m \in M \\
 #             & x_{m,f} \ge l_f z_{m,f} && \forall f \in F, m \in M \\
-#             & \sum\limits_{f\in F} x_{m,f} = d_m && \forall f \in F, m \in M \\
+#             & \sum\limits_{f\in F} x_{m,f} = d_m && \forall m \in M \\
 #             & z_{m,f} \in \{0, 1\} && \forall f \in F, m \in M.
 # \end{aligned}
 # ```
@@ -71,7 +79,7 @@ import Test
 # \min & \sum\limits_{f \in F, m \in M} a_f z_{m,f} + c_f x_{m,f} + \sum\limits_{m \in M}10000 \delta_m \\
 # \text{s.t.} & x_{m,f} \le u_f z_{m,f} && \forall f \in F, m \in M \\
 #             & x_{m,f} \ge l_f z_{m,f} && \forall f \in F, m \in M \\
-#             & \sum\limits_{f\in F} x_{m,f} - \delta_m = d_m && \forall f \in F, m \in M \\
+#             & \sum\limits_{f\in F} x_{m,f} + \delta_m = d_m && \forall m \in M \\
 #             & z_{m,f} \in \{0, 1\} && \forall f \in F, m \in M \\
 #             & \delta_m \ge 0 && \forall m \in M.
 # \end{aligned}
@@ -127,7 +135,7 @@ demand_df = CSV.read(
 # too large (or too small), which might indicate a typo or a unit conversion
 # issue (perhaps the variable costs are in \$/1000 units instead of \$/unit).
 
-function valiate_data(
+function validate_data(
     demand_df::DataFrames.DataFrame,
     factory_df::DataFrames.DataFrame,
 )
@@ -142,7 +150,7 @@ function valiate_data(
     return
 end
 
-valiate_data(demand_df, factory_df)
+validate_data(demand_df, factory_df)
 
 # ## JuMP formulation
 
@@ -157,7 +165,7 @@ function solve_factory_scheduling(
 )
     ## Even though we validated the data above, it's good practice to do it here
     ## too.
-    valiate_data(demand_df, factory_df)
+    validate_data(demand_df, factory_df)
     months, factories = unique(factory_df.month), unique(factory_df.factory)
     model = Model(HiGHS.Optimizer)
     set_silent(model)
@@ -267,7 +275,7 @@ StatsPlots.groupedbar(
 # Let's run another experiment, this time seeing how the optimal objective
 # value changes as we vary the variable costs of each factory.
 
-# First though, let's reset the demand to it's original level:
+# First though, let's reset the demand to its original level:
 
 demand_df.demand ./= 1.5;
 

@@ -5,8 +5,17 @@
 
 # # User-defined operators with vector outputs
 
-# The purpose of this tutorial is to demonstrate how to write a user-defined
-# operator with a vector-valued output.
+# This tutorial demonstrates how to write user-defined operators with
+# vector-valued outputs in JuMP, avoiding redundant computation when multiple
+# model components share an expensive function evaluation.
+#
+# **Learning intentions:**
+# * Understand why JuMP's scalar-output requirement causes redundant work when
+#   a vector-valued function is split into separate operators
+# * Implement a memoize helper that caches the most-recent result so that
+#   separate operators sharing common work each trigger only one evaluation
+# * Measure the reduction in function calls to confirm the memoized approach
+#   is more efficient than the naive split
 
 # !!! info
 #     As an alternative, see [The `VectorNonlinearOracle` set](@ref) tutorial.
@@ -40,8 +49,8 @@ end
 
 # This is a problem for JuMP, because it requires user-defined operators to
 # return a single number. One option is to define two separate functions, the
-# first returning the first argument, and the second returning the second
-# argument.
+# first returning the first output, and the second returning the second
+# output.
 
 foo_1(x, y) = foo(x, y)[1]
 foo_2(x, y) = foo(x, y)[2]

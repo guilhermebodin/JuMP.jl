@@ -20,17 +20,24 @@
 
 # # Writing a solver interface
 
-# The purpose of this tutorial is to demonstrate how to implement a basic solver
-# interface to MathOptInterface. As a motivating example, we implement the
-# Primal Dual Hybrid Gradient (PDHG) method. PDHG is a first-order method that
-# can solve convex optimization problems.
+# This tutorial demonstrates how to implement a basic solver interface to
+# MathOptInterface by writing the Primal Dual Hybrid Gradient (PDHG) method as
+# a first-order LP solver. Google has a [good introduction to the math behind
+# PDLP](https://developers.google.com/optimization/lp/pdlp_math), which is a
+# variant of PDHG specialised for linear programs.
 #
-# Google has a [good introduction to the math behind PDLP](https://developers.google.com/optimization/lp/pdlp_math),
-# which is a variant of PDHG specialized for linear programs.
+# **Learning intentions:**
+# * Implement a first-order LP solver (PDHG) from scratch in Julia and verify
+#   that it recovers correct primal and dual solutions
+# * Subtype [`MOI.AbstractOptimizer`](@ref) and implement the required support
+#   methods to declare which problem forms the solver accepts
+# * Use [`MOI.Utilities.GenericModel`](@ref) to automatically extract
+#   standard-form matrices from an arbitrary JuMP model, then expose solution
+#   attributes back to JuMP
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import LinearAlgebra
@@ -262,13 +269,13 @@ MOI.get(::Optimizer, ::MOI.SolverName) = "PDHG"
 # input model and `dest` is your empty optimizer.
 
 # To implement this method you would need to query the variables and constraints
-# in `src` and the convert these into the matrix data expected by `solve_pdhg`.
+# in `src` and then convert these into the matrix data expected by `solve_pdhg`.
 # Since matrix input is a common requirement of solvers, MOI includes utilities
 # to simplify the process.
 
 # The downside of the utilities is that they involve a highly parameterized type
-# with a large number of possible configurations.The upside of the utilities is
-# that, once setup, they requires few lines of code to extract the problem
+# with a large number of possible configurations. The upside of the utilities is
+# that, once setup, they require few lines of code to extract the problem
 # matrices.
 
 # First, we need to define the set of sets that our standard form supports. For
@@ -365,7 +372,7 @@ function MOI.optimize!(dest::Optimizer, src::MOI.ModelLike)
     ## Now we can solve the problem with PDHG and record the solution:
     dest.status, dest.iterations, dest.x, dest.y = solve_pdhg(A, b, c)
     ## To help assign the values of the x and y vectors to the appropriate
-    ## variables and constrats, we need a map of the constraint indices to their
+    ## variables and constraints, we need a map of the constraint indices to their
     ## row in the `dest` matrix and a map of the variable indices to their
     ## column in the `dest` matrix:
     F, S = MOI.VectorAffineFunction{Float64}, MOI.Zeros

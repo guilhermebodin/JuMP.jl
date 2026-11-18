@@ -183,12 +183,12 @@ end
 
 function test_size()
     err = ErrorException(
-        "`Base.size` is not implemented for `SparseAxisArray` because " *
+        "`Base.size` is not implemented for `SparseAxisArray` because, " *
         "although it is a subtype of `AbstractArray`, it is conceptually " *
-        "closer to a dictionary with `N`-dimensional keys. If you encounter " *
-        "this error and you didn't call `size` explicitly, it is because " *
-        "you called a method that is unsupported for `SparseAxisArray`s. " *
-        "Consult the JuMP documentation for a list of supported operations.",
+        "closer to a dictionary with N-dimensional keys.\n\nIf you did not " *
+        "call `size` explicitly, it is because you called a method that is " *
+        "unsupported for `SparseAxisArray`. Consult the JuMP documentation " *
+        "for a list of supported operations.\n",
     )
     x = Containers.@container([i = 1:3, j = i:3], i + j)
     @test_throws err size(x)
@@ -262,30 +262,44 @@ function test_containers_sparseaxisarray_kwarg_indexing()
     end
     @test_throws(
         ErrorException(
-            "Invalid index j in position 1. When using keyword indexing, the " *
-            "indices must match the exact name and order used when creating " *
-            "the container.",
+            """
+            Invalid index j in position 1.
+
+            When using keyword indexing, the indices must match the exact name \
+            and order used when creating the container.
+
+            Check the index names and their order in the container definition.
+            """,
         ),
         x[j=1, i=2],
     )
     @test_throws(
         ErrorException(
-            "Invalid index k in position 2. When using keyword indexing, the " *
-            "indices must match the exact name and order used when creating " *
-            "the container.",
+            """
+            Invalid index k in position 2.
+
+            When using keyword indexing, the indices must match the exact name \
+            and order used when creating the container.
+
+            Check the index names and their order in the container definition.
+            """,
         ),
         x[i=2, k=2],
     )
     @test_throws(
         ErrorException(
-            "Cannot index with mix of positional and keyword arguments",
+            "Cannot index with a mix of positional and keyword arguments.\n\n" *
+            "Use either all positional arguments, such as `A[i, j]`, or all " *
+            "keyword arguments, such as `A[dim1 = i, dim2 = j]`.\n",
         ),
         x[i=2, 2],
     )
     Containers.@container(y[i=2:3, 1:2], i, container = SparseAxisArray)
     @test_throws(
         ErrorException(
-            "Cannot index with mix of positional and keyword arguments",
+            "Cannot index with a mix of positional and keyword arguments.\n\n" *
+            "Use either all positional arguments, such as `A[i, j]`, or all " *
+            "keyword arguments, such as `A[dim1 = i, dim2 = j]`.\n",
         ),
         y[i=2, 2],
     )
@@ -296,11 +310,11 @@ end
 
 function test_containers_sparseaxisarray_kwarg_indexing_slicing()
     Containers.@container(x[i=2:3, j=1:2], i + j, container = SparseAxisArray)
-    y = x[i=2, j = :]
+    y = x[i=2, j=:]
     @test y[j=2] == 4
-    y = x[i = :, j=1]
+    y = x[i=:, j=1]
     @test y[i=3] == 4
-    y = x[i = :, j = :]
+    y = x[i=:, j=:]
     @test y[i=3, j=1] == 4
     return
 end
@@ -314,23 +328,35 @@ function test_containers_sparseaxisarray_kwarg_setindex()
     end
     @test_throws(
         ErrorException(
-            "Invalid index j in position 1. When using keyword indexing, the " *
-            "indices must match the exact name and order used when creating " *
-            "the container.",
+            """
+            Invalid index j in position 1.
+
+            When using keyword indexing, the indices must match the exact name \
+            and order used when creating the container.
+
+            Check the index names and their order in the container definition.
+            """,
         ),
         x[j=1, i=2] = 2,
     )
     @test_throws(
         ErrorException(
-            "Invalid index k in position 2. When using keyword indexing, the " *
-            "indices must match the exact name and order used when creating " *
-            "the container.",
+            """
+            Invalid index k in position 2.
+
+            When using keyword indexing, the indices must match the exact name \
+            and order used when creating the container.
+
+            Check the index names and their order in the container definition.
+            """,
         ),
         x[i=2, k=2] = 2,
     )
     @test_throws(
         ErrorException(
-            "Cannot index with mix of positional and keyword arguments",
+            "Cannot index with a mix of positional and keyword arguments.\n\n" *
+            "Use either all positional arguments, such as `A[i, j]`, or all " *
+            "keyword arguments, such as `A[dim1 = i, dim2 = j]`.\n",
         ),
         x[i=2, 2] = 3,
     )
@@ -386,6 +412,15 @@ function test_small_displaysize()
         show(io, d)
         @test String(take!(io.io)) == ""
     end
+    return
+end
+
+function test_issue_4213()
+    x = Containers.SparseAxisArray(Dict((:a, :b) => :answer))
+    @test x[(:a, :b)] == :answer
+    # This works unintentionally, because of Base.Dict's getindex semantics.
+    @test x[:a, :b] == :answer
+    @test_throws BoundsError x[:a, :b, :c]
     return
 end
 

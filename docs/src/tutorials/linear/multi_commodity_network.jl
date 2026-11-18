@@ -5,11 +5,19 @@
 
 # # The network multi-commodity flow problem
 
-# This tutorial is a variation of [The multi-commodity flow problem](@ref) where
-# the graph is a network instead of a bipartite graph.
-
-# The purpose of this tutorial is to demonstrate a style of modeling that
-# uses relational algebra.
+# This tutorial solves a multi-commodity network flow problem in which supply,
+# demand, and flow costs are stored in a SQLite database. It is a variation of
+# [The multi-commodity flow problem](@ref) with a general network graph, and
+# demonstrates a relational algebra style of JuMP modelling using DataFrames
+# joins instead of explicit index loops.
+#
+# **Learning intentions:**
+# * Load network data from a SQLite database and store it in DataFrames that
+#   serve as both the data source and the container for decision variables
+# * Build aggregated constraint expressions by grouping rows of a DataFrame,
+#   avoiding explicit index loops
+# * Construct mass-balance constraints with outer joins so that nodes appearing
+#   only as origins or only as destinations are handled correctly
 
 # ## Required packages
 
@@ -24,16 +32,16 @@ import Test
 
 # ## Formulation
 
-# The network multi-commondity flow problem is an extension of the
+# The network multi-commodity flow problem is an extension of
 # [The multi-commodity flow problem](@ref), where instead of having a bipartite
-# graph of supply and demand nodes, the graph can contains a set of nodes,
-# $i \in \mathcal{N}$ , which each have a (potentially zero) supply capacity,
-# $u^s_{i,p}$, and (potentially zero) a demand, $d_{i,p}$ for each commodity
-# $p \in P$. The nodes are connected by a set of edges $(i, j) \in \mathcal{E}$,
+# graph of supply and demand nodes, the graph can contain a set of nodes,
+# $i \in \mathcal{N}$, which each have a (potentially zero) supply capacity,
+# $u^s_{i,p}$, a supply cost, $c^s_{i,p}$, and a (potentially zero) demand,
+# $d_{i,p}$, for each commodity $p \in P$. The nodes are connected by a set of edges $(i, j) \in \mathcal{E}$,
 # which have a shipment cost $c^x_{i,j,p}$ and a total flow capacity of
 # $u^x_{i,j}$.
 
-# Our take is to choose an optimal supply for each node $s_{i,p}$, as well as
+# Our task is to choose an optimal supply for each node $s_{i,p}$, as well as
 # the optimal transshipment $x_{i,j,p}$ that minimizes the total cost.
 
 # The mathematical formulation is:

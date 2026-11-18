@@ -5,14 +5,18 @@
 
 # # Example: ellipsoid approximation
 
-# This tutorial considers the problem of computing _extremal ellipsoids_:
-# finding ellipsoids that best approximate a given set. As an extension, we show
-# how to use JuMP to inspect the bridges that were used, and how to explore
-# alternative formulations.
-
-# The model comes from Section 4.9 of [BenTal2001](@cite).
-
-# For a related example, see also the [Example: minimal ellipses](@ref) tutorial.
+# This tutorial computes _extremal ellipsoids_—the smallest ellipse enclosing
+# a set of points and the largest ellipse inscribed in a polytope—using
+# semidefinite programs from Section 4.9 of [BenTal2001](@cite). For a related
+# example, see also the [Example: minimal ellipses](@ref) tutorial.
+#
+# **Learning intentions:**
+# * Formulate the minimum-volume enclosing ellipsoid as a semidefinite program
+#   and recover the ellipse parameters from the optimal matrix
+# * Use [`print_active_bridges`](@ref) to inspect which reformulations JuMP
+#   applied automatically to match the solver's supported constraints
+# * Reduce the bridge graph by hand-tuning the model, and use
+#   [`remove_bridge`](@ref) to compare alternative reformulation paths
 
 # ## Required packages
 
@@ -88,7 +92,7 @@ plot = Plots.scatter(
 
 # ## JuMP formulation
 
-# Now let's build and the JuMP model. We'll compute ``D`` and ``c`` after the
+# Now let's build the JuMP model. We'll compute ``D`` and ``c`` after the
 # solve.
 
 model = Model(Clarabel.Optimizer)
@@ -174,12 +178,12 @@ print_active_bridges(model)
 #    [`MOI.VectorAffineFunction`](@ref) in [`MOI.PositiveSemidefiniteConeTriangle`](@ref)
 #    `@constraint(model, Z >= 0, PSDCone())`.
 #
-#  * Replacing the [`MOI.VectorOfVariables`](@ref) in [`MOI.PositiveSemidefiniteConeSquare`](@ref)
+#  * Replacing the [`MOI.VectorAffineFunction`](@ref) in [`MOI.PositiveSemidefiniteConeSquare`](@ref)
 #    constraint `[s z'; z Z] >= 0, PSDCone()` with the
 #    [`MOI.VectorAffineFunction`](@ref) in [`MOI.PositiveSemidefiniteConeTriangle`](@ref)
 #    `@constraint(model, LinearAlgebra.Symmetric([s z'; z Z]) >= 0, PSDCone())`.
 #
-#  * Replacing the [`MOI.ScalarAffineFunction`](@ref) in [`MOI.GreaterThan`](@ref)
+#  * Replacing the [`MOI.ScalarAffineFunction`](@ref) in [`MOI.LessThan`](@ref)
 #    constraints with the vectorized equivalent of
 #    [`MOI.VectorAffineFunction`](@ref) in [`MOI.Nonnegatives`](@ref)
 #
@@ -245,7 +249,7 @@ assert_is_solved_and_feasible(model)
 Test.@test isapprox(D, value.(Z); atol = 1e-3)
 solve_time_2 = solve_time(model)
 
-# This formulation gives the much smaller graph:
+# This formulation gives an even smaller graph:
 
 print_active_bridges(model)
 

@@ -49,8 +49,8 @@ which are not listed here.
    corresponds to the constraint name for scalar constraints, otherwise, the
    constraint names are set to `base_name[...]` for each index `...`.
 
- * `container = :Auto`: force the container type by passing `container = Array`,
-  `container = DenseAxisArray`, `container = SparseAxisArray`, or any another
+ * `container = Auto`: force the container type by passing `container = Array`,
+  `container = DenseAxisArray`, `container = SparseAxisArray`, or any other
   container type which is supported by a JuMP extension.
 
  * `set_string_name::Bool = true`: control whether to set the [`MOI.ConstraintName`](@ref)
@@ -103,13 +103,30 @@ macro constraint(input_args...)
     args, kwargs = Containers.parse_macro_arguments(error_fn, input_args)
     if length(args) < 2 && !isempty(kwargs)
         error_fn(
-            "No constraint expression detected. If you are trying to " *
-            "construct an equality constraint, use `==` instead of `=`.",
+            """
+            No constraint expression detected. If you are trying to construct an \
+            equality constraint, use `==` instead of `=`.
+
+            For example, to constrain `x` to equal `1`, write `@constraint(model, x == 1)`.
+            """,
         )
     elseif length(args) < 2
-        error_fn("expected 2 to 4 positional arguments, got $(length(args)).")
+        error_fn(
+            """
+            Expected 2 to 4 positional arguments, but got $(length(args)).
+
+            Use `@constraint(model, expr)` or `@constraint(model, name[...], expr)`.
+            """,
+        )
     elseif Meta.isexpr(args[2], :block)
-        error_fn("Invalid syntax. Did you mean to use `@constraints`?")
+        error_fn(
+            """
+            Invalid syntax. The constraint expression cannot be a \
+            `begin ... end` block.
+
+            To add multiple constraints at once, use the `@constraints` macro instead.
+            """,
+        )
     end
     model, y, extra = esc(args[1]), args[2], args[3:end]
     # Determine if a reference/container argument was given by the user
@@ -125,12 +142,26 @@ macro constraint(input_args...)
     c, x = nothing, y
     if y isa Symbol || Meta.isexpr(y, (:vect, :vcat, :ref, :typed_vcat))
         if length(extra) == 0
-            error_fn("No constraint expression was given.")
+            error_fn(
+                """
+                No constraint expression was given.
+
+                Provide a constraint expression as the final argument, for \
+                example `@constraint(model, name[...], x >= 1)`.
+                """,
+            )
         end
         c, x = y, popfirst!(extra)
     end
     if length(extra) > 1
-        error_fn("Cannot specify more than 1 additional positional argument.")
+        error_fn(
+            """
+            Cannot specify more than one additional positional argument.
+
+            The additional positional argument is used to pass a set, for \
+            example `@constraint(model, X >= 0, PSDCone())`.
+            """,
+        )
     end
     name, index_vars, indices = Containers.parse_ref_sets(
         error_fn,
@@ -297,7 +328,6 @@ JuMP currently supports the following `expr` objects:
  * `z --> {constraint}`
  * `!z --> {constraint}`
  * `z <--> {constraint}`
- * `!z <--> {constraint}`
  * `z => {constraint}`
  * `!z => {constraint}`
 as well as all broadcasted variants.
@@ -313,8 +343,13 @@ end
 
 function parse_constraint(error_fn::Function, arg)
     return error_fn(
-        "Incomplete constraint specification $arg. Are you missing a " *
-        "comparison (<=, >=, or ==)?",
+        """
+        Incomplete constraint specification `$arg`. Are you missing a \
+        comparison operator like `<=`, `>=`, or `==`?
+
+        Use `@constraint(model, expr op rhs)` where `op` is a comparison \
+        operator, for example `@constraint(model, x >= 1)`.
+        """,
     )
 end
 
@@ -337,7 +372,7 @@ This function is used in `_build_constraint`.
 ## Why is this needed?
 
 When broadcasting `f.(x)` over an `AbstractSparseArray` `x`, Julia first calls
-the equivalent of `f(zero(eltype(x))`. Here's an example:
+the equivalent of `f(zero(eltype(x)))`. Here's an example:
 
 ```jldoctest
 julia> import SparseArrays
@@ -345,10 +380,11 @@ julia> import SparseArrays
 julia> foo(x) = (println("Calling \$(x)"); x)
 foo (generic function with 1 method)
 
-julia> foo.(SparseArrays.sparsevec([1, 2], [1, 2]))
+julia> foo.(SparseArrays.sparsevec([1, 2], [1, 2], 3))
+Calling 0
 Calling 1
 Calling 2
-2-element SparseArrays.SparseVector{Int64, Int64} with 2 stored entries:
+3-element SparseArrays.SparseVector{Int64, Int64} with 2 stored entries:
   [1]  =  1
   [2]  =  2
 ```
@@ -414,10 +450,13 @@ See also: [`parse_constraint_call`](@ref), [`build_constraint`](@ref)
 """
 function parse_constraint_head(error_fn::Function, ::Val{T}, args...) where {T}
     return error_fn(
-        "Unsupported constraint expression: we don't know how to parse " *
-        "constraints containing expressions of type :$T.\n\nIf you are " *
-        "writing a JuMP extension, implement " *
-        "`parse_constraint_head(::Function, ::Val{:$T}, args...)",
+        """
+        Unsupported constraint expression: cannot parse a constraint \
+        containing an expression of type `:$T`.
+
+        If you are writing a JuMP extension, implement \
+        `parse_constraint_head(::Function, ::Val{:$T}, args...)`.
+        """,
     )
 end
 
@@ -428,15 +467,12 @@ function parse_constraint_head(
 )
     return error_fn(
         """
-        Unsupported constraint expression: we don't know how to parse a
-        `[ ]` block as a constraint. Have you written:
-        ```julia
-        @constraint(model, name, [...], ...)
-        ```
-        instead of:
-        ```julia
-        @constraint(model, name[...], ...)
-        ```""",
+        Unsupported constraint expression: a `[ ]` block cannot be \
+        used as a constraint.
+
+        You may have written `@constraint(model, name, [...], ...)` when \
+        you meant `@constraint(model, name[...], ...)`.
+        """,
     )
 end
 
@@ -464,7 +500,16 @@ function parse_constraint_head(
     lsign, lvectorized = _check_vectorized(lsign)
     rsign, rvectorized = _check_vectorized(rsign)
     if lvectorized != rvectorized
-        error_fn("Operators are inconsistently vectorized.")
+        error_fn(
+            """
+            Operators are inconsistently vectorized.
+
+            The left-hand side $(lvectorized ? "is" : "is not") vectorized, \
+            but the right-hand side $(rvectorized ? "is" : "is not") vectorized.
+
+            Either both sides must be vectorized, or neither must be.
+            """,
+        )
     end
     if lsign in (:(<=), :≤) && rsign in (:(<=), :≤)
         # Nothing. What we expect.
@@ -473,10 +518,12 @@ function parse_constraint_head(
         lb, ub = ub, lb
     else
         error_fn(
-            "unsupported mix of comparison operators " *
-            "`$lb $lsign ... $rsign $ub`.\n\n" *
-            "Two-sided rows must of the form `$lb <= ... <= $ub` or " *
-            "`$ub >= ... >= $lb`.",
+            """
+            Unsupported mix of comparison operators `$lb $lsign ... $rsign $ub`.
+
+            Two-sided constraints must use consistent operators. Write \
+            `$lb <= ... <= $ub` or `$ub >= ... >= $lb`.
+            """,
         )
     end
     new_aff, parse_aff = _rewrite_expression(aff)
@@ -543,32 +590,49 @@ sign is transformed into a set with zero constant and finally the constant is
 moved to the set with `MOIU.shift_constant`.
 """
 function operator_to_set(error_fn::Function, ::Val{S}) where {S}
-    return error_fn("unsupported operator $S")
+    return error_fn(
+        """
+        Unsupported operator `$S` cannot be interpreted as a constraint.
+
+        Supported operators include `>=`, `<=`, `==`, and `⟂`. For example:
+        ```julia
+        @constraint(model, x >= 1)
+        @constraint(model, x <= 1)
+        @constraint(model, x == 1)
+        @constraint(model, 1 - x ⟂ x)
+        @constraint(model, x in MOI.ZeroOne())
+        ```
+
+        If you want to define a custom set, implement `operator_to_set`.
+        """,
+    )
 end
 
 function operator_to_set(error_fn::Function, ::Val{:>})
     return error_fn(
-        "unsupported operator `>`.\n\n" *
-        "JuMP does not support strict inequalities, use `>=` instead.\n\n" *
-        "If you require a strict inequality, you will need to use a " *
-        "tolerance. For example, instead of `x > 1`, do `x >= 1 + 1e-4`. " *
-        "If the constraint must take integer values, use a tolerance of " *
-        "`1.0`. If the constraint may take continuous values, note that this " *
-        "work-around can cause numerical issues, and your constraint may not " *
-        "hold exactly.",
+        """
+        The operator `>` is not supported because JuMP does not support \
+        strict inequalities.
+
+        Use `>=` instead. If you require a strict inequality, add a \
+        tolerance: instead of `x > 1`, write `x >= 1 + 1e-4`. Note that \
+        this work-around can cause numerical issues if the constraint may \
+        take continuous values.
+        """,
     )
 end
 
 function operator_to_set(error_fn::Function, ::Val{:<})
     return error_fn(
-        "unsupported operator `<`.\n\n" *
-        "JuMP does not support strict inequalities, use `<=` instead.\n\n" *
-        "If you require a strict inequality, you will need to use a " *
-        "tolerance. For example, instead of `x < 1`, do `x <= 1 - 1e-4`. " *
-        "If the constraint must take integer values, use a tolerance of " *
-        "`1.0`. If the constraint may take continuous values, note that this " *
-        "work-around can cause numerical issues, and your constraint may not " *
-        "hold exactly.",
+        """
+        The operator `<` is not supported because JuMP does not support \
+        strict inequalities.
+
+        Use `<=` instead. If you require a strict inequality, add a \
+        tolerance: instead of `x < 1`, write `x <= 1 - 1e-4`. Note that \
+        this work-around can cause numerical issues if the constraint may \
+        take continuous values.
+        """,
     )
 end
 
@@ -654,7 +718,7 @@ julia> @constraint(model, A * x <= b)
 struct Nonpositives end
 
 """
-    GreaterThanZero()
+    LessThanZero()
 
 A struct used to intercept when `<=` or `≤` is used in a macro via
 [`operator_to_set`](@ref).
@@ -751,10 +815,13 @@ function parse_constraint_call(
     args...,
 ) where {T}
     return error_fn(
-        "Unsupported constraint expression: we don't know how to parse " *
-        "constraints containing the operator $T.\n\nIf you are writing a " *
-        "JuMP extension, implement " *
-        "`parse_constraint_call(::Function, ::Bool, ::Val{$T}, args...)",
+        """
+        Unsupported constraint expression: cannot parse a constraint \
+        containing the operator `$T`.
+
+        If you are writing a JuMP extension, implement \
+        `parse_constraint_call(::Function, ::Bool, ::Val{:$T}, args...)`.
+        """,
     )
 end
 
@@ -853,26 +920,23 @@ function build_constraint(
 )
     return error_fn(
         """
+        The syntax `x >= y` is ambiguous for matrices because JuMP cannot \
+        determine if you intend a positive semidefinite constraint or an \
+        elementwise inequality.
 
-        The syntax `x >= y` is ambiguous for matrices because we cannot tell if
-        you intend a positive semidefinite constraint or an elementwise
-        inequality.
-
-        To create a positive semidefinite constraint, pass `PSDCone()` or
+        To create a positive semidefinite constraint, pass `PSDCone()` or \
         `HermitianPSDCone()`:
-
         ```julia
         @constraint(model, x >= y, PSDCone())
         ```
-
-        To create an element-wise inequality, pass `Nonnegatives()`, or use
+        To create an elementwise inequality, pass `Nonnegatives()` or use \
         broadcasting:
-
         ```julia
         @constraint(model, x >= y, Nonnegatives())
         # or
         @constraint(model, x .>= y)
-        ```""",
+        ```
+        """,
     )
 end
 
@@ -893,26 +957,23 @@ function build_constraint(
 )
     return error_fn(
         """
+        The syntax `x <= y` is ambiguous for matrices because JuMP cannot \
+        determine if you intend a positive semidefinite constraint or an \
+        elementwise inequality.
 
-        The syntax `x <= y` is ambiguous for matrices because we cannot tell if
-        you intend a positive semidefinite constraint or an elementwise
-        inequality.
-
-        To create a positive semidefinite constraint, reverse the sense of the
-        inequality and pass `PSDCone()` or `HermitianPSDCone()`:
-
+        To create a positive semidefinite constraint, reverse the sense of \
+        the inequality and pass `PSDCone()` or `HermitianPSDCone()`:
         ```julia
         @constraint(model, y >= x, PSDCone())
         ```
-
-        To create an element-wise inequality, reverse the sense of the
-        inequality and pass `Nonnegatives()`, or use broadcasting:
-
+        To create an elementwise inequality, reverse the sense of the \
+        inequality and pass `Nonnegatives()` or use broadcasting:
         ```julia
         @constraint(model, y >= x, Nonnegatives())
         # or
         @constraint(model, x .<= y)
-        ```""",
+        ```
+        """,
     )
 end
 
@@ -984,12 +1045,14 @@ function build_constraint(error_fn::Function, func, set, args...; kwargs...)
     kwarg_str = join(Tuple(string(k, " = ", v) for (k, v) in kwargs), ", ")
     kwarg_str = isempty(kwarg_str) ? "" : "; " * kwarg_str
     return error_fn(
-        "Unrecognized constraint building format. Tried to invoke " *
-        "`build_constraint(error, $(func), $(set)$(arg_str)$(kwarg_str))`, " *
-        "but no such method exists. This is due to specifying an unrecognized " *
-        "function, constraint set, and/or extra positional/keyword arguments." *
-        "\n\nIf you're trying to create a JuMP extension, you need to " *
-        "implement `build_constraint` to accomodate these arguments.",
+        """
+        Unrecognized constraint format: no method \
+        `build_constraint(error, $func, $set$arg_str$kwarg_str)` exists.
+
+        This is due to an unrecognized function, constraint set, and/or \
+        extra arguments. If you are writing a JuMP extension, implement \
+        `build_constraint` to accommodate these arguments.
+        """,
     )
 end
 
@@ -999,8 +1062,14 @@ function build_constraint(
     ::Union{MOI.AbstractScalarSet,MOI.AbstractVectorSet},
 )
     return error_fn(
-        "Unable to add the constraint because we don't recognize " *
-        "$(func) as a valid JuMP function.",
+        """
+        Unable to add the constraint because `$(func)` is not a \
+        recognized JuMP expression type.
+
+        The constraint function must be a JuMP scalar or vector expression. \
+        Check that the left- and right-hand sides of your constraint are \
+        JuMP variables or expressions.
+        """,
     )
 end
 
@@ -1061,8 +1130,13 @@ function build_constraint(
     set::MOI.AbstractScalarSet,
 )
     return error_fn(
-        "Unexpected vector in scalar constraint. The left- and right-hand " *
-        "sides of the constraint must have the same dimension.",
+        """
+        Unexpected vector in scalar constraint: the left- and right-hand \
+        sides of the constraint must have the same dimension.
+
+        If you intended an elementwise constraint, use broadcasting: \
+        `f(x) .<= g(x)`.
+        """,
     )
 end
 
@@ -1073,8 +1147,11 @@ function build_constraint(
     ::AbstractVector,
 )
     return error_fn(
-        "Unexpected vectors in scalar constraint. Did you mean to use the dot ",
-        "comparison operators `l .<= f(x) .<= u` instead?",
+        """
+        Unexpected vectors in a scalar two-sided constraint.
+
+        Use the broadcasting comparison operators instead: `l .<= f(x) .<= u`.
+        """,
     )
 end
 
@@ -1084,8 +1161,12 @@ function build_constraint(
     set::MOI.AbstractVectorSet,
 )
     return error_fn(
-        "unexpected matrix in vector constraint. Do you need to flatten the " *
-        "matrix into a vector using `vec()`?",
+        """
+        Unexpected matrix in a vector-valued constraint.
+
+        Flatten the matrix into a vector using `vec()` before adding \
+        the constraint.
+        """,
     )
 end
 
@@ -1094,7 +1175,13 @@ function build_constraint(
     ::Matrix,
     T::MOI.PositiveSemidefiniteConeTriangle,
 )
-    return error_fn("instead of `$(T)`, use `JuMP.PSDCone()`.")
+    return error_fn(
+        """
+        `$(T)` is not a valid JuMP constraint set for matrix constraints.
+
+        Use `JuMP.PSDCone()` instead: `@constraint(model, X >= 0, PSDCone())`.
+        """,
+    )
 end
 
 # three-argument build_constraint is used for two-sided constraints.
@@ -1105,7 +1192,14 @@ function build_constraint(
     ub::Real,
 )
     if isnan(lb) || isnan(ub)
-        error_fn("Invalid bounds, cannot contain NaN: [$(lb), $(ub)].")
+        error_fn(
+            """
+            Invalid bounds `[$lb, $ub]`: bounds cannot contain `NaN`.
+
+            Check the expressions used to compute the bounds for operations \
+            that may produce `NaN`, such as `0 / 0` or `Inf - Inf`.
+            """,
+        )
     end
     return build_constraint(
         error_fn,
@@ -1124,9 +1218,12 @@ function build_constraint(
     ::Union{AbstractJuMPScalar,Real},
 )
     return error_fn(
-        "Interval constraint contains non-constant left- or " *
-        "right-hand sides. Reformulate as two separate " *
-        "constraints, or move all variables into the central term.",
+        """
+        Interval constraint contains non-constant left- or right-hand sides.
+
+        Reformulate as two separate constraints, or move all variables \
+        into the central term.
+        """,
     )
 end
 

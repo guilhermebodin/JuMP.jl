@@ -5,14 +5,24 @@
 
 # # Constraint programming
 
-# JuMP supports a range of constraint-programming type constraints via the
-# corresponding sets in MathOptInterface. For most constraints, there are
-# reformulations built-in that convert the constraint programming constraint
-# into a mixed-integer programming equivalent.
-
-# Because of this reformulation, all variables must be integer, and they must
+# This tutorial demonstrates the constraint-programming sets available in JuMP
+# via MathOptInterface. Most of these constraints are automatically reformulated
+# into equivalent mixed-integer programs, so they can be solved with standard
+# MIP solvers such as HiGHS. Because of this reformulation, all variables must be integer, and they must
 # typically have finite bounds. An error will be thrown if the reformulation
 # requires finiteness and you have a variable with non-finite bounds.
+#
+#
+# **Learning intentions:**
+# * Express combinatorial requirements—all-different assignments, Hamiltonian
+#   circuits, bin packing, table lookups—concisely using constraint-programming
+#   sets, rather than writing explicit integer-programming reformulations by hand
+# * Understand that JuMP automatically reformulates these CP sets into MIP
+#   equivalents, so any standard MIP solver can solve them without extra work
+# * Use counting constraints to bound or measure how many variables in a
+#   collection take values from a specified set
+
+# ## Required packages
 
 # This tutorial uses the following packages:
 
@@ -106,9 +116,8 @@ n = 1
 
 @constraint(model, variables in MOI.CountAtLeast(n, partitions, values))
 
-# To ensure the uniqueness of the solution, we'll add a constraint that `x[2]`
-# must be `<= 2`. This ensures that the only feasible solution is for `x[1]` and
-# `x[3]` to be `3`:
+# To force `x[1]` and `x[3]` to be `3`, we'll add a constraint that `x[2]` must
+# be `<= 2`:
 
 @constraint(model, x[2] <= 2)
 
@@ -155,11 +164,11 @@ value(n), value.(x)
 # ## CountGreaterThan
 
 # The [`MOI.CountGreaterThan`](@ref) set is used to strictly upper-bound the
-# number of distinct elements in a set of variables that have a value equal to
-# another variable.
+# number of elements in a set of variables that have a value equal to another
+# variable.
 
-# For example, to count the number `n` of times that `y` appears in the vector
-# `x`, use:
+# For example, to bound the number of times that `y` appears in the vector `x`
+# by `n`, use:
 
 model = Model(HiGHS.Optimizer)
 set_silent(model)

@@ -7,12 +7,18 @@
 
 # **This tutorial was originally contributed by Louis Luangkesorn.**
 
-# This tutorial is an adaptation of the transportation problem described in
-# [_AMPL: A Modeling Language for Mathematical Programming_](https://ampl.com/resources/the-ampl-book/),
-# by R. Fourer, D.M. Gay and B.W. Kernighan.
-
-# The purpose of this tutorial is to demonstrate how to create a JuMP model from
-# an ad-hoc structured text file.
+# This tutorial solves the classic transportation problem from the AMPL book,
+# reading shipment cost data from a delimited text file. It demonstrates how to
+# parse ad-hoc structured text into a JuMP-ready data structure and encapsulate
+# the model in a reusable function.
+#
+# **Learning intentions:**
+# * Parse a delimited text file and store the result in a
+#   [`Containers.DenseAxisArray`](@ref) indexed by string row and column names
+# * Handle missing arcs by fixing the corresponding variables to zero with
+#   [`fix`](@ref), rather than conditionally omitting them from the model
+# * Encapsulate the model in a reusable function that accepts validated input
+#   data and prints the solution in the same tabular format as the input
 
 # ## Required packages
 
@@ -72,7 +78,7 @@ end
 
 # Here the rows are the origins, the columns are the destinations, and the
 # values are the cost of shipping one pogo stick from the origin to the
-# destination. If pogo stick cannot be transported from a source to a
+# destination. If pogo sticks cannot be transported from a source to a
 # destination, then the value is `.`. The final row and final column are the
 # demand and supply of each location respectively.
 
@@ -99,7 +105,7 @@ data = read_data(joinpath(@__DIR__, "transp.txt"))
 # `stdout`:
 
 function solve_transportation_problem(data::Containers.DenseAxisArray)
-    ## Get the set of supplies and demands
+    ## Get the sets of origins and destinations
     O, D = axes(data)
     ## Drop the SUPPLY and DEMAND nodes from our sets
     O, D = setdiff(O, ["DEMAND"]), setdiff(D, ["SUPPLY"])

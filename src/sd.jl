@@ -354,7 +354,11 @@ end
 function _square_side(error_fn::Function, variables::Matrix)
     n, m = size(variables)
     if n != m
-        error_fn("Symmetric variables must be square. Got size ($n, $m).")
+        error_fn(
+            """
+            Symmetric variables must be square matrices. Got size ($n, $m).
+            """,
+        )
     end
     return n
 end
@@ -362,10 +366,16 @@ end
 function _vectorize_variables(error_fn::Function, matrix::Matrix)
     n = LinearAlgebra.checksquare(matrix)
     for j in 1:n
-        for i in 1:j
+        for i in 1:(j-1)
             if matrix[i, j] != matrix[j, i]
                 error_fn(
-                    "Non-symmetric bounds, integrality or starting values for symmetric variable.",
+                    """
+                    Data associated with a symmetric variable is not symmetric.
+
+                    Check elements ($i, $j) and ($j, $i).
+
+                    Symmetric variables must have symmetric bounds and starting values.
+                    """,
                 )
             end
         end
@@ -620,26 +630,66 @@ function reshape_vector(
     return LinearAlgebra.Hermitian(matrix)
 end
 
-function _vectorize_complex_variables(error_fn::Function, matrix::Matrix)
-    if any(_is_binary, matrix) || any(_is_integer, matrix)
-        # We would then need to fix the imaginary value to zero. Let's wait to
-        # see if there is need for such complication first.
-        error_fn(
-            "Binary or integer variables in a Hermitian matrix are not supported.",
-        )
-    end
+function _vectorize_complex_variables(
+    error_fn::Function,
+    matrix::Matrix{<:ScalarVariable},
+)
     n = LinearAlgebra.checksquare(matrix)
-    for j in 1:n
-        if !_isreal(matrix[j, j])
+    fields = (
+        :lower_bound => "lower bound",
+        :upper_bound => "upper bound",
+        :fixed_value => "fixed bound",
+        :start => "starting value",
+    )
+    for i in 1:n, j in 1:n
+        if _is_binary(matrix[i, j])
             error_fn(
-                "Non-real bounds or starting values for diagonal of Hermitian variable.",
+                """
+                Binary variables in a Hermitian matrix are not supported.
+
+                To fix, check element `($i, $j)`. You may have set the variable \
+                be binary using the `Bin` tag or used the `binary = true` keyword.
+                """,
             )
-        end
-        for i in 1:j
-            if matrix[i, j] != _conj(matrix[j, i])
-                error_fn(
-                    "Non-conjugate bounds or starting values for Hermitian variable.",
-                )
+        elseif _is_integer(matrix[i, j])
+            error_fn(
+                """
+                Integer variables in a Hermitian matrix are not supported.
+
+                To fix, check element `($i, $j)`. You may have set the variable \
+                be integer using the `Int` tag or used the `integer = true` keyword.
+                """,
+            )
+        elseif i == j
+            for (field, str) in fields
+                x_ii = getfield(matrix[i, i].info, field)
+                if !isreal(x_ii)
+                    error_fn(
+                        """
+                        Non-real $str in diagonal of Hermitian matrix.
+
+                        Got `x[$i, $i] = $x_ii`. The diagonal of a Hermitian matrix must be real.
+                        """,
+                    )
+                end
+            end
+        elseif i < j
+            for (field, str) in fields
+                x_ij = getfield(matrix[i, j].info, field)
+                x_ji = getfield(matrix[j, i].info, field)
+                if isnan(x_ij) && isnan(x_ji)
+                    continue
+                elseif x_ji != conj(x_ij)
+                    error_fn(
+                        """
+                        Non-conjugate $str in Hermitian matrix.
+
+                        Got `x[$i, $j] = $x_ij` and `x[$j, $i] = $x_ji`.
+
+                        To be Hermitian, we expected `x[$j, $i] = $(conj(x_ij))`.
+                        """,
+                    )
+                end
             end
         end
     end
@@ -681,9 +731,12 @@ function build_constraint(
     cone::HermitianPSDCone,
 )
     return error_fn(
-        "Unable to add matrix in HermitianPSDCone because the matrix is " *
-        "not a subtype of `LinearAlgebra.Hermitian`. To fix, wrap the matrix " *
-        "`H` in `LinearAlgebra.Hermitian(H)`.",
+        """
+        Unable to add matrix in HermitianPSDCone because the matrix is not a \
+        subtype of `LinearAlgebra.Hermitian`.
+
+        To fix, wrap the matrix `H` in `LinearAlgebra.Hermitian(H)`.
+        """,
     )
 end
 
@@ -718,28 +771,42 @@ reshape_set(s::MOI.Zeros, ::HermitianMatrixShape) = Zeros()
 
 function build_constraint(error_fn::Function, ::AbstractMatrix, ::Nonnegatives)
     return error_fn(
-        "Unsupported matrix in vector-valued set. Did you mean to use the " *
-        "broadcasting syntax `.>=` instead? Alternatively, perhaps you are " *
-        "missing a set argument like `@constraint(model, X >= 0, PSDCone())` " *
-        "or `@constraint(model, X >= 0, HermitianPSDCone())`.",
+        """
+        Unsupported matrix in vector-valued set.
+
+        Did you mean to use the broadcasting syntax `.>=` instead?
+
+        Alternatively, perhaps you are missing a set argument like \
+        `@constraint(model, X >= 0, PSDCone())` or \
+        `@constraint(model, X >= 0, HermitianPSDCone())`.
+        """,
     )
 end
 
 function build_constraint(error_fn::Function, ::AbstractMatrix, ::Nonpositives)
     return error_fn(
-        "Unsupported matrix in vector-valued set. Did you mean to use the " *
-        "broadcasting syntax `.<=` instead? Alternatively, perhaps you are " *
-        "missing a set argument like `@constraint(model, X <= 0, PSDCone())` " *
-        "or `@constraint(model, X <= 0, HermitianPSDCone())`.",
+        """
+        Unsupported matrix in vector-valued set.
+
+        Did you mean to use the broadcasting syntax `.<=` instead?
+
+        Alternatively, perhaps you are missing a set argument like \
+        `@constraint(model, X <= 0, PSDCone())` or \
+        `@constraint(model, X <= 0, HermitianPSDCone())`.
+        """,
     )
 end
 
 function build_constraint(error_fn::Function, ::AbstractMatrix, ::Zeros)
     return error_fn(
-        "Unsupported matrix in vector-valued set. Did you mean to use the " *
-        "broadcasting syntax `.==` for element-wise equality? Alternatively, " *
-        "this syntax is supported in the special case that the matrices are " *
-        "`Array`, `LinearAlgebra.Symmetric`, or `LinearAlgebra.Hermitian`.",
+        """
+        Unsupported matrix in vector-valued set.
+
+        Did you mean to use the broadcasting syntax `.==` for element-wise equality?
+
+        Alternatively, this syntax is supported in the special case that the \
+        matrices are `Array`, `LinearAlgebra.Symmetric`, or `LinearAlgebra.Hermitian`.
+        """,
     )
 end
 
@@ -847,7 +914,11 @@ for S in (Nonnegatives, Nonpositives, Zeros)
                 set::$S,
             )
                 return error_fn(
-                    "The syntax `x <= y, $set` not supported. Use `y >= x, $set` instead.",
+                    """
+                    The syntax `x <= y, $set` not supported.
+
+                    Use the syntax `@constraint(model, y >= x, $set)` instead.
+                    """,
                 )
             end
         end

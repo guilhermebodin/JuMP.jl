@@ -21,7 +21,8 @@ denoise
 [Dd]ependabot
 destructuring
 dev
-discretize(d|s)
+[Dd]iscretize
+discretiz(ed|es|ing)
 docstring(?s)
 doctest(?s)
 doi|DOI
@@ -39,6 +40,7 @@ invalidations
 jll|JLL
 [Jj]ulia
 juxtaposted
+kwarg(?s)
 libblastrampoline
 makespan
 [Mm]ultiline
@@ -62,7 +64,9 @@ sparsifying
 subexpression(?s)
 subgraph(?s)
 sublicense
+subsolver
 subtyping
+SVM(?s)
 sysimage
 threadsafe
 [Tt]hresholding
@@ -112,7 +116,7 @@ POVM
 [Pp]resolve
 refactorization
 Relatedly
-rhs
+(rhs|RHS)
 satisfiability
 scalarization(?s)
 SDP(?s)
@@ -132,13 +136,16 @@ warmstart
 % Proper nouns
 Adagrad
 Agence
+Algencan
 AMPL
 Appveyor
 Artelys
 (Bonmin|BONMIN)
 (Cbc|CBC)
+CCOpt
 (cdd|CDD)
 (cddlib|CDDLib)
+Chuffed
 Clarabel
 Clp
 CPLEXLink
@@ -149,7 +156,7 @@ COSMOAccelerators
 Couenne
 cuOpt
 Divio
-Dualization
+[Dd]ualization
 EAGO
 [Ee]mbotech
 [Ee]cos
@@ -300,6 +307,7 @@ Tanneau
 Teghem
 Tejada
 Tillmann
+Towle
 Ulungu
 Vanaret
 Vandenberghe

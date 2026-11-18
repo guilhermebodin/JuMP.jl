@@ -5,22 +5,25 @@
 
 # # Serving web apps
 
-# This tutorial demonstrates how to setup and serve JuMP models via a REST API.
+# This tutorial demonstrates how to set up and serve JuMP models via a REST
+# API using HTTP.jl and JSON.jl. The example service accepts an HTTP POST
+# request with a JSON body, solves a parameterized mixed-integer program, and
+# returns the solution as JSON.
+#
+# **Learning intentions:**
+# * Structure a JuMP solver as a self-contained endpoint function that validates
+#   JSON input, builds and solves a model, and returns results as a dictionary
+# * Wrap the endpoint in an HTTP request handler that parses JSON, runs the
+#   solver in a separate thread, and returns an HTTP response
+# * Register the endpoint on an HTTP router, start the server, and send test
+#   requests to verify the full round-trip
 
-# In the example app we are building, we solve a trivial mixed-integer program,
-# which is parameterized by the lower bound of a variable. To call the service,
-# users send an HTTP POST request with JSON contents indicating the lower bound.
-# The returned value is the solution of the mixed-integer program as JSON.
+# ## Required packages
 
-# First, we need JuMP and a solver:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
-
-# We also need [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl) to act as our
-# REST server, and [JSON.jl](https://github.com/JuliaIO/JSON.jl) to marshal
-# data.
-
 import HTTP
 import JSON
 
@@ -53,7 +56,7 @@ function endpoint_solve(params::Dict{String,Any})
     optimize!(model)
     ret = Dict{String,Any}(
         "status" => "okay",
-        "terminaton_status" => termination_status(model),
+        "termination_status" => termination_status(model),
         "primal_status" => primal_status(model),
     )
     ## Only include the `x` key if it has a value.
@@ -79,10 +82,11 @@ endpoint_solve(Dict{String,Any}())
 function wrap_endpoint(endpoint::Function)
     function serve_request(request::HTTP.Request)::HTTP.Response
         task = Threads.@spawn try
-            ret = request.body |> String |> JSON.parse |> endpoint |> JSON.json
-            HTTP.Response(200, ret)
+            input = request.body |> String |> JSON.parse
+            ret = convert(Dict{String,Any}, input) |> endpoint |> JSON.json
+            HTTP.Response(200; body = ret)
         catch err
-            HTTP.Response(500, "internal error: $err")
+            HTTP.Response(500; body = "internal error: $err")
         end
         return fetch(task)
     end
@@ -94,7 +98,7 @@ end
 router = HTTP.Router()
 ## Register other routes as needed
 HTTP.register!(router, "/api/solve", wrap_endpoint(endpoint_solve))
-server = HTTP.serve!(router, HTTP.ip"127.0.0.1", 8080)
+server = HTTP.serve!(router, "127.0.0.1", 8080)
 
 # ## The client side
 
@@ -105,7 +109,12 @@ function send_request(data::Dict; endpoint::String = "solve")
         "POST",
         ## This should match the URL and endpoint we defined for our server.
         "http://127.0.0.1:8080/api/$endpoint",
-        ["Content-Type" => "application/json"],
+        [
+            "Content-Type" => "application/json",
+            ## This line is needed so we can run this tutorial multiple times in
+            ## the documentation. You don't need it in practice.
+            "Connection" => "close",
+        ],
         JSON.json(data),
     )
     if ret.status != 200
@@ -137,7 +146,7 @@ send_request(Dict("lower_bound" => "1.2"))
 
 # Finally, we can shutdown our HTTP server:
 
-close(server)
+HTTP.forceclose(server)
 
 # ## Next steps
 

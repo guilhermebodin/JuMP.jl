@@ -7,17 +7,21 @@
 
 # **This tutorial was originally contributed by Louis Luangkesorn.**
 
-# This tutorial is a JuMP implementation of the multi-commodity transportation
-# model described in
-# [_AMPL: A Modeling Language for Mathematical Programming_](https://ampl.com/resources/the-ampl-book/),
-# by R. Fourer, D.M. Gay and B.W. Kernighan.
-
-# The purpose of this tutorial is to demonstrate creating a JuMP model from an
-# SQLite database.
+# This tutorial solves the multi-commodity flow problem from the AMPL book by
+# reading data from a SQLite database. It demonstrates how to build a JuMP model
+# by executing SQL queries and piping results to Julia data structures.
+#
+# **Learning intentions:**
+# * Connect to a SQLite database and execute queries to retrieve the sets and
+#   parameters needed to build a JuMP model
+# * Consume query results in three ways: loading into a DataFrame, converting to
+#   a row table, or streaming rows directly—and understand when each is appropriate
+# * Write SQL joins to generate constraint index sets directly from the database
+#   schema, rather than constructing them in Julia
 
 # ## Required packages
 
-# This tutorial uses the following packages
+# This tutorial uses the following packages:
 
 using JuMP
 import DataFrames
@@ -30,7 +34,7 @@ const DBInterface = SQLite.DBInterface
 
 # ## Formulation
 
-# The multi-commondity flow problem is a simple extension of
+# The multi-commodity flow problem is a simple extension of
 # [The transportation problem](@ref) to multiple types of products. Briefly, we
 # start with the formulation of the transportation problem:
 # ```math
@@ -128,7 +132,7 @@ set_silent(model)
 cost = DBInterface.execute(db, "SELECT * FROM cost") |> DataFrames.DataFrame
 @objective(
     model,
-    Max,
+    Min,
     sum(r.cost * x[r.origin, r.destination, r.product] for r in eachrow(cost)),
 );
 
@@ -178,7 +182,7 @@ end
 
 optimize!(model)
 assert_is_solved_and_feasible(model)
-Test.@test objective_value(model) == 225_700.0
+Test.@test objective_value(model) == 199_500.0
 solution_summary(model)
 
 # and print the solution:

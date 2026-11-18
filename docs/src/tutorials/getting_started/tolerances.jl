@@ -20,6 +20,20 @@
 
 # # Tolerances and numerical issues
 
+# Optimization solvers use tolerances to check feasibility and optimality, and
+# understanding them is essential for interpreting solutions correctly. This
+# tutorial explains the main types of tolerances—primal, dual, integrality,
+# and optimality—and what you can reasonably expect from a solver.
+#
+# **Learning intentions:**
+# * Understand the four main solver tolerance types—primal feasibility, dual
+#   feasibility, integrality, and optimality—and why this tutorial focuses on
+#   primal feasibility and integrality
+# * Recognize when a solution is wrong due to loose tolerances and adjust
+#   solver settings to tighten them
+# * Use [`primal_feasibility_report`](@ref) to check whether a solution
+#   satisfies the original constraints within a given tolerance
+#
 # Optimization solvers can seem like magic black boxes that take in an algebraic
 # formulation of a problem and return a solution. It is tempting to treat their
 # solutions at face value, since we often have little ability to verify that the
@@ -32,17 +46,13 @@
 # that has no noticeable impact on the quality of the optimal solution. In the
 # worst case, the solver can return a "wrong" solution, or fail to find one even
 # if it exists. (The solution is "wrong" only in the sense of user expectation.
-# It will satisfy the solution to the tolerances that are provided.)
-
-# The purpose of this tutorial is to explain the various types of tolerances
-# that are used in optimization solvers and what you can reasonably expect from
-# a solution.
-
+# It will satisfy the constraints to the tolerances that are provided.)
+#
 # There are a few sources of additional information:
 #  * Ambros Gleixner has an excellent YouTube talk
 #    [Numerics in LP & MIP Solvers](https://youtu.be/rKcdF4Fgl-g?feature=shared)
 #  * Gurobi has a series of articles in their documentation called
-#    [Guidelines for Numerical Issues](https://www.gurobi.com/documentation/current/refman/guidelines_for_numerical_i.html)
+#    [Guidelines for Numerical Issues](https://docs.gurobi.com/projects/optimizer/en/current/concepts/numericguide.html)
 
 # !!! tip
 #     This tutorial is more advanced than the other "Getting started" tutorials.
@@ -76,7 +86,7 @@ import SCS
 # both. The definition and default value of each tolerance is solver-dependent.
 
 # The dual feasibility tolerance is much the same as the primal feasibility
-# tolerance, only that operates on the space of dual solutions instead of the
+# tolerance, only that it operates on the space of dual solutions instead of the
 # primal. HiGHS has `dual_feasibility_tolerance`, but some solvers have only a
 # single feasibility tolerance that uses the same value for both.
 
@@ -161,7 +171,7 @@ value(x[1])
 report = primal_feasibility_report(model)
 
 # `report` is a dictionary which maps constraints to the violation.  The largest
-# violation is approximately `1e-5`:
+# violation is less than `1e-4`:
 
 maximum(values(report))
 
@@ -189,18 +199,21 @@ report[LowerBoundRef(y)]
 # of the constraints, our optimal solution is very far from the theoretical
 # optimum.
 
-# We can "fix" our model by decreasing `eps_abs` and `eps_rel`, which SCS uses
-# to control the absolute and relative feasibility tolerances. Now the solver
-# finds the correct solution:
+# We can "fix" our model by decreasing `eps_abs`, which SCS uses to control the
+# absolute and relative feasibility tolerances. Now the solver finds the correct
+# solution:
 
-set_attribute(model, "eps_abs", 1e-5)
-set_attribute(model, "eps_rel", 1e-5)
+set_attribute(model, "eps_abs", 1e-6)
 optimize!(model)
 
 #-
 
 assert_is_solved_and_feasible(model)
 value(x[1])
+
+#-
+
+@assert isapprox(value(x[1]), 1 - n * ε / 2; atol = 1e-4)
 
 # ### Why you shouldn't use a small tolerance
 
@@ -212,7 +225,7 @@ value(x[1])
 # of increased solve time.
 
 # For example, SCS is a first-order solver. This means it uses only local
-# gradient information at update each iteration. SCS took 100 iterations to
+# gradient information to update at each iteration. SCS took 100 iterations to
 # solve the problem with the default tolerance of `1e-4`, and 550 iterations to
 # solve the problem with `1e-5`. SCS may not be able to find a solution to our
 # problem with a tighter tolerance in a reasonable amount of time.
@@ -476,7 +489,7 @@ model = Model()
 
 # ### Large magnitude ratios
 
-# If the ratio of the smallest to the largest magnitude is too large, then the
+# If the ratio of the largest to the smallest magnitude is too large, then the
 # tolerances or small changes in the input data can lead to large changes in the
 # optimal solution. We have already seen an example with the integrality
 # tolerance, but we can exacerbate the behavior by putting a small coefficient
@@ -503,7 +516,7 @@ primal_feasibility_report(model, Dict(x => 1_000_000.01, y => 1e-6))
 
 # With that caveat in mind, a general rule of thumb to follow is:
 
-# Try to keep the ratio of the smallest to largest coefficient less than $10^6$
+# Try to keep the ratio of the largest to smallest coefficient less than $10^6$
 # in any row and column, and try to keep most values between $10^{-3}$ and
 # $10^6$.
 
@@ -521,10 +534,10 @@ model = Model()
 # This constraint violates the recommendations because there are values greater
 # than $10^6$, and the ratio of the coefficients in the constraint is $10^8$. In
 # real terms, an absolute feasibility tolerance of `1e-8` means that the
-# capacity cost must be not exceed 1 millionth of a cent more than 200 million
+# capacity cost must not exceed 1 millionth of a cent more than 200 million
 # dollars. No financial system measures costs to that level of accuracy.
 
-# One fix is the convert our capacity variable from Watts to Megawatts. This
+# One fix is to convert our capacity variable from Watts to Megawatts. This
 # yields:
 
 model = Model()

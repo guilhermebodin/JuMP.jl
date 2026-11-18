@@ -58,14 +58,14 @@ function _test_result_attributes(; test_empty = false)
     @test_throws err value(x)
     @test_throws err value(c)
     @test_throws err dual(c)
+    return
 end
 
-function test_result_attributes()
-    return _test_result_attributes()
-end
+test_result_attributes() = _test_result_attributes()
 
 function test_result_attributes_after_empty()
-    return _test_result_attributes(; test_empty = true)
+    _test_result_attributes(; test_empty = true)
+    return
 end
 
 function fill_small_test_model!(model)
@@ -99,7 +99,7 @@ end
 function test_empty!_model()
     model = Model()
     backend_type = typeof(backend(model))
-    model.optimize_hook === nothing
+    @test model.optimize_hook === nothing
     hook(m) = nothing
     set_optimize_hook(model, hook)
     @test model.optimize_hook === hook
@@ -109,17 +109,20 @@ function test_empty!_model()
     @test model.optimize_hook === hook # empty! does not touch the hook
     @test isa(backend(model), backend_type)
     @test fill_small_test_model!(model) === model
+    return
 end
 
 function test_innermost_error()
     model = Model()
     @test_throws ErrorException unsafe_backend(model)
+    return
 end
 
 function test_innermost()
     model = Model(() -> MOIU.MockOptimizer(MOIU.Model{Float64}()))
     MOI.Utilities.attach_optimizer(model)
     @test unsafe_backend(model) isa MOIU.MockOptimizer{MOIU.Model{Float64}}
+    return
 end
 
 function test_hygiene_variable()
@@ -131,6 +134,7 @@ function test_hygiene_variable()
     @test_throws err @constraint(model_x, y in MOI.EqualTo(1.0))
     @test_throws err @constraint(model_x, [x, y] in MOI.Zeros(2))
     @test_throws err @objective(model_x, Min, y)
+    return
 end
 
 function test_hygiene_linear()
@@ -139,11 +143,11 @@ function test_hygiene_linear()
     model_y = Model()
     @variable(model_y, y)
     err = VariableNotOwned(y)
-
     @test_throws err @constraint(model_x, x + y == 1)
     @test_throws err @constraint(model_x, [x, x + y] in MOI.Zeros(2))
     @test_throws err @constraint(model_x, [x + y, x] in MOI.Zeros(2))
     @test_throws err @objective(model_x, Min, x + y)
+    return
 end
 
 function test_hygiene_quadratic()
@@ -152,7 +156,6 @@ function test_hygiene_quadratic()
     model_y = Model()
     @variable(model_y, y)
     err = VariableNotOwned(y)
-
     @test_throws err @constraint(model_x, x * y >= 1)
     @test_throws err @constraint(model_x, [x, x * y] in MOI.Zeros(2))
     @test_throws err @constraint(model_x, [x * y, x] in MOI.Zeros(2))
@@ -161,6 +164,7 @@ function test_hygiene_quadratic()
     @test_throws err @constraint(model_x, [x * x + x + y, x] in MOI.Zeros(2))
     @test_throws err @objective(model_x, Min, x * y)
     @test_throws err @objective(model_x, Min, x * x + x + y)
+    return
 end
 
 function test_hygiene_attribute()
@@ -169,14 +173,13 @@ function test_hygiene_attribute()
     model_y = Model()
     @variable(model_y, y)
     err = VariableNotOwned(y)
-
     cy = @constraint(model_y, y in MOI.EqualTo(1.0))
     cerr = ConstraintNotOwned(cy)
-
     @test_throws err MOI.get(model_x, MOI.VariablePrimalStart(), y)
     @test_throws cerr MOI.get(model_x, MOI.ConstraintPrimalStart(), cy)
     @test_throws err MOI.set(model_x, MOI.VariablePrimalStart(), y, 1.0)
     @test_throws cerr MOI.set(model_x, MOI.ConstraintPrimalStart(), cy, 1.0)
+    return
 end
 
 function test_optimize_hook()
@@ -190,19 +193,28 @@ function test_optimize_hook()
     @test !called
     optimize!(m)
     @test called
-
     m = Model()
-    err = ErrorException("Unrecognized keyword arguments: unexpected_arg")
+    err = ErrorException(
+        """
+        Unrecognized keyword arguments: unexpected_arg.
+
+        Only keyword arguments accepted by the optimize hook are \
+        supported. To pass parameters to the solver, use \
+        `set_attribute(model, key, value)` before calling `optimize!`.
+        """,
+    )
     @test_throws err optimize!(m, unexpected_arg = 1)
     set_optimize_hook(m, (m; my_new_arg = nothing) -> my_new_arg)
     @test optimize!(m) === nothing
     @test optimize!(m; my_new_arg = 1) == 1
+    return
 end
 
 function test_universal_fallback()
     m = Model()
     MOI.set(m, MOI.Test.UnknownModelAttribute(), 1)
     @test MOI.get(m, MOI.Test.UnknownModelAttribute()) == 1
+    return
 end
 
 function test_bridges_automatic()
@@ -221,7 +233,8 @@ function test_bridges_automatic()
             MOI.Interval{Float64},
         },
     }
-    return optimize!(model)
+    optimize!(model)
+    return
 end
 
 function test_bridges_automatic_disabled()
@@ -237,14 +250,16 @@ function test_bridges_automatic_disabled()
     F = MOI.ScalarAffineFunction{Float64}
     S = MOI.Interval{Float64}
     err = ErrorException(
-        "Constraints of type $(F)-in-$(S) are not supported by the " *
-        "solver.\n\nIf you expected the solver to support your problem, " *
-        "you may have an error in your formulation. Otherwise, consider " *
-        "using a different solver.\n\nThe list of available solvers, " *
-        "along with the problem types they support, is available at " *
-        "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
+        """
+        Constraints of type $(F)-in-$(S) are not supported by the solver.
+
+        If you expected the solver to support your problem, you may have an error in your formulation. Otherwise, consider using a different solver.
+
+        The list of available solvers, along with the problem types they support, is available at https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.
+        """,
     )
     @test_throws err @constraint model 0 <= x + 1 <= 1
+    return
 end
 
 function test_bridges_direct()
@@ -256,14 +271,16 @@ function test_bridges_direct()
     F = MOI.ScalarAffineFunction{Float64}
     S = MOI.Interval{Float64}
     err = ErrorException(
-        "Constraints of type $(F)-in-$(S) are not supported by the " *
-        "solver.\n\nIf you expected the solver to support your problem, " *
-        "you may have an error in your formulation. Otherwise, consider " *
-        "using a different solver.\n\nThe list of available solvers, " *
-        "along with the problem types they support, is available at " *
-        "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
+        """
+        Constraints of type $(F)-in-$(S) are not supported by the solver.
+
+        If you expected the solver to support your problem, you may have an error in your formulation. Otherwise, consider using a different solver.
+
+        The list of available solvers, along with the problem types they support, is available at https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.
+        """,
     )
     @test_throws err @constraint model 0 <= x + 1 <= 1
+    return
 end
 
 function test_direct_generic_model()
@@ -302,6 +319,7 @@ function test_bridges_add_before_con_model_optimizer()
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_bridges_add_before_con_set_optimizer()
@@ -314,6 +332,7 @@ function test_bridges_add_before_con_set_optimizer()
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_bridges_remove_bridge()
@@ -394,20 +413,24 @@ function test_bridges_add_after_con_model_optimizer()
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_bridges_add_after_con_set_optimizer()
-    err = MOI.UnsupportedConstraint{MOI.VariableIndex,Nonnegative}()
     model = Model()
     @variable(model, x)
     c = @constraint(model, x in Nonnegative())
     set_optimizer(model, mock_factory)
-    @test_throws err optimize!(model)
+    @test_throws(
+        MOI.UnsupportedConstraint{MOI.VariableIndex,Nonnegative},
+        optimize!(model),
+    )
     add_bridge(model, NonnegativeBridge)
     optimize!(model)
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_bridges_add_bridgeable_con_model_optimizer()
@@ -420,13 +443,61 @@ function test_bridges_add_bridgeable_con_model_optimizer()
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_macro_bridgeable()
     model = Model()
     @variable(model, x)
     @constraint(model, x in BridgeMe{Int,Nonnegative}(Nonnegative()))
-    @test NonnegativeBridge{Int} in model.bridge_types
+    # `model_convert` normalizes the bridge coefficient type to the value type
+    # of the model (`Float64`), even though `BridgeMe` requested `Int`.
+    @test NonnegativeBridge{Float64} in model.bridge_types
+    @test !(NonnegativeBridge{Int} in model.bridge_types)
+    return
+end
+
+function test_model_convert_bridgeable_coefficient_type()
+    model = GenericModel{BigFloat}()
+    @variable(model, x)
+    c = ScalarConstraint(x, Nonnegative())
+    con = BridgeableConstraint(c, NonnegativeBridge; coefficient_type = Int)
+    @test model_convert(model, con).coefficient_type == BigFloat
+    return
+end
+
+function test_model_convert_bridgeable_coefficient_type_complex()
+    model = GenericModel{BigFloat}()
+    @variable(model, x)
+    c = ScalarConstraint(x, Nonnegative())
+    coefficient_type = Complex{Int}
+    con = BridgeableConstraint(c, NonnegativeBridge; coefficient_type)
+    @test model_convert(model, con).coefficient_type == Complex{BigFloat}
+    return
+end
+
+function test_macro_bridgeable_generic_value_type()
+    model = GenericModel{BigFloat}()
+    @variable(model, x)
+    @constraint(model, x in BridgeMe{Int,Nonnegative}(Nonnegative()))
+    @test NonnegativeBridge{BigFloat} in model.bridge_types
+    @test !(NonnegativeBridge{Int} in model.bridge_types)
+    return
+end
+
+function test_add_constraint_bridgeable_model_convert()
+    # `add_constraint` applies `model_convert`, so a `BridgeableConstraint`
+    # added directly (not via the `@constraint` macro, for example, by an
+    # extension that delays the construction of the constraint) also gets its
+    # coefficient type converted to the value type of the model.
+    model = GenericModel{BigFloat}()
+    @variable(model, x)
+    c = ScalarConstraint(x, Nonnegative())
+    con = BridgeableConstraint(c, NonnegativeBridge; coefficient_type = Int)
+    add_constraint(model, con)
+    @test NonnegativeBridge{BigFloat} in model.bridge_types
+    @test !(NonnegativeBridge{Int} in model.bridge_types)
+    return
 end
 
 function test_bridges_add_bridgeable_con_set_optimizer()
@@ -445,6 +516,7 @@ function test_bridges_add_bridgeable_con_set_optimizer()
     @test 1.0 == @inferred value(x)
     @test 1.0 == @inferred value(c)
     @test 2.0 == @inferred dual(c)
+    return
 end
 
 function test_bridge_graph_false()
@@ -452,20 +524,31 @@ function test_bridge_graph_false()
     @variable(model, x)
     @test_throws(
         ErrorException(
-            "Cannot use bridge if `add_bridges` was set to `false` in " *
-            "the `Model` constructor.",
+            """
+            Cannot use bridge functions because `add_bridges` was set to `false` in \
+            the `Model` constructor.
+
+            Recreate the model without setting `add_bridges = false`, or avoid calling \
+            functions that require bridges.
+            """,
         ),
         add_bridge(model, NonnegativeBridge)
     )
     @test_throws(
         ErrorException(
-            "Cannot use bridge if `add_bridges` was set to " *
-            "`false` in the `Model` constructor.",
+            """
+            Cannot use bridge functions because `add_bridges` was set to `false` in \
+            the `Model` constructor.
+
+            Recreate the model without setting `add_bridges = false`, or avoid calling \
+            functions that require bridges.
+            """,
         ),
         print_bridge_graph(model)
     )
     optimize!(model)
     @test 1.0 == @inferred value(x)
+    return
 end
 
 function test_bridge_graph_true()
@@ -501,6 +584,7 @@ function test_solver_name()
 
     model = Model(() -> MOIU.MockOptimizer(SimpleLPModel{Float64}()))
     @test "Mock" == @inferred solver_name(model)
+    return
 end
 
 function test_set_silent()
@@ -523,6 +607,7 @@ function test_set_optimizer_attribute()
     @test set_optimizer_attribute(model, "aaa", "bbb") === nothing
     @test MOI.get(backend(model), MOI.RawOptimizerAttribute("aaa")) == "bbb"
     @test MOI.get(model, MOI.RawOptimizerAttribute("aaa")) == "bbb"
+    return
 end
 
 function test_set_optimizer_attributes()
@@ -531,6 +616,7 @@ function test_set_optimizer_attributes()
     set_optimizer_attributes(model, "aaa" => "bbb", "abc" => 10)
     @test MOI.get(model, MOI.RawOptimizerAttribute("aaa")) == "bbb"
     @test MOI.get(model, MOI.RawOptimizerAttribute("abc")) == 10
+    return
 end
 
 function test_get_optimizer_attribute()
@@ -538,6 +624,7 @@ function test_get_optimizer_attribute()
     model = Model(() -> MOIU.MockOptimizer(mock))
     @test set_optimizer_attribute(model, "aaa", "bbb") === nothing
     @test get_optimizer_attribute(model, "aaa") == "bbb"
+    return
 end
 
 function test_optimizer_attribute_abstract_string()
@@ -660,6 +747,7 @@ function test_compute_conflict()
     err = NoOptimizer()
     model = Model()
     @test_throws err compute_conflict!(model)
+    return
 end
 
 function test_copy_model_base_auto()
@@ -669,7 +757,19 @@ end
 function test_copy_direct_mode()
     mock = MOIU.MockOptimizer(MOIU.Model{Float64}())
     model = direct_model(mock)
-    @test_throws ErrorException copy(model)
+    @test_throws(
+        ErrorException(
+            """
+            Cannot copy a model in `DIRECT` mode because there is no cached model
+            representation to copy from.
+
+            Use the `Model` constructor instead of `direct_model` to build a model that
+            supports copying.
+            """,
+        ),
+        copy(model),
+    )
+    return
 end
 
 function test_direct_mode_using_OptimizerWithAttributes()
@@ -684,6 +784,7 @@ function test_direct_mode_using_OptimizerWithAttributes()
     @test model.moi_backend isa MOIU.MockOptimizer
     @test MOI.get(model.moi_backend, MOI.RawOptimizerAttribute("a")) == 1
     @test MOI.get(model.moi_backend, MOI.RawOptimizerAttribute("b")) == 2
+    return
 end
 
 function test_copy_expr_aff()
@@ -693,6 +794,7 @@ function test_copy_expr_aff()
     new_model, ref_map = copy_model(model)
     @test ref_map[ex] == new_model[:ex]
     @test new_model[:ex] == 2 * new_model[:x] + 1
+    return
 end
 
 function test_copy_expr_quad()
@@ -702,6 +804,7 @@ function test_copy_expr_quad()
     new_model, ref_map = copy_model(model)
     @test ref_map[ex] == new_model[:ex]
     @test new_model[:ex] == 2 * new_model[:x]^2 + new_model[:x] + 1
+    return
 end
 
 function test_copy_dense()
@@ -709,6 +812,7 @@ function test_copy_dense()
     @variable(model, x[[:a, :b]])
     new_model, ref_map = copy_model(model)
     @test ref_map[x] == new_model[:x]
+    return
 end
 
 function test_copy_sparse()
@@ -716,6 +820,7 @@ function test_copy_sparse()
     @variable(model, x[i = 1:4; isodd(i)])
     new_model, ref_map = copy_model(model)
     @test ref_map[x] == new_model[:x]
+    return
 end
 
 function test_copy_object_fail()
@@ -724,6 +829,7 @@ function test_copy_object_fail()
     model[:d] = Dict(x => 2)
     new_model, ref_map = copy_model(model)
     @test !haskey(new_model, :d)
+    return
 end
 
 function test_copy_extension()
@@ -740,6 +846,7 @@ function test_haskey()
     @variable(model, p[i=1:10] >= 0)
     @test haskey(model, :p)
     @test !haskey(model, :i)
+    return
 end
 
 function test_copy_refmap_expr()
@@ -753,12 +860,27 @@ function test_copy_refmap_expr()
     end
 end
 
+function test_copy_shapes()
+    model = Model()
+    @variable(model, x[1:2, 1:2], PSD)
+    @constraint(model, c, x in PSDCone())
+    @constraint(model, d, x in PSDCone())
+    new_model, ref_map = copy_model(model)
+    @test constraint_by_name(new_model, "c").shape == c.shape
+    @test ref_map[c].shape == c.shape
+    new_model, ref_map = copy_model(model; filter_constraints = !=(c))
+    @test constraint_by_name(new_model, "c") === nothing
+    @test constraint_by_name(new_model, "d").shape == d.shape
+    return
+end
+
 function test_copy_dict_expr()
     model = Model()
     @variable(model, x)
     @expression(model, dictExpr[i=1:2, j=1:2], Dict(i => x, j => 2x))
     new_model, ref_map = copy_model(model)
     @test !haskey(new_model, :dictExpr)
+    return
 end
 
 function test_copy_filter()
@@ -791,6 +913,7 @@ function test_copy_filter_array()
     cref_2_new = reference_map[cref[2]]
     @test cref_2_new.model === new_model
     @test "cref[2]" == @inferred name(cref_2_new)
+    return
 end
 
 function test_copy_filter_denseaxisarray()
@@ -819,6 +942,7 @@ function test_copy_filter_denseaxisarray()
     cref_2_new = reference_map[cref[2]]
     @test cref_2_new.model === new_model
     @test "cref[2]" == @inferred name(cref_2_new)
+    return
 end
 
 function test_copy_filter_sparseaxisarray()
@@ -847,6 +971,7 @@ function test_copy_filter_sparseaxisarray()
     cref_2_new = reference_map[cref[2]]
     @test cref_2_new.model === new_model
     @test "cref[2]" == @inferred name(cref_2_new)
+    return
 end
 
 function test_copy_conflict()
@@ -906,15 +1031,11 @@ end
 function test_nlp_data_error()
     model = Model()
     err = ErrorException(
-        "The internal field `.nlp_data` was removed from `Model` in JuMP " *
-        "v.1.2.0. If you encountered this message without going " *
-        "`model.nlp_data`, it means you are using a package that is " *
-        "incompatible with your installed version of JuMP. As a " *
-        "temporary fix, install a compatible version with " *
-        "`import Pkg; Pkg.pkg\"add JuMP@1.1\"`, then restart Julia for " *
-        "the changes to take effect. In addition, you should open a " *
-        "GitHub issue for the package you are using so that the issue " *
-        "can be fixed for future users.",
+        """
+        The internal field `.nlp_data` was removed from `Model` in JuMP v1.2.0.
+
+        If you encountered this message without accessing `model.nlp_data` directly, it means you are using a package that is incompatible with your installed version of JuMP. As a temporary fix, install a compatible version with `import Pkg; Pkg.pkg"add JuMP@1.1"`, then restart Julia for the changes to take effect. You should also open a GitHub issue for the package you are using so that it can be fixed for future users.
+        """,
     )
     @test_throws(err, model.nlp_data)
     return
@@ -926,8 +1047,12 @@ function test_reset_optimizer()
     )
     @test_throws(
         ErrorException(
-            "The `$(MOI.Utilities.reset_optimizer)` function is not " *
-            "supported in DIRECT mode.",
+            """
+            The `$(MOI.Utilities.reset_optimizer)` function is not \
+            supported for models created with `direct_model`.
+
+            Use `Model(optimizer)` instead of `direct_model(optimizer)`.
+            """,
         ),
         MOI.Utilities.reset_optimizer(direct),
     )
@@ -949,8 +1074,12 @@ function test_drop_optimizer()
     )
     @test_throws(
         ErrorException(
-            "The `$(MOI.Utilities.drop_optimizer)` function is not supported " *
-            "in DIRECT mode.",
+            """
+            The `$(MOI.Utilities.drop_optimizer)` function is not \
+            supported for models created with `direct_model`.
+
+            Use `Model(optimizer)` instead of `direct_model(optimizer)`.
+            """,
         ),
         MOI.Utilities.drop_optimizer(direct),
     )
@@ -1151,7 +1280,7 @@ function test_keyword_getindex()
     # Vector{VariableRef}
     @test_throws err x[i=1]
     @test_throws err x[i=2]
-    @test_throws err x[i = :]
+    @test_throws err x[i=:]
     @test_throws err x[i=1:2]
     @test_throws BoundsError x[]
     # Matrix{VariableRef}
@@ -1168,7 +1297,7 @@ function test_keyword_getindex()
     @constraint(model, c[i=1:2], x[i] + i <= 1)
     @test_throws err c[i=1]
     @test_throws err c[i=1:2]
-    @test_throws err c[i = :]
+    @test_throws err c[i=:]
     @test_throws BoundsError c[]
     return
 end
@@ -1242,9 +1371,15 @@ function test_caching_mps_model()
     @variable(model, x >= 0)
     @test_throws(
         ErrorException(
-            "Cannot call `optimize!` because the provided optimizer is not " *
-            "a subtype of `MOI.AbstractOptimizer`.\n\nThe optimizer is:\n\n" *
-            "$(sprint(show, unsafe_backend(model)))\n",
+            """
+            Cannot call `optimize!` because the provided optimizer is not a subtype of `MOI.AbstractOptimizer`.
+
+            The optimizer provided was:
+
+            $(sprint(show, unsafe_backend(model)))
+
+            Ensure the optimizer passed to `Model()` implements the MOI interface.
+            """,
         ),
         optimize!(model),
     )
@@ -1333,17 +1468,7 @@ function test_assert_is_solved_and_feasible()
             """
             The model was not solved correctly. Here is the output of `solution_summary` to help debug why this happened:
 
-            solution_summary(; result = 1, verbose = false)
-            ├ solver_name          : Mock
-            ├ Termination
-            │ ├ termination_status : OPTIMAL
-            │ ├ result_count       : 1
-            │ └ raw_status         : failed
-            └ Solution (result = 1)
-              ├ primal_status        : FEASIBLE_POINT
-              ├ dual_status          : NO_SOLUTION
-              ├ objective_value      : 0.00000e+00
-              └ dual_objective_value : 0.00000e+00
+            $(sprint(show, solution_summary(model)))
             """,
         ),
         assert_is_solved_and_feasible(model; dual = true),
@@ -1353,10 +1478,7 @@ function test_assert_is_solved_and_feasible()
             """
             The model was not solved correctly. Here is the output of `solution_summary` to help debug why this happened:
 
-            solution_summary(; result = 2, verbose = false)
-            └ Solution (result = 2)
-              ├ primal_status        : NO_SOLUTION
-              └ dual_status          : NO_SOLUTION
+            $(sprint(show, solution_summary(model; result = 2)))
             """,
         ),
         assert_is_solved_and_feasible(model; dual = true, result = 2),
@@ -1407,7 +1529,13 @@ function test_optimizer_index()
     @variable(model, x)
     @test_throws(
         ErrorException(
-            "There is no `optimizer_index` as the optimizer is not synchronized with the cached model. Call `MOIU.attach_optimizer(model)` to synchronize it.",
+            """
+            There is no `optimizer_index` because the optimizer is not \
+            synchronized with the cached model.
+
+            Call `MOIU.attach_optimizer(model)` to synchronize, or use \
+            `optimize!(model)` which updates the optimizer automatically.
+            """,
         ),
         optimizer_index(x),
     )
@@ -1420,8 +1548,14 @@ function test_copy_nonlinear()
     @NLconstraint(model, x <= 1)
     @test_throws(
         ErrorException(
-            "copy is not supported yet for models with nonlinear constraints" *
-            " and/or nonlinear objective function",
+            """
+            `copy_model` is not supported for models with legacy nonlinear
+            constraints or a nonlinear objective (added via `@NLconstraint` or
+            `@NLobjective`).
+
+            Rewrite the nonlinear terms using the standard `@constraint` and
+            `@objective` macros, which support copying.
+            """,
         ),
         copy_model(model),
     )
@@ -1432,7 +1566,12 @@ function test_deepcopy()
     model = Model()
     @test_throws(
         ErrorException(
-            "`JuMP.Model` does not support `deepcopy` as the reference to the underlying solver cannot be deep copied, use `copy` instead.",
+            """
+            `deepcopy` is not supported for `JuMP.GenericModel` because the underlying
+            solver cannot be deep copied.
+
+            Use `Base.copy` or `JuMP.copy_model` instead.
+            """,
         ),
         deepcopy(model),
     )
@@ -1486,7 +1625,14 @@ function test_optimizer_index_bridged()
     CI = typeof(index(c))
     @test_throws(
         ErrorException(
-            "There is no `optimizer_index` for $CI constraints because they are bridged.",
+            """
+            There is no `optimizer_index` for `$CI` constraints because \
+            they are bridged.
+
+            Bridged constraints do not have a direct optimizer index. Use \
+            `add_bridges = false` in `Model()` to disable bridges if the \
+            solver supports the constraint type directly.
+            """,
         ),
         optimizer_index(c),
     )
@@ -1549,6 +1695,40 @@ function test_issue_4089()
     )
     @test start_value(x) == index(x).value
     @test !has_start_value(p)
+    return
+end
+
+function test_empty_subexpressions()
+    model = Model()
+    @variable(model, x)
+    y = sin(x)
+    # Keep the weak cache's key alive so only empty! can remove its entry.
+    GC.@preserve y begin
+        moi_function(model, y)
+        GC.gc()
+        @test !isempty(model.subexpressions)
+        empty!(model)
+        @test isempty(model.subexpressions)
+    end
+    return
+end
+
+function test_empty_variable_in_set_ref()
+    model = Model()
+    @variable(model, x[1:3] in Nonnegatives())
+    @test !isempty(model.variable_in_set_ref)
+    empty!(model)
+    @test isempty(model.variable_in_set_ref)
+    return
+end
+
+function test_empty_variable_in_set_ref()
+    model = Model()
+    @variable(model, x >= 0)
+    empty!(model)
+    @variable(model, y >= 2)
+    # This behavior is optional. It's a bit scary!!!
+    @test lower_bound(x) == 2
     return
 end
 

@@ -64,6 +64,8 @@ The struct returned by [`lp_matrix_data`](@ref) has the fields:
    corresponding to order of the columns in the matrix form.
  * `affine_constraints::Vector{ConstraintRef}`: a vector of [`ConstraintRef`](@ref),
    corresponding to the order of rows in the matrix form.
+ * `variable_constraints::Vector{ConstraintRef}`: a vector of [`ConstraintRef`](@ref)
+   of the variable bound constraints.
 
 ## Limitations
 
@@ -124,7 +126,7 @@ function lp_matrix_data(model::GenericModel{T}) where {T}
     cache = (;
         x_l = fill(typemin(T), n),
         x_u = fill(typemax(T), n),
-        c = zeros(T, n),
+        c = zeros(T, n)::Vector{T},
         c_offset = Ref{T}(zero(T)),
         b_l = T[],
         b_u = T[],
@@ -149,7 +151,7 @@ function lp_matrix_data(model::GenericModel{T}) where {T}
         cache.x_u,
         cache.c,
         cache.c_offset[],
-        MOI.get(model, MOI.ObjectiveSense()),
+        objective_sense(model),
         sort!(cache.integers),
         sort!(cache.binaries),
         variables,
@@ -243,7 +245,14 @@ function _fill_standard_form(
     ::Type{S},
     ::Any,
 ) where {T,F,S}
-    return error("Unsupported constraint type in `lp_matrix_data`: $F -in- $S")
+    return error(
+        """
+        Unsupported constraint type in `lp_matrix_data`: $F-in-$S.
+
+        The `lp_matrix_data` function supports only linear constraints. Reformulate \
+        the model to remove unsupported constraint types.
+        """,
+    )
 end
 
 function _fill_standard_form(
@@ -270,5 +279,12 @@ function _fill_standard_form(
 end
 
 function _fill_standard_form(::GenericModel{T}, ::Type{F}, ::Any) where {T,F}
-    return error("Unsupported objective type in `lp_matrix_data`: $F")
+    return error(
+        """
+        Unsupported objective type in `lp_matrix_data`: $F.
+
+        The `lp_matrix_data` function supports only linear objectives. Reformulate \
+        the model to use a supported objective type.
+        """,
+    )
 end

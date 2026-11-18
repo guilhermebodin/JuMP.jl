@@ -20,12 +20,19 @@
 
 # # Transitioning from MATLAB
 
-# [YALMIP](https://yalmip.github.io/) and [CVX](https://cvxr.com/cvx/) are two
-# packages for mathematical optimization in [MATLAB®](https://mathworks.com/products/matlab.html).
-# They are independently developed and are in no way affiliated with JuMP.
-
-# The purpose of this tutorial is to help new users to JuMP who have previously
-# used YALMIP or CVX by comparing and contrasting their different features.
+# [YALMIP](https://yalmip.github.io/) and [CVX](https://cvxr.com/cvx/) are
+# popular mathematical optimization packages for
+# [MATLAB®](https://mathworks.com/products/matlab.html), and this tutorial
+# helps users familiar with them make the transition to JuMP. It compares and
+# contrasts the syntax and workflows of all three tools side by side.
+#
+# **Learning intentions:**
+# * Recognize the key differences between JuMP and YALMIP/CVX—explicit models,
+#   Julia namespaces, and the need to choose a solver—before writing any code
+# * Map common modelling idioms side by side: declaring variables, adding
+#   constraints, setting objectives, and calling the solver
+# * Translate a complete YALMIP or CVX model into idiomatic JuMP and
+#   understand where the two tools diverge
 
 # !!! tip
 #     If you have not used Julia before, read the [Getting started with Julia](@ref)
@@ -38,7 +45,7 @@
 
 using JuMP
 
-# in order bring all names exported by JuMP into scope, or:
+# in order to bring all names exported by JuMP into scope, or:
 
 import JuMP
 
@@ -130,12 +137,12 @@ m[2]
 # Like YALMIP and CVX, JuMP is smart enough to not generate redundant
 # constraints when declaring equality constraints between `Symmetric` or
 # `Hermitian` matrices. In these cases `@constraint(model, m == c)` will not
-# generate constraints for the lower diagonal and the imaginary part of the
+# generate constraints for the lower triangle and the imaginary part of the
 # diagonal (in the complex case).
 
 # Experienced MATLAB users will probably be relieved to see that you must pass
 # `PSDCone()` or `HermitianPSDCone()` to make a matrix positive semidefinite, because
-# the `>=` ambiguity in YALMIP and CVX is common source of bugs.
+# the `>=` ambiguity in YALMIP and CVX is a common source of bugs.
 
 # ## Setting the objective
 
@@ -188,7 +195,7 @@ optimize!(model)
 is_solved_and_feasible(model)
 
 # If the return value is `false`, you should investigate with [`termination_status`](@ref),
-# [`primal_status`](@ref), and [`raw_status`](@ref), See [Solutions](@ref jump_solutions)
+# [`primal_status`](@ref), and [`raw_status`](@ref). See [Solutions](@ref jump_solutions)
 # for more details on how to query and interpret solution statuses.
 
 # ## Extracting variables
@@ -210,7 +217,7 @@ objective_value(model)
 # Like YALMIP and CVX, JuMP allows you to recover the dual variables. In order
 # to do that, the simplest method is to name the constraint you're interested in,
 # for example, `@constraint(model, bob, sum(v) == 1)` and then, after the
-# optimzation is done, call `dual(bob)`. See [Duality](@ref) for more details.
+# optimization is done, call `dual(bob)`. See [Duality](@ref) for more details.
 
 # ## Reformulating problems
 

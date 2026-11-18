@@ -7,9 +7,22 @@
 
 # **This tutorial was originally contributed by Mathieu Tanneau and Alexis Montoison.**
 
+# This tutorial formulates and solves both the uncapacitated and capacitated
+# facility location problems using binary integer programming in JuMP. It also
+# demonstrates how to visualise the problem data and solution using Plots.
+#
+# **Learning intentions:**
+# * Formulate a binary integer program for facility location, coupling
+#   open/close decisions with client-assignment decisions through linking
+#   constraints
+# * Extend the uncapacitated model with demand and capacity data to obtain the
+#   capacitated variant, and understand how the coupling constraints change
+# * Visualise problem data and the optimal solution to verify that the model
+#   behaves as expected
+
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
@@ -32,7 +45,7 @@ import Random
 #
 # **Objective**
 # The objective is to minimize the total cost of serving all clients.
-# This costs breaks down into two components:
+# This cost breaks down into two components:
 # * Fixed cost of building a facility.
 # In this example, this cost is $f_{j} = 1, \ \forall j$.
 # * Cost of serving clients from the assigned facility.
@@ -135,7 +148,7 @@ println("Optimal value: ", objective_value(model))
 
 # ### Visualizing the solution
 
-# The threshold 1e-5 ensure that edges between clients and facilities are drawn
+# The threshold 1e-5 ensures that edges between clients and facilities are drawn
 # when `x[i, j] ≈ 1`.
 x_is_selected = isapprox.(value.(x), 1; atol = 1e-5);
 y_is_selected = isapprox.(value.(y), 1; atol = 1e-5);
@@ -192,7 +205,7 @@ p
 # ```
 #
 # Note that, if $y_{j}$ is set to $0$, the capacity constraint above
-# automatically forces $x_{i, j}$ to $0$.
+# automatically forces $x_{i, j}$ to $0$ for every client with $a_{i} > 0$.
 
 # Thus, the capacitated facility location can be formulated as follows
 #
@@ -262,7 +275,7 @@ println("Optimal value: ", objective_value(model))
 
 # ### Visualizing the solution
 
-# The threshold 1e-5 ensure that edges between clients and facilities are drawn
+# The threshold 1e-5 ensures that edges between clients and facilities are drawn
 # when `x[i, j] ≈ 1`.
 x_is_selected = isapprox.(value.(x), 1; atol = 1e-5);
 y_is_selected = isapprox.(value.(y), 1; atol = 1e-5);

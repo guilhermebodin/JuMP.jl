@@ -10,7 +10,7 @@ Set the objective sense to `sense` and objective function to `func`.
 
 ## `sense`
 
-The objective sense must be either be the literals `Min` or `Max`, or one of the
+The objective sense must be one of the literals `Min` or `Max`, or one of the
 three [`MOI.OptimizationSense`](@ref) enum values ([`MIN_SENSE`](@ref),
 [`MAX_SENSE`](@ref), or [`FEASIBILITY_SENSE`](@ref)).
 
@@ -129,8 +129,13 @@ end
 
 function _moi_sense(error_fn::Function, sense)
     return error_fn(
-        "unexpected sense `$sense`. The sense must be an " *
-        "`::MOI.OptimizatonSense`, or the symbol `:Min` or `:Max`.",
+        """
+        Unexpected objective sense `$sense`.
+
+        The sense must be an `::MOI.OptimizationSense`, or one of the literals `Min` or `Max`.
+
+        For example, use `@objective(model, Min, x)`, `@objective(model, Max, x)`, or `@objective(model, MAX_SENSE, x)`.
+        """,
     )
 end
 

@@ -411,15 +411,6 @@ function test_eltype_QuadTermIterator()
     return
 end
 
-function test_GenericQuadExpr_constructor()
-    model = Model()
-    @variable(model, x[1:2])
-    y = 1 * x[1] + 2 * x[2] + 3 * x[1]^2 + 4 * x[2]^2
-    map_coefficients_inplace!(c -> 2c, y)
-    @test y == 2 * x[1] + 4 * x[2] + 6 * x[1]^2 + 8 * x[2]^2
-    return
-end
-
 function test_GenericQuadExpr_map_coefficients_inplace!()
     model = Model()
     @variable(model, x[1:2])
@@ -496,23 +487,57 @@ function test_aff_expr_complex_HermitianPSDCone()
     @test lower_bound(x[1, 1]) == 2.5
     @test_throws(
         ErrorException(
-            "Cannot call $start_value with $(x[2, 1]) because it is not an affine " *
-            "expression of one variable.",
+            """
+            Cannot call `$start_value` with the affine expression `$(x[2, 1])` because the expression
+            does not have exactly one term.
+
+            `$start_value` can be called only with affine expressions of the form `1.0 * x`.
+            """,
         ),
         start_value(x[2, 1]),
     )
     @test_throws(
         ErrorException(
-            "Cannot call $start_value with $(imag(x[2, 1])) because the " *
-            "variable has a coefficient that is different to `+1`.",
+            """
+            Cannot call `$start_value` with the affine expression `$(imag(x[2, 1]))` because the coefficient
+            on the variable is `-1.0`.
+
+            `$start_value` can be called only with affine expressions of the form `1.0 * x`.
+            """,
         ),
         start_value(imag(x[2, 1])),
     )
+    return
+end
+
+function test_eval_as_variable_no_terms()
     y = AffExpr(0.0)
     @test_throws(
         ErrorException(
-            "Cannot call $start_value with $y because it is not an affine " *
-            "expression of one variable.",
+            """
+            Cannot call `$start_value` with the affine expression `$y` because the expression
+            does not have exactly one term.
+
+            `$start_value` can be called only with affine expressions of the form `1.0 * x`.
+            """,
+        ),
+        start_value(y),
+    )
+    return
+end
+
+function test_eval_as_variable_with_constant()
+    model = Model()
+    @variable(model, x, start = 1)
+    y = 1.0 * x + 2.0
+    @test_throws(
+        ErrorException(
+            """
+            Cannot call `$start_value` with the affine expression `$y` because \
+            the expression has a non-zero constant.
+
+            `$start_value` can be called only with affine expressions of the form `1.0 * x`.
+            """,
         ),
         start_value(y),
     )
@@ -609,8 +634,12 @@ function test_value_type()
     T = Symbol
     @test_throws(
         ErrorException(
-            "Unable to compute the `value_type($T)`. If you are developing a " *
-            "JuMP extension, define a new method for `JuMP.value_type(::Type{$T})`",
+            """
+            Unable to compute `value_type($T)`.
+
+            If you are developing a JuMP extension, define a new method for \
+            `JuMP.value_type(::Type{$T})` that returns the numeric type used in your model.
+            """,
         ),
         value_type(T),
     )
@@ -686,6 +715,36 @@ function test_issue_4049()
     @variable(model, x[A])
     y = @expression(model, sum(x[A] for a in A))
     @test isequal_canonical(y, 3x)
+    return
+end
+
+function test_convert_aff_expr_to_variable()
+    model = Model()
+    @variable(model, x)
+    @test convert(VariableRef, 1.0 * x) === x
+    @test_throws InexactError convert(VariableRef, 1.0 * x + 1.0)
+    @test_throws InexactError convert(VariableRef, zero(AffExpr))
+    @test_throws InexactError convert(VariableRef, 1.2 * x)
+    return
+end
+
+function test_convert_aff_expr_to_variable()
+    model = GenericModel{Rational{Int}}()
+    @variable(model, x)
+    @variable(model, y)
+    @test convert(GenericVariableRef{Rational{Int}}, 1 // 1 * x) === x
+    @test_throws(
+        InexactError,
+        convert(GenericVariableRef{Rational{Int}}, 1 // 1 * x + 1 // 1),
+    )
+    @test_throws(
+        InexactError,
+        convert(GenericVariableRef{Rational{Int}}, 1 // 2 * x + 1 // 2 * y),
+    )
+    @test_throws(
+        InexactError,
+        convert(GenericVariableRef{Rational{Int}}, 5 // 4 * x),
+    )
     return
 end
 

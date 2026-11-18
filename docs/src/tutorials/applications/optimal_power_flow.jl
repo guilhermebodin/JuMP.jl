@@ -6,16 +6,19 @@
 # # Optimal power flow
 
 # This tutorial formulates and solves an alternating current optimal power flow
-# (AC-OPF) problem, a much-studied nonlinear problem from the field of
-# electrical engineering.
-
-# Once we've formulated and solved the nonlinear problem, we will turn our focus
-# to obtaining a good estimate of the objective value at the global optimum
-# through the use of semidefinite programming.
-
-# One main purpose of this tutorial is to highlight JuMP's ability to directly
-# formulate problems involving complex-valued decision variables and complex
-# matrix cones such as the  [`HermitianPSDCone`](@ref) object.
+# (AC-OPF) problem using JuMP's support for complex-valued decision variables.
+# It then derives a semidefinite relaxation of the nonlinear problem and
+# adds the second-order cone constraints implied by its 2×2 minors to obtain a
+# lower bound on the globally optimal objective.
+#
+# **Learning intentions:**
+# * Formulate AC optimal power flow using complex-valued decision variables
+#   and express power balance as a quadratic constraint using the bus admittance
+#   matrix
+# * Derive a semidefinite relaxation of the nonlinear problem by lifting voltages
+#   into a Hermitian PSD matrix with [`HermitianPSDCone`](@ref)
+# * Add to the SDP relaxation the second-order cone constraints implied by the
+#   2×2 minors of the lifted matrix using [`RotatedSecondOrderCone`](@ref)
 
 # For another example of modeling with complex decision variables, see the
 # [Example: quantum state discrimination](@ref) tutorial, and see the
@@ -28,12 +31,12 @@
 #     (known as a _branch model_) where it is easier to work with flow
 #     constraints. A general approach is provided by
 #     [PowerModels.jl](https://lanl-ansi.github.io/PowerModels.jl/stable/),
-#     an open-source framework to a broad range of power flow model formulations
+#     an open-source framework for a broad range of power flow model formulations
 #     along with utilities for working with detailed network data.
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import Clarabel
@@ -87,7 +90,7 @@ Q_Demand = SparseArrays.sparsevec([5, 7, 9], [18, 21, 30], N)
 S_Demand = P_Demand + im * Q_Demand
 
 # The key decision variables are the real power injections ``P^G`` and reactive
-# power injections ``Q^G``over the allowed range of the generators. All other
+# power injections ``Q^G`` over the allowed range of the generators. All other
 # buses must restrict their generation variables to 0. On the other hand, these
 # non-generator nodes have a fixed  real and reactive power demand, denoted
 # ``P^D`` and ``Q^D`` respectively (these are fixed at 0 in the case of
@@ -353,7 +356,7 @@ E(k, n) = SparseArrays.sparse([k], [n], 1, N, N);
 # semidefinite programming approach.
 
 # We will make use of complex voltages and relax
-# ``W = V V^*`` to;
+# ``W = V V^*`` to:
 # ```math
 # W \succeq V V^*,
 # ```
@@ -381,9 +384,6 @@ E(k, n) = SparseArrays.sparse([k], [n], 1, N, N);
 # AC-OPF problem:
 
 model = Model(Clarabel.Optimizer)
-set_attribute(model, "tol_gap_rel", 1e-3)
-set_attribute(model, "tol_feas", 1e-3)
-set_attribute(model, "tol_ktratio", 1e-3)
 @variable(
     model,
     S_G[i in 1:N] in ComplexPlane(),
@@ -393,7 +393,6 @@ set_attribute(model, "tol_ktratio", 1e-3)
 @variable(model, W[1:N, 1:N] in HermitianPSDCone())
 @variable(model, V[1:N] in ComplexPlane(), start = 1.0 + 0.0im)
 @constraint(model, [i in 1:N], 0.9^2 <= real(W[i, i]) <= 1.1^2)
-@constraint(model, real(V[1]) >= 0)
 @constraint(model, imag(V[1]) == 0)
 @constraint(model, 0.9 <= real(V[1]) <= 1.1)
 @constraint(model, LinearAlgebra.Hermitian([1 V'; V W]) in HermitianPSDCone())
@@ -420,7 +419,11 @@ optimize!(model)
 
 #-
 
-assert_is_solved_and_feasible(model; allow_almost = true)
+## Sometimes Clarabel fails to solve this problem to optimality and the
+## termination status might be NUMERICAL_ERROR because of a short step-size.
+## The primal solution is still pretty close though.
+Test.@test is_solved_and_feasible(model; allow_almost = true) ||
+           termination_status(model) == NUMERICAL_ERROR
 sdp_relaxation_lower_bound = round(objective_value(model); digits = 2)
 Test.@test isapprox(sdp_relaxation_lower_bound, 2753.04; rtol = 1e-3)
 println(

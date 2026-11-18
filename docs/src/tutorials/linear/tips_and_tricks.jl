@@ -25,8 +25,24 @@
 # !!! tip
 #     A good source of tips is the [Mosek Modeling Cookbook](https://docs.mosek.com/modeling-cookbook/mio.html).
 
-# This tutorial collates some tips and tricks you can use when formulating
-# mixed-integer programs. It uses the following packages:
+# This tutorial collates modelling tips and tricks for mixed-integer programs in
+# JuMP, including reformulations for absolute value, norms, logical operators,
+# disjunctions, indicator constraints, and special variable types. It is a
+# reference guide rather than a single worked example.
+#
+# **Learning intentions:**
+# * Reformulate non-linear or combinatorial expressions—absolute value, max,
+#   min, modulo, and Boolean operators—as linear constraints using auxiliary
+#   variables
+# * Model conditional logic using indicator constraints and big-M
+#   reformulations, and understand the trade-offs between the two approaches
+# * Use JuMP's special variable types—[`Semicontinuous`](@ref),
+#   [`Semiinteger`](@ref), [`SOS1`](@ref), and [`SOS2`](@ref)—to express
+#   structure that solvers can exploit directly
+
+# ## Required packages
+
+# This tutorial uses the following packages:
 
 using JuMP
 
@@ -118,7 +134,7 @@ model = Model();
 
 # To model ``y = x \text{ mod } n``, where ``n`` is a constant modulus, we use the
 # relationship ``x = n \cdot z + y``, where ``z \in \mathbb{Z}_+`` is the number
-# of times that ``n`` can be divided by ``x`` and ``y`` is the remainder.
+# of times that ``n`` divides into ``x`` and ``y`` is the remainder.
 
 n = 4
 model = Model();
@@ -139,7 +155,7 @@ model = Model();
 # ## Boolean operators
 
 # Binary variables can be used to construct logical operators. Here are some
-# example.
+# examples.
 
 # ### Or
 
@@ -167,7 +183,7 @@ end)
 
 # ### Not
 
-# $$x_1 \neg x_2$$
+# $$x_1 = \neg x_2$$
 
 model = Model();
 @variable(model, x[1:2], Bin)

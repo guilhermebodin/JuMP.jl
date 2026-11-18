@@ -178,25 +178,20 @@ julia> @variable(model, y[1:2, 1:2], Symmetric);
 
 julia> @constraint(model, x >= y)
 ERROR: At none:1: `@constraint(model, x >= y)`:
-The syntax `x >= y` is ambiguous for matrices because we cannot tell if
-you intend a positive semidefinite constraint or an elementwise
-inequality.
 
-To create a positive semidefinite constraint, pass `PSDCone()` or
-`HermitianPSDCone()`:
+The syntax `x >= y` is ambiguous for matrices because JuMP cannot determine if you intend a positive semidefinite constraint or an elementwise inequality.
 
+To create a positive semidefinite constraint, pass `PSDCone()` or `HermitianPSDCone()`:
 ```julia
 @constraint(model, x >= y, PSDCone())
 ```
-
-To create an element-wise inequality, pass `Nonnegatives()`, or use
-broadcasting:
-
+To create an elementwise inequality, pass `Nonnegatives()` or use broadcasting:
 ```julia
 @constraint(model, x >= y, Nonnegatives())
 # or
 @constraint(model, x .>= y)
 ```
+
 Stacktrace:
 [...]
 ````
@@ -392,14 +387,13 @@ julia> @constraint(model, c, 2x <= 1)
 c : 2 x ≤ 1
 
 julia> @constraint(model, c, 2x <= 1)
-ERROR: An object of name c is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, for example,
-    `x = @variable(model, [1:N], ...)` where the name of the object does
-    not appear inside the macro.
+ERROR: An object of name `:c` is already registered in this model.
 
-    Alternatively, use `unregister(model, :c)` to first unregister
-    the existing name from the model. Note that this will not delete the
-    object; it will just remove the reference at `model[:c]`.
+Consider instead using the anonymous construction syntax, for example, `x = @variable(model, [1:N], ...)` where the name of the object does not appear inside the macro.
+
+Alternatively, use `unregister(model, :c)` to first unregister the existing name from the model. Note that this will not delete the object from the model; it will just remove the reference at `model[:c]`.
+
+Stacktrace:
 [...]
 ```
 
@@ -545,7 +539,7 @@ Here's a summary of the differences:
  * Named constraints have the form `@constraint(model, c, expr)`. For named
    constraints:
    * The `String` name of the constraint is set to `"c"`.
-   * A Julia variable `c` is created that binds `c` to  the JuMP constraint.
+   * A Julia variable `c` is created that binds `c` to the JuMP constraint.
    * The name `:c` is registered as a key in the model with the value `c`.
  * Anonymous constraints have the form `c = @constraint(model, expr)`. For
    anonymous constraints:
@@ -738,7 +732,7 @@ multiple ways to achieve this goal; we explain three options.
 ### Option 1: change the right-hand side
 
 Use [`set_normalized_rhs`](@ref) to modify the right-hand side (constant)
-term of a linear or quadratic  constraint. Use [`normalized_rhs`](@ref) to query
+term of a linear or quadratic constraint. Use [`normalized_rhs`](@ref) to query
 the right-hand side term.
 ```jldoctest
 julia> model = Model();
@@ -796,7 +790,7 @@ The constraint `con` is now equivalent to `2x <= 2`.
 
 The third option is to use [`add_to_function_constant`](@ref). The constant
 given is added to the function of a `func`-in-`set` constraint. In the following
-example, adding `2` to the function has the effect of removing `2` to the
+example, adding `2` to the function has the effect of removing `2` from the
 right-hand side:
 ```jldoctest con_add
 julia> model = Model();
@@ -931,14 +925,13 @@ Deleting a constraint does not unregister the symbolic reference from the model.
 Therefore, creating a new constraint of the same name will throw an error:
 ```jldoctest constraints_delete
 julia> @constraint(model, con, 2x <= 1)
-ERROR: An object of name con is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, for example,
-    `x = @variable(model, [1:N], ...)` where the name of the object does
-    not appear inside the macro.
+ERROR: An object of name `:con` is already registered in this model.
 
-    Alternatively, use `unregister(model, :con)` to first unregister
-    the existing name from the model. Note that this will not delete the
-    object; it will just remove the reference at `model[:con]`.
+Consider instead using the anonymous construction syntax, for example, `x = @variable(model, [1:N], ...)` where the name of the object does not appear inside the macro.
+
+Alternatively, use `unregister(model, :con)` to first unregister the existing name from the model. Note that this will not delete the object from the model; it will just remove the reference at `model[:con]`.
+
+Stacktrace:
 [...]
 ```
 
@@ -1298,7 +1291,12 @@ julia> @constraint(model, x - y in MOI.Nonnegatives(2))
 Non-zero constants are not supported in this syntax:
 ```jldoctest set_inequality
 julia> @constraint(model, x >= 1, MOI.Nonnegatives(2))
-ERROR: Operation `sub_mul` between `Vector{VariableRef}` and `Int64` is not allowed. This most often happens when you write a constraint like `x >= y` where `x` is an array and `y` is a constant. Use the broadcast syntax `x .- y >= 0` instead.
+ERROR: Operation `sub_mul` between `Vector{VariableRef}` and `Int64` is not allowed.
+
+This most often happens when you write a constraint like `x >= y` where `x` is an array and `y` is a constant.
+
+Use the broadcast syntax `x .- y >= 0` instead.
+
 Stacktrace:
 [...]
 ```
@@ -1436,7 +1434,7 @@ a --> {x + y ≤ 1}
 ```
 
 If the constraint must hold when `a` is zero, add `!` or `¬` before the binary
-variable;
+variable:
 ```jldoctest indicator
 julia> @constraint(model, !a --> {x + y <= 1})
 !a --> {x + y ≤ 1}

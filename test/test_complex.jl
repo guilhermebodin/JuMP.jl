@@ -22,6 +22,7 @@ include(joinpath(@__DIR__, "utilities.jl"))
 function _test_dot(a, b)
     @test LinearAlgebra.dot(a, b) == conj(a) * b
     @test LinearAlgebra.dot(b, a) == conj(b) * a
+    return
 end
 
 function test_complex_aff_expr()
@@ -117,6 +118,7 @@ function test_complex_vector_constraint()
     con_obj = constraint_object(con_ref)
     @test jump_function(con_obj) == [(1 + 2im) * x + 1]
     @test moi_set(con_obj) == MOI.Zeros(1)
+    return
 end
 
 function test_complex_vector_constraint_quadratic()
@@ -128,6 +130,7 @@ function test_complex_vector_constraint_quadratic()
     con_obj = constraint_object(con_ref)
     @test jump_function(con_obj) == [(1 + 2im) * x^2 + 1]
     @test moi_set(con_obj) == MOI.Zeros(1)
+    return
 end
 
 function test_complex_scalar_affine_constraint()
@@ -198,11 +201,12 @@ function test_complex_conj()
     real_quad = 4x^2 + 2 * x + 3
     @test conj(real_quad) === real_quad
     @test real(real_quad) === real_quad
-    @test imag(real_quad) === real_quad
+    @test imag(real_quad) == 0
     complex_quad = (4 - 5im) * x^2 + (2 + im) * x + 3 - im
     @test conj(complex_quad) == (4 + 5im) * x^2 + (2 - im) * x + 3 + im
     @test real(complex_quad) == 4x^2 + 2x + 3
     @test imag(complex_quad) == -5x^2 + x - 1
+    return
 end
 
 function test_complex_abs2()
@@ -212,6 +216,7 @@ function test_complex_abs2()
     @test abs2(x + 2im) == x^2 + 4
     @test abs2(x + 2) == x^2 + 4x + 4
     @test abs2(x * im + 2) == x^2 + 4
+    return
 end
 
 function test_hermitian()
@@ -308,10 +313,14 @@ function test_HermitianPSDCone_general_matrix_error()
     @test !(Y isa LinearAlgebra.Hermitian)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, Y in HermitianPSDCone())`: " *
-            "Unable to add matrix in HermitianPSDCone because the matrix is " *
-            "not a subtype of `LinearAlgebra.Hermitian`. To fix, wrap the " *
-            "matrix `H` in `LinearAlgebra.Hermitian(H)`.",
+            """
+            In `@constraint(model, Y in HermitianPSDCone())`:
+
+            Unable to add matrix in HermitianPSDCone because the matrix is \
+            not a subtype of `LinearAlgebra.Hermitian`.
+
+            To fix, wrap the matrix `H` in `LinearAlgebra.Hermitian(H)`.
+            """,
         ),
         @constraint(model, Y in HermitianPSDCone()),
     )
@@ -361,6 +370,154 @@ function test_mul_real_hermitian()
         @test isequal_canonical(B * f, LinearAlgebra.Hermitian(A * f, s))
         @test isequal_canonical(f * B + f * B, (2 * f) * B)
     end
+    return
+end
+
+function test_non_real_Hermitian_errors()
+    model = Model()
+    H = [1.0+1.0im 2.0+3.0im; 2.0-3.0im 4.0]
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2], Hermitian, start = H[i, j])`:
+
+            Non-real starting value in diagonal of Hermitian matrix.
+
+            Got `x[1, 1] = 1.0 + 1.0im`. The diagonal of a Hermitian matrix must be real.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2], Hermitian, start = H[i, j]),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] >= H[i, j], Hermitian)`:
+
+            Non-real lower bound in diagonal of Hermitian matrix.
+
+            Got `x[1, 1] = 1.0 + 1.0im`. The diagonal of a Hermitian matrix must be real.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] >= H[i, j], Hermitian),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] <= H[i, j], Hermitian)`:
+
+            Non-real upper bound in diagonal of Hermitian matrix.
+
+            Got `x[1, 1] = 1.0 + 1.0im`. The diagonal of a Hermitian matrix must be real.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] <= H[i, j], Hermitian),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] == H[i, j], Hermitian)`:
+
+            Non-real fixed bound in diagonal of Hermitian matrix.
+
+            Got `x[1, 1] = 1.0 + 1.0im`. The diagonal of a Hermitian matrix must be real.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] == H[i, j], Hermitian),
+    )
+    return
+end
+
+function test_non_conjugate_Hermitian_errors()
+    model = Model()
+    H = [1.0 2.0+3.0im; 2.0+3.0im 4.0]
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2], Hermitian, start = H[i, j])`:
+
+            Non-conjugate starting value in Hermitian matrix.
+
+            Got `x[1, 2] = 2.0 + 3.0im` and `x[2, 1] = 2.0 + 3.0im`.
+
+            To be Hermitian, we expected `x[2, 1] = 2.0 - 3.0im`.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2], Hermitian, start = H[i, j]),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] >= H[i, j], Hermitian)`:
+
+            Non-conjugate lower bound in Hermitian matrix.
+
+            Got `x[1, 2] = 2.0 + 3.0im` and `x[2, 1] = 2.0 + 3.0im`.
+
+            To be Hermitian, we expected `x[2, 1] = 2.0 - 3.0im`.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] >= H[i, j], Hermitian),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] <= H[i, j], Hermitian)`:
+
+            Non-conjugate upper bound in Hermitian matrix.
+
+            Got `x[1, 2] = 2.0 + 3.0im` and `x[2, 1] = 2.0 + 3.0im`.
+
+            To be Hermitian, we expected `x[2, 1] = 2.0 - 3.0im`.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] <= H[i, j], Hermitian),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2] == H[i, j], Hermitian)`:
+
+            Non-conjugate fixed bound in Hermitian matrix.
+
+            Got `x[1, 2] = 2.0 + 3.0im` and `x[2, 1] = 2.0 + 3.0im`.
+
+            To be Hermitian, we expected `x[2, 1] = 2.0 - 3.0im`.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2] == H[i, j], Hermitian),
+    )
+    return
+end
+
+function test_discrete_variable_Hermitian_errors()
+    model = Model()
+    H = [false false; true false]
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2], Hermitian, integer = H[i, j])`:
+
+            Integer variables in a Hermitian matrix are not supported.
+
+            To fix, check element `(2, 1)`. You may have set the variable \
+            be integer using the `Int` tag or used the `integer = true` keyword.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2], Hermitian, integer = H[i, j]),
+    )
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@variable(model, x[i in 1:2, j in 1:2], Hermitian, binary = H[i, j])`:
+
+            Binary variables in a Hermitian matrix are not supported.
+
+            To fix, check element `(2, 1)`. You may have set the variable \
+            be binary using the `Bin` tag or used the `binary = true` keyword.
+            """,
+        ),
+        @variable(model, x[i in 1:2, j in 1:2], Hermitian, binary = H[i, j]),
+    )
     return
 end
 

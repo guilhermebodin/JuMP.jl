@@ -5,12 +5,20 @@
 
 # # The diet problem
 
-# The purpose of this tutorial is to demonstrate how to incorporate DataFrames
-# into a JuMP model. As an example, we use classic [Stigler diet problem](https://en.wikipedia.org/wiki/Stigler_diet).
+# This tutorial demonstrates how to use DataFrames to supply data to a JuMP
+# model, using the classic diet problem as an example. It also shows how to
+# modify a solved model by adding new constraints and re-solving.
+#
+# **Learning intentions:**
+# * Use a `DataFrames.DataFrame` as the sole source of truth for variables,
+#   objective coefficients, and constraints, so the model automatically adapts
+#   when the data changes
+# * Modify a solved model by adding a new constraint and re-solving without
+#   rebuilding from scratch, and recognize what an infeasible result means
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import CSV
@@ -77,7 +85,7 @@ end
 foods = CSV.read(food_csv_filename, DataFrames.DataFrame)
 
 # Here, ``F`` is `foods.name` and ``c_f`` is `foods.cost`. (We're also playing
-# a bit loose the term "macro-nutrient" by including calories and sodium.)
+# a bit loose with the term "macro-nutrient" by including calories and sodium.)
 
 # We also need our minimum and maximum limits:
 
@@ -164,7 +172,7 @@ end
 table = Containers.rowtable(value, x; header = [:food, :quantity])
 solution = DataFrames.DataFrame(table)
 
-# This makes it easy to perform analyses our solution:
+# This makes it easy to perform analyses of our solution:
 
 filter!(row -> row.quantity > 0.0, solution)
 

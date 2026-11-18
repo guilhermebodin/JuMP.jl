@@ -36,8 +36,13 @@ function test_scalar_error_x_F()
     @variable(model, x >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, x ⟂ 2x - 1)`: second term must be a " *
-            "variable.",
+            """
+            In `@constraint(model, x ⟂ 2x - 1)`:
+
+            The right-hand side term in a complementarity constraint must be a variable.
+
+            Currently, it is a `$(typeof(2 * x - 1))`.
+            """,
         ),
         @constraint(model, x ⟂ 2x - 1)
     )
@@ -49,8 +54,13 @@ function test_scalar_error_F_F()
     @variable(model, x >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, x + 1 ⟂ 2x - 1)`: second term must " *
-            "be a variable.",
+            """
+            In `@constraint(model, x + 1 ⟂ 2x - 1)`:
+
+            The right-hand side term in a complementarity constraint must be a variable.
+
+            Currently, it is a `$(typeof(2 * x - 1))`.
+            """,
         ),
         @constraint(model, x + 1 ⟂ 2x - 1)
     )
@@ -62,8 +72,13 @@ function test_scalar_error_0_F()
     @variable(model, x >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, 0 ⟂ 2x - 1)`: second term must be a " *
-            "variable.",
+            """
+            In `@constraint(model, 0 ⟂ 2x - 1)`:
+
+            The right-hand side term in a complementarity constraint must be a variable.
+
+            Currently, it is a `$(typeof(2 * x - 1))`.
+            """,
         ),
         @constraint(model, 0 ⟂ 2x - 1)
     )
@@ -96,8 +111,15 @@ function test_vector_error_length_mismatch()
     @variable(model, x[1:2] >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, x ⟂ [x[1]])`: size of mapping does " *
-            "not match size of variables: (2,) != (1,).",
+            """
+            In `@constraint(model, x ⟂ [x[1]])`:
+
+            The number of elements in the left-hand side (2,) does not match \
+            the right-hand side (1,).
+
+            There must be a one-to-one mapping between the left- and right-hand \
+            sides of a complementarity constraint.
+            """,
         ),
         @constraint(model, x ⟂ [x[1]])
     )
@@ -109,8 +131,14 @@ function test_vector_error_x_F()
     @variable(model, x[1:2] >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, x ⟂ 2x .- 1)`: second term must be an " *
-            "array of variables.",
+            """
+            In `@constraint(model, x ⟂ 2x .- 1)`:
+
+            The right-hand side term in a complementarity constraint must be a \
+            variable or an array of variables.
+
+            Currently, it is a `Vector{JuMP.AffExpr}`.
+            """,
         ),
         @constraint(model, x ⟂ 2x .- 1)
     )
@@ -121,8 +149,14 @@ function test_vector_error_F_F()
     @variable(model, x[1:2] >= 0)
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, x .+ 1 ⟂ 2x .- 1)`: second term must " *
-            "be an array of variables.",
+            """
+            In `@constraint(model, x .+ 1 ⟂ 2x .- 1)`:
+
+            The right-hand side term in a complementarity constraint must be a \
+            variable or an array of variables.
+
+            Currently, it is a `Vector{JuMP.AffExpr}`.
+            """,
         ),
         @constraint(model, x .+ 1 ⟂ 2x .- 1)
     )
@@ -135,8 +169,14 @@ function test_vector_error_0_F()
     y = [1.2, -1.3]
     @test_throws_runtime(
         ErrorException(
-            "In `@constraint(model, y ⟂ 2x .- 1)`: second term must " *
-            "be an array of variables.",
+            """
+            In `@constraint(model, y ⟂ 2x .- 1)`:
+
+            The right-hand side term in a complementarity constraint must be a \
+            variable or an array of variables.
+
+            Currently, it is a `Vector{JuMP.AffExpr}`.
+            """,
         ),
         @constraint(model, y ⟂ 2x .- 1)
     )
@@ -169,7 +209,37 @@ function test_sparse_key_mismatch()
     model = Model()
     @variable(model, x[i = 1:3; isodd(i)] >= 0)
     @variable(model, y[i = 3:5; isodd(i)] >= 0)
-    @test_throws(ErrorException, @constraint(model, 2x .- 1 ⟂ y))
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@constraint(model, 2x .- 1 ⟂ y)`:
+
+            Keys of the SparseAxisArrays do not match.
+
+            The left-hand side has key `(1,)`, but the right-hand side does not.
+            """,
+        ),
+        @constraint(model, 2x .- 1 ⟂ y),
+    )
+    return
+end
+
+function test_sparse_klength_mismatch()
+    model = Model()
+    @variable(model, x[i = 1:3; isodd(i)] >= 0)
+    @variable(model, y[i = 1:5; isodd(i)] >= 0)
+    @test_throws_runtime(
+        ErrorException(
+            """
+            In `@constraint(model, 2x .- 1 ⟂ y)`:
+
+            The number of elements in the left-hand side (2) does not match the right-hand side (3).
+
+            There must be a one-to-one mapping between the left- and right-hand sides of a complementarity constraint.
+            """,
+        ),
+        @constraint(model, 2x .- 1 ⟂ y),
+    )
     return
 end
 

@@ -5,22 +5,30 @@
 
 # # Sensitivity analysis of a linear program
 
-# This tutorial explains how to use the [`lp_sensitivity_report`](@ref) function
-# to create sensitivity reports like those that are produced by the Excel
-# Solver. This is most often used in introductory classes to linear programming.
-
+# This tutorial explains how to perform sensitivity analysis on a linear program
+# using JuMP's [`lp_sensitivity_report`](@ref), producing tables similar to those in
+# Excel Solver. Sensitivity analysis answers how much problem data can change
+# before the current optimal basis—and therefore the current solution—
+# changes.
+#
 # In brief, sensitivity analysis of a linear program is about asking two
 # questions:
 #  1) Given an optimal solution, how much can the objective coefficients change
 #     by before a different solution becomes optimal?
 #  2) Given an optimal solution, how much can the right-hand side of a linear
 #     constraint change by before a different solution becomes optimal?
+#
+# **Learning intentions:**
+# * Understand what sensitivity analysis tells you: how far an objective
+#   coefficient or constraint right-hand side can move before the optimal basis
+#   changes
+# * Use [`lp_sensitivity_report`](@ref) to retrieve allowable ranges, and
+#   organize them alongside reduced costs, shadow prices, and slacks into
+#   readable DataFrames
+# * Read the resulting tables to identify which variables are basic or
+#   non-basic and which constraints are binding
 
-# JuMP provides a function, [`lp_sensitivity_report`](@ref), to help us compute
-# these values, but this tutorial extends that to create more informative
-# tables in the form of a `DataFrame`.
-
-# ## Setup
+# ## Required packages
 
 # This tutorial uses the following packages:
 
@@ -28,7 +36,9 @@ using JuMP
 import HiGHS
 import DataFrames
 
-# as well as this small linear program:
+# ## Setup
+
+# As an example, we use this small linear program:
 
 model = Model(HiGHS.Optimizer)
 @variable(model, x >= 0)
@@ -64,7 +74,7 @@ report = lp_sensitivity_report(model)
 
 # Both tuples are relative, rather than absolute. So, given an objective
 # coefficient of `1.0` and a tuple `(-0.5, 0.5)`, the objective coefficient can
-# range between `1.0 - 0.5` an `1.0 + 0.5`.
+# range between `1.0 - 0.5` and `1.0 + 0.5`.
 
 # For example:
 
@@ -77,8 +87,8 @@ report[x]
 report[c1]
 
 # means that the right-hand side of the `c1` constraint (100), can decrease
-# by 4 units, or increase by 2.85 units, and the primal solution `(15, 1.25)`
-# will remain optimal.
+# by 4 units, or increase by 2.86 units, and the current basis will remain
+# optimal (although the primal solution will change).
 
 # ## Variable sensitivity
 
@@ -126,7 +136,7 @@ end
 
 c1_report = constraint_report(c1)
 
-# That's a bit hard to read, so let's call this on every variable in the model
+# That's a bit hard to read, so let's call this on every constraint in the model
 # and put things into a DataFrame:
 
 constraint_df = DataFrames.DataFrame(

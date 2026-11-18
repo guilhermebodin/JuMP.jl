@@ -20,14 +20,18 @@
 
 # # Nested optimization problems
 
-# The purpose of this tutorial is to show how to solve a *nested* optimization
-# problem, where an *upper* problem uses the results from the optimization of a
-# *lower* subproblem.
+# This tutorial shows how to solve a nested (bilevel) optimization problem in
+# which the upper-level problem uses the optimal value of a lower-level
+# subproblem as an objective term. It also demonstrates how to use a cache to
+# avoid redundant subproblem solves.
 #
-# To model the problem, we define a user-defined operator to handle the
-# decomposition of the lower problem inside the upper one. Finally, we show how
-# to improve the performance by using a cache that avoids resolving the lower
-# problem.
+# **Learning intentions:**
+# * Decompose a bilevel program and expose the lower-level value function to the
+#   upper level as a user-defined operator via [`@operator`](@ref)
+# * Cache the lower-level solution so that the function and gradient at the same
+#   point all share a single subproblem solve
+# * Use DiffOpt.jl to compute a Hessian callback by differentiating the
+#   lower-level solution with respect to the upper-level solution.
 #
 # For a simpler example of writing a user-defined operator, see the
 # [User-defined Hessians](@ref) tutorial.
@@ -41,6 +45,7 @@
 # This tutorial uses the following packages:
 
 using JuMP
+import DiffOpt
 import Ipopt
 
 # ## Formulation
@@ -94,7 +99,7 @@ function solve_lower_level(x...)
     return objective_value(model), value.(y)
 end
 
-# The next function takes a value of ``x`` and returns the optimal lower-level
+# The function above takes a value of ``x`` and returns the optimal lower-level
 # objective-value and the optimal response ``y``. The reason why we need both
 # the objective and the optimal ``y`` will be made clear shortly, but for now
 # let us define:
@@ -117,7 +122,7 @@ end
 # ``V``! However, because ``V`` solves an optimization problem internally, we
 # can't use automatic differentiation to compute the first and second
 # derivatives. Instead, we can use JuMP's ability to pass callback functions
-# for the gradient and Hessian instead.
+# for the gradient (and later, Hessian) instead.
 
 # First up, we need to define the gradient of ``V`` with respect to ``x``. In
 # general, this may be difficult to compute, but because ``x`` appears only in
@@ -131,26 +136,11 @@ function ∇V(g::AbstractVector, x...)
     return
 end
 
-# Second, we need to define the Hessian of ``V`` with respect to ``x``. This is
-# a symmetric matrix, but in our example only the diagonal elements are
-# non-zero:
-
-function ∇²V(H::AbstractMatrix, x...)
-    _, y = solve_lower_level(x...)
-    H[1, 1] = 2 * y[1]
-    H[2, 2] = 2 * y[2]
-    return
-end
-
-# !!! info
-#     Providing an explicit Hessian function is optional
-#     if first derivatives are already available.
-
 # We now have enough to define our bilevel optimization problem:
 
 model = Model(Ipopt.Optimizer)
 @variable(model, x[1:2] >= 0)
-@operator(model, op_V, 2, V, ∇V, ∇²V)
+@operator(model, op_V, 2, V, ∇V)
 @objective(model, Min, x[1]^2 + x[2]^2 + op_V(x[1], x[2]))
 optimize!(model)
 assert_is_solved_and_feasible(model)
@@ -173,10 +163,10 @@ y
 # ## Improving performance
 
 # Our solution approach works, but it has a performance problem: every time
-# we need to compute the value, gradient, or Hessian of ``V``, we have to
+# we need to compute the value or gradient of ``V``, we have to
 # re-solve the lower-level optimization problem. This is wasteful, because we
-# will often call the gradient and Hessian at the same point, and so solving the
-# problem twice with the same input repeats work unnecessarily.
+# will often call the function and gradient at the same point, and so solving
+# the problem twice with the same input repeats work unnecessarily.
 
 # We can work around this by using a cache:
 
@@ -196,8 +186,8 @@ function _update_if_needed(cache::Cache, x...)
     return
 end
 
-# Then, we define cached versions of out three functions which call
-# `_updated_if_needed` and return values from the cache.
+# Then, we define cached versions of our two functions which call
+# `_update_if_needed` and return values from the cache.
 
 function cached_f(cache::Cache, x...)
     _update_if_needed(cache, x...)
@@ -208,13 +198,6 @@ function cached_∇f(cache::Cache, g::AbstractVector, x...)
     _update_if_needed(cache, x...)
     g[1] = 2 * x[1] * cache.y[1] - cache.y[1]^4
     g[2] = 2 * x[2] * cache.y[2] - 2 * cache.y[2]^4
-    return
-end
-
-function cached_∇²f(cache::Cache, H::AbstractMatrix, x...)
-    _update_if_needed(cache, x...)
-    H[1, 1] = 2 * cache.y[1]
-    H[2, 2] = 2 * cache.y[2]
     return
 end
 
@@ -229,17 +212,92 @@ cache = Cache(Float64[], NaN, Float64[])
     2,
     (x...) -> cached_f(cache, x...),
     (g, x...) -> cached_∇f(cache, g, x...),
-    (H, x...) -> cached_∇²f(cache, H, x...),
 )
 @objective(model, Min, x[1]^2 + x[2]^2 + op_cached_f(x[1], x[2]))
 optimize!(model)
 assert_is_solved_and_feasible(model)
 solution_summary(model)
 
-# an we can check we get the same objective value:
+# and we can check we get the same objective value:
 
 objective_value(model)
 
 # and upper-level decision variable ``x``:
 
 value.(x)
+
+# The problem takes 8 iterations to converge:
+
+@assert barrier_iterations(model) == 8 #src
+barrier_iterations(model)
+
+# ## Computing the Hessian
+
+# To improve performance we can pass a function that computes the Hessian of `V`
+# with respect to the inputs `x`. Computing this Hessian requires some calculus.
+#
+# Let ``f(x, y)`` be the objective function, then:
+# ```math
+# \nabla^2_{xx} V(x) = \nabla^2_{xx}f(x, y^*) + \nabla^2_{xy}f(x, y^*) \cdot \frac{d y^*}{d x}
+# ```
+# It is easy to compute ``\nabla^2_{xx} f`` and ``\nabla^2_{xy} f`` by hand.
+# Computing ``\frac{d y^*}{d x}`` (the derivative of the optimal solution ``y^*``
+# with respect to the input ``x``) is trickier. However, JuMP has a package,
+# [DiffOpt.jl](@ref) which can do this for us.
+
+function solve_lower_level_with_sensitivity(x...)
+    model = DiffOpt.nonlinear_diff_model(Ipopt.Optimizer)
+    set_silent(model)
+    ## Instead of directly using `x`, introduce a parameter `p` instead.
+    @variable(model, p[i in 1:2] in Parameter(x[i]))
+    @variable(model, y[1:2])
+    @objective(
+        model,
+        Max,
+        p[1]^2 * y[1] + p[2]^2 * y[2] - p[1] * y[1]^4 - 2 * p[2] * y[2]^4,
+    )
+    @constraint(model, (y[1] - 10)^2 + (y[2] - 10)^2 <= 25)
+    optimize!(model)
+    assert_is_solved_and_feasible(model)
+    y_star = value.(y)
+    dy_dx = zeros(2, 2)
+    for j in 1:2
+        DiffOpt.set_forward_parameter.(model, p, 0.0)
+        DiffOpt.set_forward_parameter(model, p[j], 1.0)
+        DiffOpt.forward_differentiate!(model)
+        dy_dx[:, j] .= DiffOpt.get_forward_variable.(model, y)
+    end
+    return y_star, dy_dx
+end
+
+function ∇²V(H::AbstractMatrix, x...)
+    y, dy_dx = solve_lower_level_with_sensitivity(x...)
+    ∇²V_xx = [2 * y[1] 0; 0 2 * y[2]]
+    ∇²V_xy = [(2 * x[1] - 4 * y[1]^3) 0; 0 (2 * x[2] - 8 * y[2]^3)]
+    ret = ∇²V_xx + ∇²V_xy * dy_dx
+    for j in 1:size(H, 2), i in j:size(H, 1)
+        H[i, j] = ret[i, j]
+    end
+    return
+end
+
+model = Model(Ipopt.Optimizer)
+@variable(model, x[1:2] >= 0)
+@operator(model, op_V, 2, V, ∇V, ∇²V)
+@objective(model, Min, x[1]^2 + x[2]^2 + op_V(x[1], x[2]))
+optimize!(model)
+assert_is_solved_and_feasible(model)
+solution_summary(model)
+
+# The optimal objective value is:
+
+objective_value(model)
+
+# and the optimal upper-level decision variables ``x`` are:
+
+value.(x)
+
+# With the Hessian, the problem now takes 7 iterations to converge:
+
+@assert barrier_iterations(model) == 7 #src
+barrier_iterations(model)

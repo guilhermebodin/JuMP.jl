@@ -21,12 +21,15 @@ It should never be called by users of JuMP.
 """
 function copy_extension_data(data, ::AbstractModel, ::AbstractModel)
     @warn(
-        "Model contains extension data of type $(typeof(data)) that we do " *
-        "not know how to copy.\n\nIf you are using a JuMP extension and you " *
-        "did not add data to the `model.ext` dictionary. Please open an " *
-        "issue on the GitHub repository of the JuMP extension and tell them " *
-        "to implement `JuMP.copy_extension_data`.\n\nIf you added things to " *
-        "`model.ext`, they have not been copied.",
+        """
+        Skipping the copy of extension data of type `$(typeof(data))` because
+        `JuMP.copy_extension_data` has not been implemented for this type.
+
+        If you are using a JuMP extension, open an issue on its GitHub repository
+        and ask the maintainers to implement `JuMP.copy_extension_data`.
+
+        If you added data to `model.ext` directly, it has not been copied.
+        """,
     )
     return missing
 end
@@ -116,9 +119,9 @@ constraint reference as argument.
 
 Model copy is not supported in `DIRECT` mode, that is, when a model is constructed
 using the [`direct_model`](@ref) constructor instead of the [`Model`](@ref)
-constructor. Moreover, independently on whether an optimizer was provided at
+constructor. Moreover, independently of whether an optimizer was provided at
 model construction, the new model will have no optimizer, that is, an optimizer
-will have to be provided to the new model in the [`optimize!`](@ref) call.
+must be set using [`set_optimizer`](@ref) before calling [`optimize!`](@ref).
 
 ## Example
 
@@ -150,9 +153,13 @@ function copy_model(
 ) where {T}
     if mode(model) == DIRECT
         error(
-            "Cannot copy a model in `DIRECT` mode. Use the `Model` ",
-            "constructor instead of the `direct_model` constructor to be ",
-            "able to copy the constructed model.",
+            """
+            Cannot copy a model in `DIRECT` mode because there is no cached model
+            representation to copy from.
+
+            Use the `Model` constructor instead of `direct_model` to build a model that
+            supports copying.
+            """,
         )
     end
     new_model = GenericModel{T}()
@@ -173,11 +180,23 @@ function copy_model(
 
     new_model.optimize_hook = model.optimize_hook
 
+    for (ci, shape) in model.shapes
+        if haskey(index_map, ci)
+            new_model.shapes[index_map[ci]] = shape
+        end
+    end
+
     # TODO copy NLP data
     if nonlinear_model(model) !== nothing
         error(
-            "copy is not supported yet for models with nonlinear constraints",
-            " and/or nonlinear objective function",
+            """
+            `copy_model` is not supported for models with legacy nonlinear
+            constraints or a nonlinear objective (added via `@NLconstraint` or
+            `@NLobjective`).
+
+            Rewrite the nonlinear terms using the standard `@constraint` and
+            `@objective` macros, which support copying.
+            """,
         )
     end
 
@@ -190,10 +209,13 @@ function copy_model(
             catch err
                 if err isa MethodError
                     @warn(
-                        "Skipping the copy of object `:$(name)` due to " *
-                        "unsupported type $(typeof(value)). Please open a " *
-                        "GitHub issue at https://github.com/jump-dev/JuMP.jl " *
-                        "with this message.",
+                        """
+                        Skipping the copy of object `$(name)` of type `$(typeof(value))` because
+                        `getindex(::GenericReferenceMap, ::$(typeof(value)))` is not implemented.
+
+                        Please open a GitHub issue at https://github.com/jump-dev/JuMP.jl
+                        with this message so that support can be added.
+                        """,
                     )
                 else
                     rethrow(err)
@@ -241,10 +263,10 @@ cref : x = 2
 
 julia> new_model = copy(model);
 
-julia> x_new = model[:x]
+julia> x_new = new_model[:x]
 x
 
-julia> cref_new = model[:cref]
+julia> cref_new = new_model[:cref]
 cref : x = 2
 ```
 """
@@ -327,7 +349,12 @@ end
 # solver (behind a C pointer).
 function Base.deepcopy(::GenericModel)
     return error(
-        "`JuMP.Model` does not support `deepcopy` as the reference to the underlying solver cannot be deep copied, use `copy` instead.",
+        """
+        `deepcopy` is not supported for `JuMP.GenericModel` because the underlying
+        solver cannot be deep copied.
+
+        Use `Base.copy` or `JuMP.copy_model` instead.
+        """,
     )
 end
 

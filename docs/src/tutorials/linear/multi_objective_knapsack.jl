@@ -5,13 +5,22 @@
 
 # # Multi-objective knapsack
 
-# The purpose of this tutorial is to demonstrate how to create and solve a
-# multi-objective linear program. In addition, it demonstrates how to work with
-# solvers which return multiple solutions.
+# This tutorial extends the classic knapsack problem to two objectives—
+# maximising both profit and desirability—and solves it using
+# MultiObjectiveAlgorithms.jl. It demonstrates how to visualise and navigate
+# the Pareto frontier to support decision-making.
+#
+# **Learning intentions:**
+# * Extend a single-objective binary integer program to two objectives by
+#   passing a vector of expressions to [`@objective`](@ref)
+# * Enumerate all Pareto-optimal solutions and access each one using
+#   [`result_count`](@ref) and the `result` keyword in [`objective_value`](@ref)
+# * Plot the objective space to visualise trade-offs and identify a preferred
+#   solution from the Pareto frontier
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
@@ -182,7 +191,7 @@ Plots.scatter!([ideal_point[1]], [ideal_point[2]]; label = "Ideal point")
 
 # Visualizing the objective space lets the decision maker choose a solution that
 # suits their personal preferences. For example, result `#7` is close to the
-# maximum value of profit, but offers significantly higher desirability compared
+# maximum value of desire, but offers significantly higher profit compared
 # with solutions `#8` and `#9`.
 
 # The set of items that are chosen in solution `#7` are:

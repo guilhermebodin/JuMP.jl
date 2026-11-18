@@ -22,17 +22,33 @@
 
 # **This tutorial was originally contributed by Matthew Helm and Mathieu Tanneau.**
 
-# The goal of this exercise is to cluster $n$ cities into $k$ groups, minimizing
-# the total pairwise distance between cities *and* ensuring that the variance in
-# the total populations of each group is relatively small.
+# This tutorial clusters US cities into groups by minimising total pairwise
+# Haversine distance while constraining population variance across groups. It
+# demonstrates how to formulate and solve a binary integer programming
+# clustering model in JuMP.
+#
+# **Learning intentions:**
+# * Introduce auxiliary binary variables to linearize a pairwise "same group"
+#   condition, turning a non-linear clustering objective into a standard MIP
+# * Break formulation symmetry by fixing one city's group, and add
+#   population-balance constraints to trade off geographic compactness against
+#   even group sizes
+# * Post-process binary solution variables to assign each item to a group and
+#   verify the result against the original data
+
+# ## Required packages
 
 # This tutorial uses the following packages:
+
 using JuMP
 import DataFrames
 import HiGHS
 import LinearAlgebra
 
+# ## Data
+
 # For this example, we'll use the 20 most populous cities in the United States.
+
 cities = DataFrames.DataFrame(
     Union{String,Float64}[
         "New York, NY" 8.405 40.7127 -74.0059
@@ -104,7 +120,7 @@ dm = LinearAlgebra.LowerTriangular([
 # Now that we have the basics taken  care of, we can set up our model, create
 # decision variables, add constraints, and then solve.
 
-# First, we'll set up a model that leverages the Cbc solver. Next, we'll set up
+# First, we'll set up a model that leverages the HiGHS solver. Next, we'll set up
 # a binary variable $x_{i,k}$ that takes the value $1$ if city $i$ is in group
 # $k$ and $0$ otherwise. Each city must be in a group, so we'll add the
 # constraint $\sum_k x_{i,k} = 1$ for every $i$.
@@ -119,7 +135,7 @@ fix(x[1, 1], 1; force = true)
 # The total population of a group $k$ is $Q_k = \sum_ix_{i,k}q_i$ where $q_i$ is
 # simply the $i$-th value from the `population` column in our `cities` DataFrame.
 # Let's add constraints so that $\alpha \leq (Q_k - P) \leq \beta$. We'll set
-# $\alpha$ equal to $-3$ million and $\beta$ equal to $3$. By adjusting
+# $\alpha$ equal to $-3$ million and $\beta$ equal to $3$ million. By adjusting
 # these thresholds you'll find that there is a tradeoff between having
 # relatively even populations between groups and having geographically close
 # cities within each group. In other words, the larger the absolute values of
@@ -134,8 +150,8 @@ fix(x[1, 1], 1; force = true)
 # $\sum_{i,j}d_{i,j}z_{i,j}$. Variable $z_{i,j}$ will equal $1$ if cities $i$
 # and $j$ are in the same group, and $0$ if they are not in the same group.
 
-# To ensure that $z_{i,j} = 1$ if and only if cities $i$ and $j$ are in the same
-# group, we add the constraints $z_{i,j} \geq x_{i,k} + x_{j,k} - 1$ for every
+# To ensure that $z_{i,j} = 1$ if cities $i$ and $j$ are in the same group, we
+# add the constraints $z_{i,j} \geq x_{i,k} + x_{j,k} - 1$ for every
 # pair $i,j$ and every $k$:
 
 @variable(model, z[i=1:n, j=1:i], Bin)

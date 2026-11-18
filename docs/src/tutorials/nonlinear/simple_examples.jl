@@ -5,7 +5,18 @@
 
 # # Simple examples
 
-# This tutorial is a collection of examples of small nonlinear programs.
+# This tutorial is a collection of small nonlinear programs in JuMP, covering
+# the Rosenbrock function, a beam deflection problem, maximum likelihood
+# estimation, and quadratically constrained programs.
+#
+# **Learning intentions:**
+# * Formulate and solve a variety of small nonlinear programs—unconstrained,
+#   discretized ODEs, and log-likelihood objectives—to see JuMP's nonlinear
+#   syntax in action
+# * Use the block form of [`@variables`](@ref) to declare several groups of
+#   variables concisely
+# * Add a nonlinear constraint to an already-solved model and re-optimize
+#   without rebuilding from scratch
 
 # ## Required packages
 
@@ -143,7 +154,7 @@ example_mle()
 # ## Quadratically constrained programs
 
 # A simple quadratically constrained program based on an
-# [example from Gurobi](https://www.gurobi.com/documentation/9.0/examples/qcp_c_c.html).
+# [example from Gurobi](https://docs.gurobi.com/projects/examples/en/current/examples/qcp.html).
 
 function example_qcp()
     model = Model(Ipopt.Optimizer)

@@ -110,7 +110,11 @@ function test_extension_broadcast_division_error(
     @test A ./ x isa Matrix{NonlinearExprType}
     @test B ./ x isa SparseArrays.SparseMatrixCSC{NonlinearExprType,Int}
     @test A ./ y isa SparseArrays.SparseMatrixCSC{NonlinearExprType,Int}
-    @test B ./ y isa SparseArrays.SparseMatrixCSC{NonlinearExprType,Int}
+    if VERSION < v"1.14"
+        @test B ./ y isa SparseArrays.SparseMatrixCSC{NonlinearExprType,Int}
+    else
+        @test B ./ y isa Matrix{NonlinearExprType}
+    end
     # TODO: Refactor to avoid calling the internal JuMP function
     # `_densify_with_jump_eltype`.
     #z = _densify_with_jump_eltype((2 .* y) ./ 3)
@@ -383,6 +387,7 @@ function test_extension_basic_operators_variable(
     @test_expression_with_string w * α "4.13 w"
     @test_expression_with_string w / T(2) "0.5 w"
     @test w == w
+    @test w != x
     @test_expression_with_string x * y - 1 "x*y - 1"
     @test_expression_with_string(x^2, "x²", interrable = false)
     @test_expression_with_string(x^1, "x", interrable = false)
@@ -436,6 +441,7 @@ function test_extension_basic_operators_affexpr(
     @test_expression_with_string aff / 2 "3.55 x + 1.25"
     @test_throws MethodError aff ≤ 1
     @test aff == aff
+    @test aff != aff + 1
     @test_throws MethodError aff ≥ 1
     @test_expression_with_string aff - 1 "7.1 x + 1.5"
     @test_expression_with_string(
@@ -509,6 +515,7 @@ function test_extension_basic_operators_quadexpr(
     @test_expression_with_string q * 2 "5 y*z + 14.2 x + 5"
     @test_expression_with_string q / 2 "1.25 y*z + 3.55 x + 1.25"
     @test q == q
+    @test q != q2
     @test_expression_with_string aff2 - q "-2.5 y*z - 7.1 x + 1.2 y - 1.3"
     # 4-2 QuadExpr--Variable
     @test_expression_with_string q + w "2.5 y*z + 7.1 x + w + 2.5"
@@ -640,12 +647,18 @@ function test_matrix_abstractscalar_add()
     A = rand(Float64, 3, 2)
     B = rand(Float64, 3)
     err_add = ErrorException(
-        "Addition between an array and a JuMP scalar is not supported: " *
-        "instead of `x + y`, do `x .+ y` for element-wise addition.",
+        """
+        Addition between an array and a JuMP scalar is not supported.
+
+        Instead of `x + y`, use `x .+ y` for element-wise addition.
+        """,
     )
     err_sub = ErrorException(
-        "Subtraction between an array and a JuMP scalar is not supported: " *
-        "instead of `x - y`, do `x .- y` for element-wise subtraction.",
+        """
+        Subtraction between an array and a JuMP scalar is not supported.
+
+        Instead of `x - y`, use `x .- y` for element-wise subtraction.
+        """,
     )
     for lhs in (A, A', B, B'), rhs in (x, 1.0 * x, x^2, sin(x))
         @test_throws(err_add, lhs + rhs)
@@ -659,16 +672,22 @@ function test_matrix_abstractscalar_add()
     end
     C = rand(Float64, 2, 2)
     err_add = ErrorException(
-        "Addition between an array and a JuMP scalar is not supported: " *
-        "instead of `x + y`, do `x .+ y` for element-wise addition." *
-        " If you are modifying the diagonal entries of a square matrix, " *
-        "do `x + y * LinearAlgebra.I(n)`, where `n` is the side length.",
+        """
+        Addition between an array and a JuMP scalar is not supported.
+
+        Instead of `x + y`, use `x .+ y` for element-wise addition. For \
+        a square matrix, you can also modify the diagonal using \
+        `x + y * LinearAlgebra.I(n)`, where `n` is the side length.
+        """,
     )
     err_sub = ErrorException(
-        "Subtraction between an array and a JuMP scalar is not supported: " *
-        "instead of `x - y`, do `x .- y` for element-wise subtraction." *
-        " If you are modifying the diagonal entries of a square matrix, " *
-        "do `x - y * LinearAlgebra.I(n)`, where `n` is the side length.",
+        """
+        Subtraction between an array and a JuMP scalar is not supported.
+
+        Instead of `x - y`, use `x .- y` for element-wise subtraction. \
+        For a square matrix, you can also modify the diagonal using \
+        `x - y * LinearAlgebra.I(n)`, where `n` is the side length.
+        """,
     )
     for lhs in (C, C'), rhs in (x, 1.0 * x, x^2, sin(x))
         @test_throws(err_add, lhs + rhs)

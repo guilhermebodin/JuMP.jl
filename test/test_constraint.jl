@@ -118,24 +118,36 @@ function test_extension_AffExpr_vectorized_constraints(
     model = ModelType()
     @variable(model, x)
     err = ErrorException(
-        "In `@constraint(model, [x, 2x] in MOI.EqualTo(1.0))`: " *
-        "Unexpected vector in scalar constraint. The left- and right-hand " *
-        "sides of the constraint must have the same dimension.",
+        """
+        In `@constraint(model, [x, 2x] in MOI.EqualTo(1.0))`:
+
+        Unexpected vector in scalar constraint: the left- and right-hand \
+        sides of the constraint must have the same dimension.
+
+        If you intended an elementwise constraint, use broadcasting: \
+        `f(x) .<= g(x)`.
+        """,
     )
     @test_throws_runtime err @constraint(model, [x, 2x] in MOI.EqualTo(1.0))
     VT = typeof([x, 2x])
     err = ErrorException(
-        "Operation `sub_mul` between `$VT` and `$Int` is not " *
-        "allowed. This most often happens when you write a constraint like " *
-        "`x >= y` where `x` is an array and `y` is a constant. Use the " *
-        "broadcast syntax `x .- y >= 0` instead.",
+        """
+        Operation `sub_mul` between `$VT` and `$Int` is not allowed.
+
+        This most often happens when you write a constraint like `x >= y` where `x` is an array and `y` is a constant.
+
+        Use the broadcast syntax `x .- y >= 0` instead.
+        """,
     )
     @test_throws err @constraint(model, [x, 2x] == 1)
     err = ErrorException(
-        "Operation `sub_mul` between `$Int` and `$VT` is not " *
-        "allowed. This most often happens when you write a constraint like " *
-        "`x >= y` where `x` is a constant and `y` is an array. Use the " *
-        "broadcast syntax `x .- y >= 0` instead.",
+        """
+        Operation `sub_mul` between `$Int` and `$VT` is not allowed.
+
+        This most often happens when you write a constraint like `x >= y` where `x` is a constant and `y` is an array.
+
+        Use the broadcast syntax `x .- y >= 0` instead.
+        """,
     )
     a = 1
     @test_throws err @constraint(model, a == [x, 2x])
@@ -159,9 +171,13 @@ function test_extension_AffExpr_vectorized_interval_constraints(
     model = ModelType()
     @variable(model, x[1:2])
     err = ErrorException(
-        "In `@constraint(model, b <= x <= b)`: Unexpected vectors in " *
-        "scalar constraint. Did you mean to use the dot comparison " *
-        "operators `l .<= f(x) .<= u` instead?",
+        """
+        In `@constraint(model, b <= x <= b)`:
+
+        Unexpected vectors in a scalar two-sided constraint.
+
+        Use the broadcasting comparison operators instead: `l .<= f(x) .<= u`.
+        """,
     )
     b = T[5, 6]
     @test_throws_runtime err @constraint(model, b <= x <= b)
@@ -363,9 +379,16 @@ function test_extension_syntax_error_constraint(
     model = ModelType()
     @variable(model, x[1:2])
     err = ErrorException(
-        "In `@constraint(model, [3, x] in SecondOrderCone())`: Unable to " *
-        "add the constraint because we don't recognize $([3, x]) as a " *
-        "valid JuMP function.",
+        """
+        In `@constraint(model, [3, x] in SecondOrderCone())`:
+
+        Unable to add the constraint because `$([3, x])` is not a recognized \
+        JuMP expression type.
+
+        The constraint function must be a JuMP scalar or vector expression. \
+        Check that the left- and right-hand sides of your constraint are JuMP \
+        variables or expressions.
+        """,
     )
     @test_throws_runtime err @constraint(model, [3, x] in SecondOrderCone())
     return
@@ -402,23 +425,53 @@ function test_extension_indicator_constraint(
         @test c.set == MOI.Indicator{MOI.ACTIVATE_ON_ZERO}(MOI.LessThan(one(T)))
     end
     err = ErrorException(
-        "In `@constraint(model, !(a, b) => {x <= 1})`: Invalid binary variable expression `!(a, b)` for indicator constraint.",
+        """
+        In `@constraint(model, !(a, b) => {x <= 1})`:
+
+        Invalid binary variable expression `!(a, b)` for indicator constraint.
+
+        The indicator variable must be a single binary variable.
+        """,
     )
     @test_throws_parsetime err @constraint(model, !(a, b) => {x <= 1})
     err = ErrorException(
-        "In `@constraint(model, a => x)`: Invalid right-hand side `x` of indicator constraint. Expected constraint surrounded by `{` and `}`.",
+        """
+        In `@constraint(model, a => x)`:
+
+        Invalid right-hand side `x` of an indicator constraint.
+
+        Expected a constraint surrounded by `{` and `}`. For example, `@constraint(model, z --> {2 * x >= 1})`.
+        """,
     )
     @test_throws_parsetime err @constraint(model, a => x)
     err = ErrorException(
-        "In `@constraint(model, a => x <= 1)`: Invalid right-hand side `x <= 1` of indicator constraint. Expected constraint surrounded by `{` and `}`.",
+        """
+        In `@constraint(model, a => x <= 1)`:
+
+        Invalid right-hand side `x <= 1` of an indicator constraint.
+
+        Expected a constraint surrounded by `{` and `}`. For example, `@constraint(model, z --> {2 * x >= 1})`.
+        """,
     )
     @test_throws_parsetime err @constraint(model, a => x <= 1)
     err = ErrorException(
-        "In `@constraint(model, a => {x <= 1, x >= 0})`: Invalid right-hand side `{x <= 1, x >= 0}` of indicator constraint. Expected constraint surrounded by `{` and `}`.",
+        """
+        In `@constraint(model, a => {x <= 1, x >= 0})`:
+
+        Invalid right-hand side `{x <= 1, x >= 0}` of an indicator constraint.
+
+        Expected a constraint surrounded by `{` and `}`. For example, `@constraint(model, z --> {2 * x >= 1})`.
+        """,
     )
     @test_throws_parsetime err @constraint(model, a => {x <= 1, x >= 0})
     err = ErrorException(
-        "In `@constraint(model, [a, b] .=> {x + y <= 1})`: Inconsistent use of `.` in symbols to indicate vectorization.",
+        """
+        In `@constraint(model, [a, b] .=> {x + y <= 1})`:
+
+        Inconsistent use of `.` in symbols to indicate vectorization.
+
+        The left-hand side is vectorized, but the right-hand side is not vectorized.
+        """,
     )
     @test_throws_parsetime err @constraint(model, [a, b] .=> {x + y <= 1})
     return
@@ -584,14 +637,17 @@ function test_extension_SDP_errors(
     @variable(model, w)
     aff_str = "$AffExprType"
     err = ErrorException(
-        "In `@constraint(model, [x 1; 1 -y] >= [1 x; x -2], PSDCone(), unknown_kw = 1)`:" *
-        " Unrecognized constraint building format. Tried to invoke " *
-        "`build_constraint(error, $(aff_str)[x - " *
-        "1 -x + 1; -x + 1 -y + 2], $(MOI.GreaterThan(false)), $(PSDCone()); unknown_kw = 1)`, but no " *
-        "such method exists. This is due to specifying an unrecognized " *
-        "function, constraint set, and/or extra positional/keyword " *
-        "arguments.\n\nIf you're trying to create a JuMP extension, you " *
-        "need to implement `build_constraint` to accomodate these arguments.",
+        """
+        In `@constraint(model, [x 1; 1 -y] >= [1 x; x -2], PSDCone(), unknown_kw = 1)`:
+
+        Unrecognized constraint format: no method \
+        `build_constraint(error, $(aff_str)[x - 1 -x + 1; -x + 1 -y + 2], $(MOI.GreaterThan(false)), $(PSDCone()); unknown_kw = 1)` \
+        exists.
+
+        This is due to an unrecognized function, constraint set, and/or \
+        extra arguments. If you are writing a JuMP extension, implement \
+        `build_constraint` to accommodate these arguments.
+        """,
     )
     @test_throws_runtime(
         err,
@@ -610,7 +666,10 @@ function test_extension_SDP_errors(
     return
 end
 
-function _test_constraint_name_util(ModelType, VariableRefType)
+function test_constraint_name_util(
+    ModelType = Model,
+    VariableRefType = VariableRef,
+)
     model = ModelType()
     @variable(model, x)
     @constraint(model, con, x^2 == 1)
@@ -670,9 +729,13 @@ function test_extension_PSD_constraint_errors(
     model = ModelType()
     @variable(model, X[1:2, 1:2])
     err = ErrorException(
-        "In `@constraint(model, X in MOI.PositiveSemidefiniteConeTriangle(2))`:" *
-        " instead of `MathOptInterface.PositiveSemidefiniteConeTriangle(2)`," *
-        " use `JuMP.PSDCone()`.",
+        """
+        In `@constraint(model, X in MOI.PositiveSemidefiniteConeTriangle(2))`:
+
+        `$(MOI.PositiveSemidefiniteConeTriangle(2))` is not a valid JuMP constraint set for matrix constraints.
+
+        Use `JuMP.PSDCone()` instead: `@constraint(model, X >= 0, PSDCone())`.
+        """,
     )
     @test_throws_runtime(
         err,
@@ -688,9 +751,13 @@ function test_extension_matrix_constraint_errors(
     model = ModelType()
     @variable(model, X[1:2, 1:2])
     err = ErrorException(
-        "In `@constraint(model, X in MOI.SecondOrderCone(4))`: unexpected " *
-        "matrix in vector constraint. Do you need to flatten the matrix " *
-        "into a vector using `vec()`?",
+        """
+        In `@constraint(model, X in MOI.SecondOrderCone(4))`:
+
+        Unexpected matrix in a vector-valued constraint.
+
+        Flatten the matrix into a vector using `vec()` before adding the constraint.
+        """,
     )
     # Note: this should apply to any MOI.AbstractVectorSet. We just pick
     # SecondOrderCone for convenience.
@@ -706,7 +773,11 @@ function test_extension_nonsensical_SDP_constraint(
     m = ModelType()
     @test_throws_runtime(
         ErrorException(
-            "In `@variable(m, unequal[1:5, 1:6], PSD)`: Symmetric variables must be square. Got size (5, 6).",
+            """
+            In `@variable(m, unequal[1:5, 1:6], PSD)`:
+
+            Symmetric variables must be square matrices. Got size (5, 6).
+            """,
         ),
         @variable(m, unequal[1:5, 1:6], PSD)
     )
@@ -715,29 +786,59 @@ function test_extension_nonsensical_SDP_constraint(
     @test_throws MethodError @variable(m, oneD[1:5], PSD)
     @test_throws MethodError @variable(m, threeD[1:5, 1:5, 1:5], PSD)
     Y = T[1 2; 21//10 3]
-    function _ErrorException(m)
-        return ErrorException(
-            "In `$m`: Non-symmetric bounds, integrality or starting values " *
-            "for symmetric variable.",
-        )
-    end
     @test_throws_runtime(
-        _ErrorException("@variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], PSD)"),
+        ErrorException(
+            """
+            In `@variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], PSD)`:
+
+            Data associated with a symmetric variable is not symmetric.
+
+            Check elements (1, 2) and (2, 1).
+
+            Symmetric variables must have symmetric bounds and starting values.
+            """,
+        ),
         @variable(m, foo[i=1:2, j=1:2] >= Y[i, j], PSD),
     )
     @test_throws_runtime(
-        _ErrorException("@variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], PSD)"),
+        ErrorException(
+            """
+            In `@variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], PSD)`:
+
+            Data associated with a symmetric variable is not symmetric.
+
+            Check elements (1, 2) and (2, 1).
+
+            Symmetric variables must have symmetric bounds and starting values.
+            """,
+        ),
         @variable(m, foo[i=1:2, j=1:2] <= Y[i, j], PSD),
     )
     @test_throws_runtime(
-        _ErrorException(
-            "@variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], Symmetric)",
+        ErrorException(
+            """
+            In `@variable(m, foo[i = 1:2, j = 1:2] >= Y[i, j], Symmetric)`:
+
+            Data associated with a symmetric variable is not symmetric.
+
+            Check elements (1, 2) and (2, 1).
+
+            Symmetric variables must have symmetric bounds and starting values.
+            """,
         ),
         @variable(m, foo[i=1:2, j=1:2] >= Y[i, j], Symmetric),
     )
     @test_throws_runtime(
-        _ErrorException(
-            "@variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], Symmetric)",
+        ErrorException(
+            """
+            In `@variable(m, foo[i = 1:2, j = 1:2] <= Y[i, j], Symmetric)`:
+
+            Data associated with a symmetric variable is not symmetric.
+
+            Check elements (1, 2) and (2, 1).
+
+            Symmetric variables must have symmetric bounds and starting values.
+            """,
         ),
         @variable(m, foo[i=1:2, j=1:2] <= Y[i, j], Symmetric),
     )
@@ -785,13 +886,20 @@ function test_all_constraints_scalar()
     aff_constraints = all_constraints(model, AffExpr, MOI.GreaterThan{Float64})
     @test isempty(aff_constraints)
     err = ErrorException(
-        "`MathOptInterface.GreaterThan` is not a " *
-        "concrete type. Did you miss a type parameter?",
+        """
+        `MathOptInterface.GreaterThan` is not a concrete type. Did you miss a type parameter?
+
+        Provide a concrete type such as `AffExpr` instead of `GenericAffExpr`, or `MOI.GreaterThan{Float64}` instead of `MOI.GreaterThan`.
+        """,
     )
     @test_throws err num_constraints(model, AffExpr, MOI.GreaterThan)
     @test_throws err all_constraints(model, AffExpr, MOI.GreaterThan)
     err = ErrorException(
-        "`JuMP.GenericAffExpr` is not a concrete type. Did you miss a type parameter?",
+        """
+        `JuMP.GenericAffExpr` is not a concrete type. Did you miss a type parameter?
+
+        Provide a concrete type such as `AffExpr` instead of `GenericAffExpr`, or `MOI.GreaterThan{Float64}` instead of `MOI.GreaterThan`.
+        """,
     )
     @test_throws err try
         num_constraints(model, GenericAffExpr, MOI.ZeroOne)
@@ -852,8 +960,11 @@ function test_all_constraints_vector()
     @test isempty(aff_constraints)
     err = ErrorException(
         replace(
-            "`$(GenericAffExpr{Float64})` is not a concrete type. Did you " *
-            "miss a type parameter?",
+            """
+            `$(GenericAffExpr{Float64})` is not a concrete type. Did you miss a type parameter?
+
+            Provide a concrete type such as `AffExpr` instead of `GenericAffExpr`, or `MOI.GreaterThan{Float64}` instead of `MOI.GreaterThan`.
+            """,
             "" => "",
         ),
     )
@@ -876,8 +987,11 @@ function test_all_constraints_vector()
         error(replace(e.msg, "" => ""))
     end
     err = ErrorException(
-        "`MathOptInterface.SOS1` is not a " *
-        "concrete type. Did you miss a type parameter?",
+        """
+        `MathOptInterface.SOS1` is not a concrete type. Did you miss a type parameter?
+
+        Provide a concrete type such as `AffExpr` instead of `GenericAffExpr`, or `MOI.GreaterThan{Float64}` instead of `MOI.GreaterThan`.
+        """,
     )
     @test_throws err all_constraints(
         model,
@@ -1133,6 +1247,7 @@ function _test_shadow_price_util(
     )
     optimize!(model)
     mock_optimizer = unsafe_backend(model)
+    MOI.set(mock_optimizer, MOI.ResultCount(), 1)
     MOI.set(mock_optimizer, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock_optimizer, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     optimize!(model)
@@ -1527,6 +1642,7 @@ function test_Hermitian_PSD_constraint()
     MOIU.attach_optimizer(model)
     model.is_model_dirty = false
     mock_optimizer = unsafe_backend(model)
+    MOI.set(mock_optimizer, MOI.ResultCount(), 1)
     MOI.set(mock_optimizer, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock_optimizer, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     F = MOI.VectorAffineFunction{Float64}
@@ -1560,14 +1676,17 @@ function test_extension_HermitianPSDCone_errors(
     @variable(model, y)
     aff_str = "$AffExprType"
     err = ErrorException(
-        "In `@constraint(model, H in HermitianPSDCone(), unknown_kw = 1)`:" *
-        " Unrecognized constraint building format. Tried to invoke " *
-        "`build_constraint(error, $aff_str[" *
-        "x im; -im -y], $(HermitianPSDCone()); unknown_kw = 1)`, but no " *
-        "such method exists. This is due to specifying an unrecognized " *
-        "function, constraint set, and/or extra positional/keyword " *
-        "arguments.\n\nIf you're trying to create a JuMP extension, you " *
-        "need to implement `build_constraint` to accomodate these arguments.",
+        """
+        In `@constraint(model, H in HermitianPSDCone(), unknown_kw = 1)`:
+
+        Unrecognized constraint format: no method \
+        `build_constraint(error, $aff_str[x im; -im -y], $(HermitianPSDCone()); unknown_kw = 1)` \
+        exists.
+
+        This is due to an unrecognized function, constraint set, and/or \
+        extra arguments. If you are writing a JuMP extension, implement \
+        `build_constraint` to accommodate these arguments.
+        """,
     )
     H = LinearAlgebra.Hermitian([x 1im; -1im -y])
     @test_throws_runtime(
@@ -1716,6 +1835,7 @@ function test_eltype_for_constraint_primal_float64()
     @constraint(model, c6, [x^2] == [1.0])
     MOI.Utilities.attach_optimizer(model)
     mock = unsafe_backend(model)
+    MOI.set(mock, MOI.ResultCount(), 1)
     MOI.set(mock, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     MOI.set(mock, MOI.VariablePrimal(), optimizer_index(x), 0.5)
@@ -1746,6 +1866,7 @@ function test_eltype_for_constraint_dual_float64()
     @constraint(model, c6, [x^2] == [1.0])
     MOI.Utilities.attach_optimizer(model)
     mock = unsafe_backend(model)
+    MOI.set(mock, MOI.ResultCount(), 1)
     MOI.set(mock, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     MOI.set(mock, MOI.ConstraintDual(), optimizer_index(c1), 0.5)
@@ -1776,6 +1897,7 @@ function test_eltype_for_constraint_primal_complex_float64()
     @constraint(model, c6, [x^2] == [1.0 + 2im])
     MOI.Utilities.attach_optimizer(model)
     mock = unsafe_backend(model)
+    MOI.set(mock, MOI.ResultCount(), 1)
     MOI.set(mock, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock, MOI.DualStatus(), MOI.FEASIBLE_POINT)
     x_re, x_im = first(keys(real(x).terms)), first(keys(imag(x).terms))
@@ -1858,7 +1980,13 @@ function test_indicator_error()
     model = Model()
     @variable(model, x[1:2])
     err = ErrorException(
-        "In `@constraint(model, x[1] >= 0 --> {x[2] == 0})`: unable to build indicator constraint with the left-hand side term `(x[1] >= 0)::JuMP.NonlinearExpr`. The left-hand side must be a binary decision variable.",
+        """
+        In `@constraint(model, x[1] >= 0 --> {x[2] == 0})`:
+
+        Unable to build indicator constraint with the left-hand side term `(x[1] >= 0)::JuMP.NonlinearExpr`.
+
+        The left-hand side must be a binary decision variable.
+        """,
     )
     @test_throws_runtime err @constraint(model, x[1] >= 0 --> {x[2] == 0})
     return
@@ -1892,6 +2020,12 @@ function test_set_normalized_coefficient_quadratic_batch()
         ),
         set_normalized_coefficient([con], [x[1], x[1]], [x[1], x[2]], [4, 5]),
     )
+    @test_throws(
+        DimensionMismatch(
+            "The number of constraints (2), variables (2, 1) and coefficients (2) must match",
+        ),
+        set_normalized_coefficient([con, con], [x[1], x[1]], [x[1]], [4, 5]),
+    )
     return
 end
 
@@ -1914,7 +2048,13 @@ function test_symmetric_matrix_inequality()
         @test primal == LinearAlgebra.Symmetric([-5.0 -2.0; -2.0 -4.0])
         @test_throws_runtime(
             ErrorException(
-                "In `@constraint(model, x <= y, set)`: The syntax `x <= y, $set` not supported. Use `y >= x, $set` instead.",
+                """
+                In `@constraint(model, x <= y, set)`:
+
+                The syntax `x <= y, $set` not supported.
+
+                Use the syntax `@constraint(model, y >= x, $set)` instead.
+                """,
             ),
             @constraint(model, x <= y, set),
         )
@@ -1941,7 +2081,13 @@ function test_matrix_inequality()
         @test primal == [-6.0 -7.0 -8.0; -4.0 -7.0 -7.0]
         @test_throws_runtime(
             ErrorException(
-                "In `@constraint(model, x <= y, set)`: The syntax `x <= y, $set` not supported. Use `y >= x, $set` instead.",
+                """
+                In `@constraint(model, x <= y, set)`:
+
+                The syntax `x <= y, $set` not supported.
+
+                Use the syntax `@constraint(model, y >= x, $set)` instead.
+                """,
             ),
             @constraint(model, x <= y, set),
         )
@@ -1999,25 +2145,25 @@ function test_matrix_ambiguous_greater_than_inequality()
     set_start_value.(y, [7 9 11; 8 12 13])
     err = ErrorException(
         """
-        In `@constraint(model, x >= y)`: \nThe syntax `x >= y` is ambiguous for matrices because we cannot tell if
-        you intend a positive semidefinite constraint or an elementwise
-        inequality.
+        In `@constraint(model, x >= y)`:
 
-        To create a positive semidefinite constraint, pass `PSDCone()` or
+        The syntax `x >= y` is ambiguous for matrices because JuMP cannot \
+        determine if you intend a positive semidefinite constraint or an \
+        elementwise inequality.
+
+        To create a positive semidefinite constraint, pass `PSDCone()` or \
         `HermitianPSDCone()`:
-
         ```julia
         @constraint(model, x >= y, PSDCone())
         ```
-
-        To create an element-wise inequality, pass `Nonnegatives()`, or use
+        To create an elementwise inequality, pass `Nonnegatives()` or use \
         broadcasting:
-
         ```julia
         @constraint(model, x >= y, Nonnegatives())
         # or
         @constraint(model, x .>= y)
-        ```""",
+        ```
+        """,
     )
     @test_throws_runtime(err, @constraint(model, x >= y))
     c = @constraint(model, x - y in Nonnegatives())
@@ -2033,25 +2179,25 @@ function test_matrix_ambiguous_less_than_inequality()
     set_start_value.(y, [7 9 11; 8 12 13])
     err = ErrorException(
         """
-        In `@constraint(model, x <= y)`: \nThe syntax `x <= y` is ambiguous for matrices because we cannot tell if
-        you intend a positive semidefinite constraint or an elementwise
-        inequality.
+        In `@constraint(model, x <= y)`:
 
-        To create a positive semidefinite constraint, reverse the sense of the
-        inequality and pass `PSDCone()` or `HermitianPSDCone()`:
+        The syntax `x <= y` is ambiguous for matrices because JuMP cannot \
+        determine if you intend a positive semidefinite constraint or an \
+        elementwise inequality.
 
+        To create a positive semidefinite constraint, reverse the sense of \
+        the inequality and pass `PSDCone()` or `HermitianPSDCone()`:
         ```julia
         @constraint(model, y >= x, PSDCone())
         ```
-
-        To create an element-wise inequality, reverse the sense of the
-        inequality and pass `Nonnegatives()`, or use broadcasting:
-
+        To create an elementwise inequality, reverse the sense of the \
+        inequality and pass `Nonnegatives()` or use broadcasting:
         ```julia
         @constraint(model, y >= x, Nonnegatives())
         # or
         @constraint(model, x .<= y)
-        ```""",
+        ```
+        """,
     )
     @test_throws_runtime(err, @constraint(model, x <= y))
     c = @constraint(model, x - y in Nonpositives())
@@ -2182,8 +2328,11 @@ function test_shadow_price_errors()
     @constraint(model, c4, x in MOI.Interval(0.0, 1.0))
     @test_throws(
         ErrorException(
-            "The shadow price is not available because no dual result is " *
-            "available.",
+            """
+            The shadow price is not available because no dual result is available.
+
+            Call `optimize!(model)` before querying the shadow price, and check `has_duals(model)` to verify that a dual solution exists.
+            """,
         ),
         shadow_price(c1),
     )
@@ -2198,7 +2347,11 @@ function test_shadow_price_errors()
     optimize!(model)
     @test_throws(
         ErrorException(
-            "The shadow price is not available because the objective sense $FEASIBILITY_SENSE is not minimization or maximization.",
+            """
+            The shadow price is not available because the objective sense $FEASIBILITY_SENSE is not minimization or maximization.
+
+            Set an objective using `@objective(model, Min, ...)` or `@objective(model, Max, ...)` before querying the shadow price.
+            """,
         ),
         shadow_price(c1),
     )
@@ -2208,7 +2361,11 @@ function test_shadow_price_errors()
     @test shadow_price(c3) == -1.0
     @test_throws(
         ErrorException(
-            "The shadow price is not defined or not implemented for this type of constraint.",
+            """
+            The shadow price is not defined or not implemented for constraints with set type $(MOI.Interval{Float64}).
+
+            Shadow prices are only supported for `LessThan`, `GreaterThan`, and `EqualTo` constraints.
+            """,
         ),
         shadow_price(c4),
     )
@@ -2218,7 +2375,11 @@ function test_shadow_price_errors()
     @test shadow_price(c3) == 1.0
     @test_throws(
         ErrorException(
-            "The shadow price is not defined or not implemented for this type of constraint.",
+            """
+            The shadow price is not defined or not implemented for constraints with set type $(MOI.Interval{Float64}).
+
+            Shadow prices are only supported for `LessThan`, `GreaterThan`, and `EqualTo` constraints.
+            """,
         ),
         shadow_price(c4),
     )
@@ -2243,6 +2404,42 @@ function test_reshape_vector_nothing()
     @variable(model, x[1:2, 1:2], PSD)
     c = VariableInSetRef(x)
     @test dual_start_value(c) === nothing
+    return
+end
+
+function test_check_belongs_to_model_scalar()
+    model = Model()
+    @variable(model, x)
+    c = @constraint(model, 2 * x + 1 == 0)
+    o = constraint_object(c)
+    check_belongs_to_model(o, model)
+    @test isapprox(moi_function(o), moi_function(model, o))
+    return
+end
+
+function test_check_belongs_to_model_vector()
+    model = Model()
+    @variable(model, x)
+    c = @constraint(model, [2 * x + 1] in Zeros())
+    o = constraint_object(c)
+    check_belongs_to_model(o, model)
+    @test isapprox(moi_function(o), moi_function(model, o))
+    return
+end
+
+function test_sos_model_convert_sos1()
+    model = GenericModel{Rational{Int}}()
+    @variable(model, x[1:3])
+    c = @constraint(model, x in SOS1())
+    @test constraint_object(c).set == MOI.SOS1([1 // 1, 2 // 1, 3 // 1])
+    return
+end
+
+function test_sos_model_convert_sos2()
+    model = GenericModel{Rational{Int}}()
+    @variable(model, x[1:3])
+    c = @constraint(model, x in SOS2())
+    @test constraint_object(c).set == MOI.SOS2([1 // 1, 2 // 1, 3 // 1])
     return
 end
 

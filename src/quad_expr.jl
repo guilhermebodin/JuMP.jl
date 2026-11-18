@@ -180,7 +180,7 @@ Base.broadcastable(q::GenericQuadExpr) = Ref(q)
 
 Base.conj(a::GenericQuadExpr{<:Real}) = a
 Base.real(a::GenericQuadExpr{<:Real}) = a
-Base.imag(a::GenericQuadExpr{<:Real}) = a
+Base.imag(a::GenericQuadExpr{<:Real}) = zero(a)
 Base.isreal(::GenericQuadExpr{<:Real}) = true
 
 Base.conj(a::GenericQuadExpr{<:Complex}) = map_coefficients(conj, a)
@@ -621,8 +621,17 @@ end
 function _assert_isfinite(q::GenericQuadExpr)
     _assert_isfinite(q.aff)
     for (coef, var1, var2) in quad_terms(q)
-        isfinite(coef) ||
-            error("Invalid coefficient $coef on quadratic term $var1*$var2.")
+        if !isfinite(coef)
+            error(
+                """
+                Quadratic expression contains invalid term `$coef  * $var1 * $var2`.
+
+                The coefficients in an quadratic expression must be finite. \
+                They cannot be values like `NaN`, `Inf`, or `-Inf`. Check for \
+                division by zero or other sources of non-finite values.
+                """,
+            )
+        end
     end
 end
 
@@ -687,14 +696,6 @@ end
 
 GenericQuadExpr{C,V}() where {C,V} = zero(GenericQuadExpr{C,V})
 
-function check_belongs_to_model(q::GenericQuadExpr, model::AbstractModel)
-    check_belongs_to_model(q.aff, model)
-    for variable_pair in keys(q.terms)
-        check_belongs_to_model(variable_pair.a, model)
-        check_belongs_to_model(variable_pair.b, model)
-    end
-end
-
 """
     _moi_quadratic_term(t::Tuple)
 
@@ -719,14 +720,6 @@ function MOI.ScalarQuadraticFunction(
     ]
     moi_aff = MOI.ScalarAffineFunction(q.aff)
     return MOI.ScalarQuadraticFunction(qterms, moi_aff.terms, moi_aff.constant)
-end
-
-function moi_function(aff::GenericQuadExpr)
-    return MOI.ScalarQuadraticFunction(aff)
-end
-
-function moi_function_type(::Type{<:GenericQuadExpr{T}}) where {T}
-    return MOI.ScalarQuadraticFunction{T}
 end
 
 function GenericQuadExpr{C,GenericVariableRef{T}}(
@@ -754,40 +747,6 @@ function GenericQuadExpr{C,GenericVariableRef{T}}(
         )
     end
     return quad
-end
-
-function jump_function_type(
-    ::GenericModel{T},
-    ::Type{MOI.ScalarQuadraticFunction{C}},
-) where {C,T}
-    return GenericQuadExpr{promote_type(T, C),GenericVariableRef{T}}
-end
-
-function jump_function(
-    model::GenericModel{T},
-    f::MOI.ScalarQuadraticFunction{C},
-) where {C,T}
-    S = promote_type(T, C)
-    return GenericQuadExpr{S,GenericVariableRef{T}}(model, f)
-end
-
-function jump_function_type(
-    ::GenericModel{T},
-    ::Type{MOI.VectorQuadraticFunction{C}},
-) where {C,T}
-    S = promote_type(T, C)
-    return Vector{GenericQuadExpr{S,GenericVariableRef{T}}}
-end
-
-function jump_function(
-    model::GenericModel{T},
-    f::MOI.VectorQuadraticFunction{C},
-) where {C,T}
-    S = promote_type(T, C)
-    return GenericQuadExpr{S,GenericVariableRef{T}}[
-        GenericQuadExpr{S,GenericVariableRef{T}}(model, f) for
-        f in MOIU.eachscalar(f)
-    ]
 end
 
 """
@@ -830,12 +789,6 @@ function MOI.VectorQuadraticFunction(
         constants[i] = constant(quad)
     end
     return MOI.VectorQuadraticFunction(quadratic_terms, lin_terms, constants)
-end
-
-moi_function(a::Vector{<:GenericQuadExpr}) = MOI.VectorQuadraticFunction(a)
-
-function moi_function_type(::Type{<:Vector{<:GenericQuadExpr{T}}}) where {T}
-    return MOI.VectorQuadraticFunction{T}
 end
 
 """

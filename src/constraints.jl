@@ -95,6 +95,7 @@ function check_belongs_to_model(con_ref::ConstraintRef, model::AbstractModel)
     if owner_model(con_ref) !== model
         throw(ConstraintNotOwned(con_ref))
     end
+    return
 end
 
 Base.broadcastable(con_ref::ConstraintRef) = Ref(con_ref)
@@ -432,8 +433,8 @@ if no constraint has this name attribute.
 
 Throws an error if several constraints have `name` as their name attribute.
 
-If `F` and `S` are provided, this method addititionally throws an error if the
-constraint is not an `F`-in-`S` contraint where `F` is either the JuMP or MOI
+If `F` and `S` are provided, this method additionally throws an error if the
+constraint is not an `F`-in-`S` constraint where `F` is either the JuMP or MOI
 type of the function and `S` is the MOI type of the set.
 
 Providing `F` and `S` is recommended if you know the type of the function and
@@ -529,7 +530,7 @@ end
 """
     delete(model::GenericModel, con_ref::ConstraintRef)
 
-Delete the constraint associated with `constraint_ref` from the model `model`.
+Delete the constraint associated with `con_ref` from the model `model`.
 
 Note that `delete` does not unregister the name from the model, so adding a new
 constraint of the same name will throw an error. Use [`unregister`](@ref) to
@@ -562,8 +563,12 @@ Stacktrace:
 function delete(model::GenericModel, con_ref::ConstraintRef)
     if model !== con_ref.model
         error(
-            "The constraint reference you are trying to delete does not " *
-            "belong to the model.",
+            """
+            Cannot delete this constraint because it does not belong to this model.
+
+            Use `owner_model(con_ref)` to find which model owns the constraint, then \
+            delete it from that model.
+            """,
         )
     end
     model.is_model_dirty = true
@@ -614,8 +619,13 @@ function delete(
 )
     if any(c -> model !== c.model, con_refs)
         error(
-            "A constraint reference you are trying to delete does not " *
-            "belong to the model.",
+            """
+            One or more constraints in the vector cannot be deleted because they do not \
+            belong to this model.
+
+            Use `owner_model(con_ref)` to check which model owns each constraint, then \
+            delete it from that model.
+            """,
         )
     end
     model.is_model_dirty = true
@@ -671,7 +681,7 @@ abstract type AbstractConstraint end
         coefficient_type::Type{T} = Float64,
     ) where {C<:AbstractConstraint,B<:Type{<:MOI.Bridges.AbstractBridge},T}
 
-An [`AbstractConstraint`](@ref) representinng that `constraint` that can be
+An [`AbstractConstraint`](@ref) representing a `constraint` that can be
 bridged by the bridge of type `bridge_type{coefficient_type}`.
 
 Adding a `BridgeableConstraint` to a model is equivalent to:
@@ -716,7 +726,7 @@ JuMP extensions should extend `JuMP.build_constraint` only if they also defined
  2. A missing method will not inform the users that they forgot to load the
     extension module defining the `build_constraint` method.
  3. Defining a method where neither the function nor any of the argument types
-    are defined in the package is called [*type piracy*](https://docs.julialang.org/en/v1/manual/style-guide/index.html#Avoid-type-piracy-1)
+    are defined in the package is called [*type piracy*](https://docs.julialang.org/en/v1/manual/style-guide/#avoid-type-piracy)
     and is discouraged in the Julia style guide.
 """
 struct BridgeableConstraint{C,B,T} <: AbstractConstraint
@@ -738,26 +748,14 @@ function add_constraint(
     con::BridgeableConstraint,
     name::String = "",
 )
+    # Like the generic `add_constraint`, convert to the value type of the model.
+    # This is needed for constraints that reach this method without going
+    # through the `model_convert` call of the `@constraint` macro. This happens
+    # with constraints built in `add_constraint` by an extension that delays
+    # their construction.
+    con = model_convert(model, con)
     add_bridge(model, con.bridge_type; coefficient_type = con.coefficient_type)
     return add_constraint(model, con.constraint, name)
-end
-
-"""
-    jump_function(constraint::AbstractConstraint)
-
-Return the function of the constraint `constraint` in the function-in-set form
-as a `AbstractJuMPScalar` or `Vector{AbstractJuMPScalar}`.
-"""
-jump_function(constraint::AbstractConstraint) = constraint.func
-
-"""
-    moi_function(constraint::AbstractConstraint)
-
-Return the function of the constraint `constraint` in the function-in-set form
-as a `MathOptInterface.AbstractFunction`.
-"""
-function moi_function(constraint::AbstractConstraint)
-    return moi_function(jump_function(constraint))
 end
 
 """
@@ -893,10 +891,6 @@ function constraint_object(
     return ScalarConstraint(jump_function(model, f), s)
 end
 
-function check_belongs_to_model(con::ScalarConstraint, model)
-    return check_belongs_to_model(con.func, model)
-end
-
 """
     struct VectorConstraint
 
@@ -992,12 +986,6 @@ function constraint_object(
     return VectorConstraint(jump_function(model, f), s, con_ref.shape)
 end
 
-function check_belongs_to_model(con::VectorConstraint, model)
-    for func in con.func
-        check_belongs_to_model(func, model)
-    end
-end
-
 function _moi_add_constraint(
     model::MOI.ModelLike,
     f::F,
@@ -1005,12 +993,15 @@ function _moi_add_constraint(
 ) where {F<:MOI.AbstractFunction,S<:MOI.AbstractSet}
     if !MOI.supports_constraint(model, F, S)
         error(
-            "Constraints of type $(F)-in-$(S) are not supported by the " *
-            "solver.\n\nIf you expected the solver to support your problem, " *
-            "you may have an error in your formulation. Otherwise, consider " *
-            "using a different solver.\n\nThe list of available solvers, " *
-            "along with the problem types they support, is available at " *
-            "https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.",
+            """
+            Constraints of type $(F)-in-$(S) are not supported by the solver.
+
+            If you expected the solver to support your problem, you may have an error in \
+            your formulation. Otherwise, consider using a different solver.
+
+            The list of available solvers, along with the problem types they support, is \
+            available at https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers.
+            """,
         )
     end
     return MOI.add_constraint(model, f, s)
@@ -1032,10 +1023,10 @@ function add_constraint(
     name::String = "",
 )
     con = model_convert(model, con)
+    func = moi_function(model, con)
+    set = moi_set(con)
     # The type of backend(model) is unknown so we directly redirect to another
     # function.
-    check_belongs_to_model(con, model)
-    func, set = moi_function(con), moi_set(con)
     cindex = _moi_add_constraint(
         backend(model),
         func,
@@ -1090,12 +1081,9 @@ function set_normalized_rhs(
     S<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
     F<:Union{MOI.ScalarAffineFunction{T},MOI.ScalarQuadraticFunction{T}},
 }
-    MOI.set(
-        owner_model(con_ref),
-        MOI.ConstraintSet(),
-        con_ref,
-        S(convert(T, value)),
-    )
+    model = owner_model(con_ref)
+    MOI.set(model, MOI.ConstraintSet(), con_ref, S(convert(T, value)))
+    model.is_model_dirty = true
     return
 end
 
@@ -1144,12 +1132,14 @@ function set_normalized_rhs(
     S<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
     F<:Union{MOI.ScalarAffineFunction{T},MOI.ScalarQuadraticFunction{T}},
 }
+    model = owner_model(first(constraints))
     MOI.set(
-        backend(owner_model(first(constraints))),
+        backend(model),
         MOI.ConstraintSet(),
         index.(constraints),
         S.(convert.(T, values)),
     )
+    model.is_model_dirty = true
     return
 end
 
@@ -1188,17 +1178,18 @@ end
 
 function _moi_add_to_function_constant(
     model::MOI.ModelLike,
-    ci::MOI.ConstraintIndex{
-        <:MOI.AbstractScalarFunction,
-        <:MOI.AbstractScalarSet,
-    },
+    ci::MOI.ConstraintIndex{F,S},
     value,
-)
+) where {F<:MOI.AbstractScalarFunction,S<:MOI.AbstractScalarSet}
     set = MOI.get(model, MOI.ConstraintSet(), ci)
-    if !MOI.Utilities.supports_shift_constant(typeof(set))
+    if !MOI.Utilities.supports_shift_constant(S)
         error(
-            "Unable to add to function constant for constraint type " *
-            "$(typeof(ci))",
+            """
+            Cannot add to the function constant for constraints of type $F-in-$S \
+            because the constraint set does not support shifting the constant term.
+
+            Use `set_normalized_rhs` to modify the right-hand side of scalar constraints.
+            """,
         )
     end
     new_set = MOIU.shift_constant(set, -value)
@@ -1484,15 +1475,24 @@ function shadow_price(
     model = owner_model(con_ref)
     if !has_duals(model)
         error(
-            "The shadow price is not available because no dual result is " *
-            "available.",
+            """
+            The shadow price is not available because no dual result is available.
+
+            Call `optimize!(model)` before querying the shadow price, and check \
+            `has_duals(model)` to verify that a dual solution exists.
+            """,
         )
     end
     sense = objective_sense(model)
     if sense == FEASIBILITY_SENSE
         error(
-            "The shadow price is not available because the objective sense " *
-            "$sense is not minimization or maximization.",
+            """
+            The shadow price is not available because the objective sense $sense is \
+            not minimization or maximization.
+
+            Set an objective using `@objective(model, Min, ...)` or \
+            `@objective(model, Max, ...)` before querying the shadow price.
+            """,
         )
     end
     return _shadow_price(S, dual(con_ref), sense)
@@ -1500,8 +1500,13 @@ end
 
 function _shadow_price(::Type{S}, ::Any, ::Any) where {S}
     return error(
-        "The shadow price is not defined or not implemented for this type " *
-        "of constraint.",
+        """
+        The shadow price is not defined or not implemented for constraints with \
+        set type $(S).
+
+        Shadow prices are only supported for `LessThan`, `GreaterThan`, and \
+        `EqualTo` constraints.
+        """,
     )
 end
 
@@ -1529,15 +1534,23 @@ function _shadow_price(::Type{MOI.EqualTo{T}}, dual, sense) where {T}
     end
 end
 
-function _error_if_not_concrete_type(t)
-    if !isconcretetype(t)
-        error("`$t` is not a concrete type. Did you miss a type parameter?")
+function _error_if_not_concrete_type(::Type{T}) where {T}
+    if !isconcretetype(T)
+        error(
+            """
+            `$T` is not a concrete type. Did you miss a type parameter?
+
+            Provide a concrete type such as `AffExpr` instead of `GenericAffExpr`, or \
+            `MOI.GreaterThan{Float64}` instead of `MOI.GreaterThan`.
+            """,
+        )
     end
     return
 end
+
 # `isconcretetype(Vector{Integer})` is `true`
-function _error_if_not_concrete_type(t::Type{Vector{ElT}}) where {ElT}
-    return _error_if_not_concrete_type(ElT)
+function _error_if_not_concrete_type(::Type{Vector{T}}) where {T}
+    return _error_if_not_concrete_type(T)
 end
 
 """
@@ -1645,9 +1658,6 @@ function all_constraints(
     end
     return result
 end
-
-# TODO: Support vector function types. This is blocked by not having the shape
-# information available.
 
 """
     list_of_constraint_types(model::GenericModel)::Vector{Tuple{Type,Type}}
@@ -1787,8 +1797,12 @@ end
 """
     relax_with_penalty!(
         model::GenericModel{T},
-        [penalties::Dict{ConstraintRef,T}];
-        [default::Union{Nothing,Real} = nothing,]
+        penalties::Dict{ConstraintRef,T};
+        default::Union{Nothing,Real} = nothing,
+    ) where {T}
+    relax_with_penalty!(
+        model::GenericModel{T};
+        default::Real = one(T),
     ) where {T}
 
 Destructively modify the model in-place to create a penalized relaxation of the
@@ -1881,6 +1895,7 @@ function relax_with_penalty!(
         backend(model),
         MOI.Utilities.PenaltyRelaxation(moi_penalties; default = default),
     )
+    model.is_model_dirty = true
     return Dict(
         constraint_ref_with_index(model, k) => jump_function(model, v) for
         (k, v) in map
@@ -1891,7 +1906,7 @@ function relax_with_penalty!(
     model::GenericModel{T};
     default::Real = one(T),
 ) where {T}
-    return relax_with_penalty!(model, Dict(); default = default)
+    return relax_with_penalty!(model, Dict(); default)
 end
 
 """
@@ -1900,7 +1915,7 @@ end
 JuMP uses [`model_convert`](@ref) to automatically promote [`MOI.AbstractScalarSet`](@ref)
 sets to the same [`value_type`](@ref) as the model.
 
-In cases there this is undesirable, wrap the set in `SkipModelConvertScalarSetWrapper`
+In cases where this is undesirable, wrap the set in `SkipModelConvertScalarSetWrapper`
 to pass the set un-changed to the solver.
 
 !!! warning

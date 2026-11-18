@@ -20,9 +20,18 @@
 
 # # Performance problems with sum-if formulations
 
-# The purpose of this tutorial is to explain a common performance issue that can
-# arise with summations like `sum(x[a] for a in list if condition(a))`. This
-# issue is particularly common in models with graph or network structures.
+# A common performance issue in JuMP arises with filtered summations like
+# `sum(x[a] for a in list if condition(a))`, which can be surprisingly slow in
+# large models with graph or network structures. This tutorial explains why this
+# happens and shows how to restructure data to avoid the bottleneck.
+#
+# **Learning intentions:**
+# * Identify when `sum(... if condition)` generators are the performance
+#   bottleneck in a JuMP model
+# * Restructure graph or network data into adjacency lists so that constraint
+#   generation loops over only the relevant elements
+# * Measure and compare model build times to quantify the improvement from the
+#   restructured formulation
 
 # !!! tip
 #     This tutorial is more advanced than the other "Getting started" tutorials.
@@ -98,7 +107,7 @@ model = Model()
 # mathematical formulation of a network flow problem.
 
 # The downside to this formulation is subtle. Behind the scenes, the JuMP
-# `@constraint` macro expands to something like:
+# [`@constraint`](@ref) macro expands to something like:
 
 model = Model()
 @variable(model, flows[e in edges] >= 0)
@@ -223,7 +232,7 @@ for factor in factors
     push!(run_times_cached, @elapsed build_cached_model(graph...))
 end
 Plots.plot(; xlabel = "Factor", ylabel = "Runtime [s]")
-Plots.scatter!(factors, run_times_naive; label = "Actual")
+Plots.scatter!(factors, run_times_naive; label = "Naive")
 a, b = hcat(ones(10), factors .^ 2) \ run_times_naive
 Plots.plot!(factors, a .+ b * factors .^ 2; label = "Quadratic fit")
 Plots.scatter!(factors, run_times_cached; label = "Cached")
@@ -237,7 +246,7 @@ Plots.plot!(factors, a .+ b * factors; label = "Linear fit")
 # ## Lesson
 
 # If you write code with `sum-if` type conditions, for example,
-# `@constraint(model, [a in set], sum(x[b] for b in list if condition(a, b))`,
+# `@constraint(model, [a in set], sum(x[b] for b in list if condition(a, b)) <= 1)`,
 # you can improve the performance by caching the elements for which `condition(a, b)`
 # is true.
 

@@ -20,10 +20,17 @@
 
 # # Getting started with JuMP
 
-# This tutorial is aimed at providing a quick introduction to writing and
-# solving optimization models with JuMP.
-
-# If you're new to Julia, start by reading [Getting started with Julia](@ref).
+# This tutorial provides a quick introduction to writing and solving
+# optimization models with JuMP. If you're new to Julia, start by reading
+# [Getting started with Julia](@ref).
+#
+# **Learning intentions:**
+# * Build and solve a linear program in JuMP by declaring variables,
+#   constraints, and an objective, then calling [`optimize!`](@ref)
+# * Query the solution using [`termination_status`](@ref),
+#   [`primal_status`](@ref), [`value`](@ref), and [`shadow_price`](@ref)
+# * Add variable bounds and vectorized constraints, and configure the solver
+#   with [`set_attribute`](@ref) and [`optimizer_with_attributes`](@ref)
 
 # ## What is JuMP?
 
@@ -153,14 +160,14 @@ model = Model(HiGHS.Optimizer)
 
 # Variables can have lower and upper bounds:
 
-@variable(model, 0 <= y <= 30)
+@variable(model, 0 <= y <= 3)
 
 # The objective is set using [`@objective`](@ref):
 
 @objective(model, Min, 12x + 20y)
 
 # Constraints are modeled using [`@constraint`](@ref). Here, `c1` and `c2` are
-# the names of our constraint:
+# the names of our constraints:
 
 @constraint(model, c1, 6x + 8y >= 100)
 @constraint(model, c2, 7x + 12y >= 120)
@@ -477,7 +484,7 @@ for i in 1:3
     @constraint(model, 6x + 4y >= 5i)
 end
 
-# or use for each loops inside the `@constraint` macro:
+# or use for each loops inside the [`@constraint`](@ref) macro:
 
 @constraint(model, [i in 1:3], 6x + 4y >= 5i)
 

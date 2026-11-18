@@ -20,8 +20,16 @@
 
 # # Getting started with Julia
 
-# Because JuMP is embedded in Julia, knowing some basic Julia is important
-# before you start learning JuMP.
+# JuMP is embedded in Julia, so knowing some basic Julia is essential before
+# learning JuMP. This tutorial provides a minimalist crash course in the Julia
+# concepts most relevant to writing optimization models.
+#
+# **Learning intentions:**
+# * Install Julia and an IDE, and navigate the Julia REPL and package manager
+# * Use Julia's core data types—numbers, strings, vectors, matrices, and
+#   dictionaries—to represent problem data
+# * Write Julia functions, control flow, and comprehensions to express
+#   concise, readable programs
 
 # !!! tip
 #     This tutorial is designed to provide a minimalist crash course in the
@@ -156,7 +164,7 @@ x * (1 - 2im)
 #     The curly brackets surround what we call the _parameters_ of a type. You
 #     can read `Complex{Int64}`  as "a complex number, where the real and
 #     imaginary parts are represented by `Int64`." If we call
-#     `typeof(1.0 + 2.0im)` it will be `Complex{Float64}`, which a complex
+#     `typeof(1.0 + 2.0im)` it will be `Complex{Float64}`, which is a complex
 #     number with the parts represented by `Float64`.
 
 # There are also some cool things like an irrational representation of π.
@@ -222,8 +230,8 @@ isapprox(sin(2π / 3), √3 / 2; atol = 1e-8)
 #     whether a binary variable is 0 using `value(z) == 0`. Always remember to
 #     use something like `isapprox` when comparing floating point numbers.
 
-# Note that `isapprox` will always return `false` if one of the number being
-# compared is `0` and `atol` is zero (its default value).
+# Note that `isapprox` will always return `false` if one of the numbers being
+# compared is `0`, the other is nonzero, and `atol` is zero (its default value).
 
 1e-300 ≈ 0.0
 
@@ -611,7 +619,7 @@ end                         #hide
 
 # A `MethodError` means that you passed a
 # function something that didn't match the type that it was expecting. In this
-# case, the error message says that it doesn't know how to handle an
+# case, the error message says that it doesn't know how to handle a
 # `Vector{Int64}`, but it does know how to handle `Float64`, `Int64`, and
 # `Number`.
 #
@@ -621,8 +629,8 @@ end                         #hide
 
 # ### Broadcasting
 
-# In the example above, we didn't define what to do if `f` was passed a
-# `Vector`. Luckily, Julia provides a convenient syntax for mapping `f`
+# In the example above, we didn't define what to do if `foo` was passed a
+# `Vector`. Luckily, Julia provides a convenient syntax for mapping `foo`
 # element-wise over arrays. Just add a `.` between the name of the function and
 # the opening `(`. This works for _any_ function, including functions with
 # multiple arguments. For example:
@@ -663,10 +671,10 @@ println("immutable_type: $(immutable_type)")
 # function changed the value outside of the function. In contrast, the change
 # to `immutable_type` didn't modify the value outside the function.
 
-# You can check mutability with the `isimmutable` function:
+# You can check mutability with the `ismutable` function:
 
-isimmutable([1, 2, 3])
-isimmutable(1)
+ismutable([1, 2, 3])
+ismutable(1)
 
 # ## The package manager
 
@@ -696,7 +704,7 @@ Random.seed!(33)
 # For a complete list of registered Julia packages see the package listing at
 # [JuliaHub](https://juliahub.com).
 
-# From time to you may wish to use a Julia package that is not registered.  In
+# From time to time you may wish to use a Julia package that is not registered.  In
 # this case a git repository URL can be used to install the package.
 # ```julia
 # using Pkg

@@ -7,8 +7,12 @@ function _throw_write_to_file_explanatory_message(
     ::MOI.UnsupportedConstraint{F,S},
 ) where {F,S}
     return error(
-        "Unable to write problem to file because the chosen file format " *
-        "doesn't support constraints of the type $F-in-$S.",
+        """
+        Unable to write the model to file because the chosen file format does not \
+        support constraints of type $F-in-$S.
+
+        Try a different file format that supports this constraint type.
+        """,
     )
 end
 
@@ -50,7 +54,7 @@ If the filename ends in `.bz2`, the file will be compressed using BZip2.
 
 Other `kwargs` are passed to the `Model` constructor of the chosen format.
 
-For details, see the docstring each file format's `Model` constructor. For
+For details, see the docstring of each file format's `Model` constructor. For
 example, [`MOI.FileFormats.MPS.Model`](@ref).
 
 ## Example
@@ -157,7 +161,7 @@ Other `kwargs` are passed to the `Model` constructor of the chosen format.
 
 Other `kwargs` are passed to the `Model` constructor of the chosen format.
 
-For details, see the docstring each file format's `Model` constructor. For
+For details, see the docstring of each file format's `Model` constructor. For
 example, [`MOI.FileFormats.MPS.Model`](@ref).
 
 ## Example
@@ -197,7 +201,13 @@ function Base.write(
     kwargs...,
 )
     if format == MOI.FileFormats.FORMAT_AUTOMATIC
-        error("Unable to infer the file format from an IO stream.")
+        error(
+            """
+            Unable to infer the file format from an IO stream.
+
+            Pass the `format` keyword argument explicitly, for example: `write(io, model; format = MOI.FileFormats.FORMAT_MPS)`.
+            """,
+        )
     end
     dest = _copy_to_bridged_model(model) do
         return MOI.FileFormats.Model(; format = format, kwargs...)
@@ -229,7 +239,7 @@ See [`MOI.FileFormats.FileFormat`](@ref) for a list of supported formats.
 
 Other `kwargs` are passed to the `Model` constructor of the chosen format.
 
-For details, see the docstring each file format's `Model` constructor. For
+For details, see the docstring of each file format's `Model` constructor. For
 example, [`MOI.FileFormats.MPS.Model`](@ref).
 
 ## Nonlinear models
@@ -288,10 +298,10 @@ end
 """
     Base.read(
         io::IO,
-        ::Type{<:GenericModel};
+        ::Type{GenericModel{T}};
         format::MOI.FileFormats.FileFormat,
         kwargs...,
-    )
+    ) where {T}
 
 Return a JuMP model read from `io` in the format `format`.
 
@@ -301,7 +311,7 @@ See [`MOI.FileFormats.FileFormat`](@ref) for a list of supported formats.
 
 Other `kwargs` are passed to the `Model` constructor of the chosen format.
 
-For details, see the docstring each file format's `Model` constructor. For
+For details, see the docstring of each file format's `Model` constructor. For
 example, [`MOI.FileFormats.MPS.Model`](@ref).
 
 ## Nonlinear models
@@ -353,7 +363,13 @@ function Base.read(
     kwargs...,
 ) where {T}
     if format == MOI.FileFormats.FORMAT_AUTOMATIC
-        error("Unable to infer the file format from an IO stream.")
+        error(
+            """
+            Unable to infer the file format from an IO stream.
+
+            Pass the `format` keyword argument explicitly, for example: `read(io, Model; format = MOI.FileFormats.FORMAT_MPS)`.
+            """,
+        )
     end
     src = MOI.FileFormats.Model(; format = format, kwargs...)
     read!(io, src)

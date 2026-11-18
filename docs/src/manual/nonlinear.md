@@ -41,8 +41,8 @@ exp(x[1]) - 1 ≤ 0
 
 julia> @constraint(model, con[i = 1:2], 2^x[i] >= i)
 2-element Vector{ConstraintRef{Model, MathOptInterface.ConstraintIndex{MathOptInterface.ScalarNonlinearFunction, MathOptInterface.GreaterThan{Float64}}, ScalarShape}}:
- con[1] : (2 ^ x[1]) - 1 ≥ 0
- con[2] : (2 ^ x[2]) - 2 ≥ 0
+ con[1] : 2 ^ x[1] - 1 ≥ 0
+ con[2] : 2 ^ x[2] - 2 ≥ 0
 ```
 
 Delete a nonlinear constraint using [`delete`](@ref):
@@ -128,7 +128,7 @@ A [`NonlinearExpr`](@ref) can be used in [`@objective`](@ref),
 
 ```jldoctest nl_expression
 julia> @objective(model, Min, expr^2 + 1)
-((exp(x[1]) + sqrt(x[2])) ^ 2) + 1
+(exp(x[1]) + sqrt(x[2])) ^ 2 + 1
 
 julia> @constraint(model, [i = 1:2], my_expr[i] <= i)
 2-element Vector{ConstraintRef{Model, MathOptInterface.ConstraintIndex{MathOptInterface.ScalarNonlinearFunction, MathOptInterface.LessThan{Float64}}, ScalarShape}}:
@@ -169,10 +169,10 @@ julia> model = Model();
 julia> @variable(model, x[1:2]);
 
 julia> @expression(model, expr, sum(exp.(x)))
-0 + exp(x[2]) + exp(x[1])
+exp(x[1]) + exp(x[2])
 
 julia> @objective(model, Min, sum(exp(x[i]) / expr for i in 1:2))
-(exp(x[1]) / (0 + exp(x[2]) + exp(x[1]))) + (exp(x[2]) / (0 + exp(x[2]) + exp(x[1])))
+exp(x[1]) / (exp(x[1]) + exp(x[2])) + exp(x[2]) / (exp(x[1]) + exp(x[2]))
 ```
 In this model, JuMP will compute the value (and derivatives) of the denominator
 twice, without realizing that it is the same expression.
@@ -189,10 +189,10 @@ julia> @variable(model, x[1:2]);
 julia> @variable(model, expr);
 
 julia> @constraint(model, expr == sum(exp.(x)))
-expr - (0 + exp(x[2]) + exp(x[1])) = 0
+expr - (exp(x[1]) + exp(x[2])) = 0
 
 julia> @objective(model, Min, sum(exp(x[i]) / expr for i in 1:2))
-(exp(x[1]) / expr) + (exp(x[2]) / expr)
+exp(x[1]) / expr + exp(x[2]) / expr
 ```
 
 The reason JuMP does not perform common subexpression elimination automatically
@@ -207,7 +207,7 @@ JuMP computes first- and second-order derivatives using sparse reverse-mode
 automatic differentiation. For details, see [ReverseAD](@ref).
 
 For a tutorial on how to construct and query the derivatives, see
-[Computing Hessians](@ref)
+[Computing Hessians](@ref).
 
 ## Nonlinear expressions in detail
 
@@ -254,7 +254,7 @@ julia> aff = x + 1;
 julia> quad = x^2 + x;
 
 julia> expr = cos(x) * sin(quad) + aff
-(cos(x) * sin(x² + x)) + (x + 1)
+cos(x) * sin(x² + x) + (x + 1)
 ```
 
 ### Supported operators
@@ -542,7 +542,7 @@ Instead, unless [Gradients and Hessians](@ref) are explicitly provided,
 user-defined operators must support automatic differentiation by
 [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl).
 
-The use of FowardDiff.jl has two important implications:
+The use of ForwardDiff.jl has two important implications:
 
  1. ForwardDiff.jl supports only a limited subset of Julia. If you encounter an
     error adding the operator, see [Common mistakes when writing a user-defined operator](@ref).
@@ -583,8 +583,7 @@ julia> f(x) = x^2
 f (generic function with 1 method)
 
 julia> @operator(model, f, 1, f)
-ERROR: Unable to add the nonlinear operator `:f` with the same name as
-an existing function.
+ERROR: Unable to add the nonlinear operator `:f` with the same name as an existing function.
 [...]
 ```
 This error occurs because `@operator(model, f, 1, f)` is equivalent to:
@@ -789,7 +788,7 @@ ERROR: MethodError: no method matching Float64(::ForwardDiff.Dual{ForwardDiff.Ta
 ```
 
 Unfortunately, the list of calls supported by ForwardDiff is too large to
-enumerate what is an isn't allowed, so the best advice is to try and see if it
+enumerate what is and isn't allowed, so the best advice is to try and see if it
 works.
 
 #### Operator does not accept splatted input

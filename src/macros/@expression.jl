@@ -16,8 +16,8 @@ and the expression may depend on the indices of the index sets.
 
 ## Keyword arguments
 
- * `container = :Auto`: force the container type by passing `container = Array`,
-   `container = DenseAxisArray`, `container = SparseAxisArray`, or any another
+ * `container = Auto`: force the container type by passing `container = Array`,
+   `container = DenseAxisArray`, `container = SparseAxisArray`, or any other
    container type which is supported by a JuMP extension.
 
 ## Example
@@ -72,7 +72,13 @@ macro expression(input_args...)
         valid_kwargs = [:container],
     )
     if Meta.isexpr(args[2], :block)
-        error_fn("Invalid syntax. Did you mean to use `@expressions`?")
+        error_fn(
+            """
+            Invalid syntax. The expression cannot be a `begin ... end` block.
+
+            To add multiple expressions at once, use the `@expressions` macro instead.
+            """,
+        )
     end
     name_expr = length(args) == 3 ? args[2] : nothing
     name, index_vars, indices = Containers.parse_ref_sets(

@@ -489,7 +489,7 @@ end
 Updates `expression` in-place to `expression + (*)(terms...)`.
 
 This is typically much more efficient than `expression += (*)(terms...)` because
-it avoids the temorary allocation of the right-hand side term.
+it avoids the temporary allocation of the right-hand side term.
 
 For example, `add_to_expression!(expression, a, b)` produces the same result as
 `expression += a*b`, and `add_to_expression!(expression, a)` produces the same result as
@@ -698,6 +698,22 @@ function Base.convert(
     )
 end
 
+function Base.convert(
+    ::Type{V},
+    expr::GenericAffExpr{<:Number,V},
+) where {V<:GenericVariableRef}
+    if !iszero(expr.constant)
+        throw(InexactError(:convert, V, expr))
+    elseif length(expr.terms) != 1
+        throw(InexactError(:convert, V, expr))
+    end
+    x, c = only(expr.terms)
+    if !isone(c)
+        throw(InexactError(:convert, V, expr))
+    end
+    return x
+end
+
 """
     AffExpr
 
@@ -710,13 +726,24 @@ const AffExpr = GenericAffExpr{Float64,VariableRef}
 function _assert_isfinite(a::GenericAffExpr)
     for (coef, var) in linear_terms(a)
         if !isfinite(coef)
-            error("Invalid coefficient $coef on variable $var.")
+            error(
+                """
+                Affine expression contains an invalid term `$coef * $var`.
+
+                The coefficients in an affine expression must be finite. They cannot
+                be values like `NaN`, `Inf`, or `-Inf`.
+                """,
+            )
         end
     end
     if isnan(a.constant)
         error(
-            "Expression contains an invalid NaN constant. This could be " *
-            "produced by `Inf - Inf`.",
+            """
+            The constant in the affine expression is `NaN`.
+
+            Expressions must have a finite constant. A constant like `NaN` could be
+            produced by an operation like `Inf - Inf` or `0 / 0`.
+            """,
         )
     end
     return
@@ -736,13 +763,6 @@ function value(a::GenericAffExpr; result::Int = 1)
     end
 end
 
-function check_belongs_to_model(a::GenericAffExpr, model::AbstractModel)
-    for variable in keys(a.terms)
-        check_belongs_to_model(variable, model)
-    end
-    return
-end
-
 # Note: No validation is performed that the variables in the AffExpr belong to
 # the same model. The verification is done in `check_belongs_to_model` which
 # should be called before calling `MOI.ScalarAffineFunction`.
@@ -754,114 +774,6 @@ function MOI.ScalarAffineFunction(
         MOI.ScalarAffineTerm(t[1], index(t[2])) for t in linear_terms(a)
     ]
     return MOI.ScalarAffineFunction(terms, a.constant)
-end
-
-"""
-    moi_function(x::AbstractJuMPScalar)
-    moi_function(x::AbstractArray{<:AbstractJuMPScalar})
-
-Given a JuMP object `x`, return the MathOptInterface equivalent.
-
-See also: [`jump_function`](@ref).
-
-## Example
-
-```jldoctest
-julia> model = Model();
-
-julia> @variable(model, x);
-
-julia> f = 2.0 * x + 1.0
-2 x + 1
-
-julia> moi_function(f)
-1.0 + 2.0 MOI.VariableIndex(1)
-```
-"""
-function moi_function end
-
-function moi_function(x::AbstractArray{AbstractJuMPScalar})
-    return error(
-        "Unable to convert array of type `::$(typeof(x))` to an equivalent " *
-        "function in MathOptInterface because the array has the abstract " *
-        "element type `AbstractJuMPScalar`. To fix this error, convert every " *
-        "element in the array to the same concrete element type.\n\n" *
-        """For example, instead of:
-        ```julia
-        model = Model();
-        @variable(model, x);
-        y = AbstractJuMPScalar[x, sin(x)]
-        @objective(model, Min, y)
-        ```
-        do
-        ```julia
-        @objective(model, Min, convert.(NonlinearExpr, y))
-        ```
-        """,
-    )
-end
-
-"""
-    moi_function_type(::Type{T}) where {T}
-
-Given a JuMP object type `T`, return the MathOptInterface equivalent.
-
-See also: [`jump_function_type`](@ref).
-
-## Example
-
-```jldoctest
-julia> moi_function_type(AffExpr)
-MathOptInterface.ScalarAffineFunction{Float64}
-```
-"""
-function moi_function_type end
-
-"""
-    jump_function(model::AbstractModel, x::MOI.AbstractFunction)
-
-Given an MathOptInterface object `x`, return the JuMP equivalent.
-
-See also: [`moi_function`](@ref).
-
-## Example
-
-```jldoctest
-julia> model = Model();
-
-julia> @variable(model, x);
-
-julia> f = 2.0 * index(x) + 1.0
-1.0 + 2.0 MOI.VariableIndex(1)
-
-julia> jump_function(model, f)
-2 x + 1
-```
-"""
-function jump_function end
-
-"""
-    jump_function_type(model::AbstractModel, ::Type{T}) where {T}
-
-Given an MathOptInterface object type `T`, return the JuMP equivalent.
-
-See also: [`moi_function_type`](@ref).
-
-## Example
-
-```jldoctest
-julia> model = Model();
-
-julia> jump_function_type(model, MOI.ScalarAffineFunction{Float64})
-AffExpr (alias for GenericAffExpr{Float64, GenericVariableRef{Float64}})
-```
-"""
-function jump_function_type end
-
-moi_function(a::GenericAffExpr) = MOI.ScalarAffineFunction(a)
-
-function moi_function_type(::Type{<:GenericAffExpr{T}}) where {T}
-    return MOI.ScalarAffineFunction{T}
 end
 
 function GenericAffExpr{C,GenericVariableRef{T}}(
@@ -877,50 +789,6 @@ function GenericAffExpr{C,GenericVariableRef{T}}(
         )
     end
     return aff
-end
-
-function jump_function_type(
-    ::GenericModel{T},
-    ::Type{MOI.ScalarAffineFunction{C}},
-) where {C,T}
-    S = promote_type(C, T)
-    return GenericAffExpr{S,GenericVariableRef{T}}
-end
-
-function jump_function(
-    model::GenericModel{T},
-    f::MOI.ScalarAffineFunction{C},
-) where {C,T}
-    S = promote_type(C, T)
-    return GenericAffExpr{S,GenericVariableRef{T}}(model, f)
-end
-
-function jump_function_type(
-    ::GenericModel{T},
-    ::Type{MOI.VectorAffineFunction{C}},
-) where {C,T}
-    S = promote_type(C, T)
-    return Vector{GenericAffExpr{S,GenericVariableRef{T}}}
-end
-
-function jump_function(
-    model::GenericModel{T},
-    f::MOI.VectorAffineFunction{C},
-) where {T,C}
-    S = promote_type(C, T)
-    ret = GenericAffExpr{S,GenericVariableRef{T}}[]
-    for scalar_f in MOIU.eachscalar(f)
-        g = GenericAffExpr{S,GenericVariableRef{T}}(scalar_f.constant)
-        for t in scalar_f.terms
-            add_to_expression!(
-                g,
-                t.coefficient,
-                GenericVariableRef(model, t.variable),
-            )
-        end
-        push!(ret, g)
-    end
-    return ret
 end
 
 """
@@ -969,32 +837,43 @@ function MOI.VectorAffineFunction(
     return MOI.VectorAffineFunction(terms, constant)
 end
 
-moi_function(a::Vector{<:GenericAffExpr}) = MOI.VectorAffineFunction(a)
-
-function moi_function_type(::Type{<:Vector{<:GenericAffExpr{T}}}) where {T}
-    return MOI.VectorAffineFunction{T}
-end
-
 """
     _eval_as_variable(f::F, x::GenericAffExpr, args...) where {F}
 
 In many cases, `@variable` can return a `GenericAffExpr` instead of a
 `GenericVariableRef`. This is particularly the case for complex-valued
 expressions. To make common operations like `lower_bound(x)` work, we should
-forward the method if and only if `x` is convertable to a `GenericVariableRef`.
+forward the method if and only if `x` is convertible to a `GenericVariableRef`.
 """
 function _eval_as_variable(f::F, x::GenericAffExpr, args...) where {F}
-    if length(x.terms) != 1
+    if !iszero(x.constant)
         error(
-            "Cannot call $f with $x because it is not an affine expression " *
-            "of one variable.",
+            """
+            Cannot call `$f` with the affine expression `$x` because the expression \
+            has a non-zero constant.
+
+            `$f` can be called only with affine expressions of the form `1.0 * x`.
+            """,
+        )
+    elseif length(x.terms) != 1
+        error(
+            """
+            Cannot call `$f` with the affine expression `$x` because the expression
+            does not have exactly one term.
+
+            `$f` can be called only with affine expressions of the form `1.0 * x`.
+            """,
         )
     end
     variable, coefficient = first(x.terms)
     if !isone(coefficient)
         error(
-            "Cannot call $f with $x because the variable has a coefficient " *
-            "that is different to `+1`.",
+            """
+            Cannot call `$f` with the affine expression `$x` because the coefficient
+            on the variable is `$coefficient`.
+
+            `$f` can be called only with affine expressions of the form `1.0 * x`.
+            """,
         )
     end
     return f(variable, args...)

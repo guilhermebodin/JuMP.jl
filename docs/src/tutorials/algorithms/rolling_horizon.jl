@@ -22,15 +22,21 @@
 #
 # **This tutorial was originally contributed by Diego Tejada.**
 #
-# The purpose of this tutorial is to demonstrate how to use [ParametricOptInterface.jl](@ref)
-# to solve a rolling horizon optimization problem.
+# This tutorial demonstrates how to use [ParametricOptInterface.jl](@ref) to
+# solve a rolling horizon optimisation problem—repeatedly solving a
+# time-dependent LP while advancing the planning window forward by one step. It
+# uses a power system with solar generation and a battery as the worked example.
 #
-# The term "rolling horizon" refers to solving a time-dependent model
-# repeatedly, where the planning interval is shifted forward in time during each
-# solution step.
-#
-# As a motivating example, this tutorial models the operations of a power system
-# with solar generation and a battery.
+# **Learning intentions:**
+# * Understand how rolling horizon trades global optimality for tractability by
+#   solving a short planning window repeatedly and keeping only the first
+#   `move_forward` decisions from each solve
+# * Use [`Parameter`](@ref) variables and [`set_parameter_value`](@ref) to
+#   update forecast data and initial conditions between windows without
+#   rebuilding the model
+# * Visualise each window's decisions alongside the stitched full-horizon
+#   solution to verify that the piecewise solves compose into a coherent
+#   trajectory
 
 # ## Required packages
 #
@@ -48,7 +54,7 @@ import Plots
 # The model is a simplified model of a power system's operations with battery
 # storage.
 #
-# We model the system of a set of time-steps $t \in 1,\ldots,T$, where each time
+# We model the system over a set of time-steps $t \in 1,\ldots,T$, where each time
 # step is a period of one hour.
 #
 # There are five types of decision variables in the model:
@@ -107,7 +113,7 @@ optimization_window = 48;
 
 # **Move Forward**: this value defines how many periods (for example, hours) we
 # will move forward to optimize the next optimization window. For this example,
-# we set the default value in 24 hours, meaning we will move one day ahead each
+# we set the default value to 24 hours, meaning we will move one day ahead each
 # time.
 
 move_forward = 24;

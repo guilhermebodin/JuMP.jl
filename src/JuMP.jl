@@ -11,9 +11,29 @@
 """
     JuMP
 
-An algebraic modeling language for Julia.
+JuMP is an algebraic modeling language for Julia.
 
-For more information, go to https://jump.dev.
+## Documentation
+
+The documentation for JuMP is hosted at https://jump.dev/JuMP.jl
+
+There is also a copy of the documentation in the `/docs/src` directory of the
+source code. To find the directory on your local machine, run
+```julia
+julia> using JuMP; pkgdir(JuMP, "docs", "src")
+```
+
+## Getting help
+
+If you need help, please ask a question on the JuMP community forum at
+https://jump.dev/forum.
+
+If you have a reproducible example of a bug in JuMP, please open a GitHub issue
+by going to https://github.com/jump-dev/JuMP.jl/issues/new.
+
+## More information
+
+For more information on JuMP, go to https://jump.dev.
 """
 module JuMP
 
@@ -52,9 +72,9 @@ See also: [`mode`](@ref).
 
 Possible values are:
 
- * [`AUTOMATIC`]: `moi_backend` field holds a CachingOptimizer in AUTOMATIC mode.
- * [`MANUAL`]: `moi_backend` field holds a CachingOptimizer in MANUAL mode.
- * [`DIRECT`]: `moi_backend` field holds an AbstractOptimizer. No extra copy of
+ * [`AUTOMATIC`](@ref): `moi_backend` field holds a CachingOptimizer in AUTOMATIC mode.
+ * [`MANUAL`](@ref): `moi_backend` field holds a CachingOptimizer in MANUAL mode.
+ * [`DIRECT`](@ref): `moi_backend` field holds an AbstractOptimizer. No extra copy of
    the model is stored. The `moi_backend` must support `add_constraint` etc.
 """
 @enum(ModelMode, AUTOMATIC, MANUAL, DIRECT)
@@ -98,46 +118,71 @@ value_type(::Type{T}) where {T<:Number} = T
 
 function value_type(::Type{T}) where {T}
     return error(
-        "Unable to compute the `value_type($T)`. If you are developing a " *
-        "JuMP extension, define a new method for `JuMP.value_type(::Type{$T})`",
+        """
+        Unable to compute `value_type($T)`.
+
+        If you are developing a JuMP extension, define a new method for \
+        `JuMP.value_type(::Type{$T})` that returns the numeric type used in your model.
+        """,
     )
 end
 
 mutable struct GenericModel{T<:Real} <: AbstractModel
+    # !!! note
+    #     When adding new fields to this struct, you must also update
+    #     `Base.empty!(::GenericModel)`.
+
     # In MANUAL and AUTOMATIC modes, CachingOptimizer.
     # In DIRECT mode, will hold an AbstractOptimizer.
     moi_backend::MOI.ModelLike
+
     # List of shapes of constraints that are not `ScalarShape` or `VectorShape`.
     shapes::Dict{MOI.ConstraintIndex,AbstractShape}
+
     # List of bridges to add in addition to the ones added in
     # `MOI.Bridges.full_bridge_optimizer`. With `BridgeableConstraint`, the
     # same bridge may be added many times so we store them in a `Set` instead
     # of, for example, a `Vector`.
+
     bridge_types::Set{Any}
+
     # Hook into a solve call...function of the form f(m::GenericModel; kwargs...),
     # where kwargs get passed along to subsequent solve calls.
     optimize_hook::Any
+
     # TODO: Document.
     nlp_model::Union{Nothing,MOI.Nonlinear.Model}
+
     # Dictionary from variable and constraint names to objects.
     obj_dict::Dict{Symbol,Any}
+
     # Number of times we add large expressions. Incremented and checked by
     # the `operator_warn` method.
     operator_counter::Int
+
     # A flag to track whether we have modified the model after calling
     # optimize!.
     is_model_dirty::Bool
+
     # Enable extensions to attach arbitrary information to a JuMP model by
     # using an extension-specific symbol as a key.
     ext::Dict{Symbol,Any}
+
     # A model-level option that is used as the default for the set_string_name
     # keyword to @variable and @constraint.
     set_string_names_on_creation::Bool
-    #
+
+    # A dictionary to map variables (or arrays of variables to their
+    # corresponding constraint index from add_constrained_variables
     variable_in_set_ref::Dict{Any,MOI.ConstraintIndex}
-    # A dictionary to store timing information from the JuMP macros.
+
+    # A dictionary (and opt-in flag) to store timing information from the JuMP
+    # macros.
     enable_macro_timing::Bool
     macro_times::Dict{Tuple{LineNumberNode,String},Float64}
+
+    # A cache to track common subexpressions based on their `objectid`.
+    subexpressions::WeakKeyDict{Any,MOI.ScalarNonlinearFunction}
 end
 
 value_type(::Type{GenericModel{T}}) where {T} = T
@@ -145,15 +190,16 @@ value_type(::Type{GenericModel{T}}) where {T} = T
 function Base.getproperty(model::GenericModel, name::Symbol)
     if name == :nlp_data
         error(
-            "The internal field `.nlp_data` was removed from `Model` in JuMP " *
-            "v.1.2.0. If you encountered this message without going " *
-            "`model.nlp_data`, it means you are using a package that is " *
-            "incompatible with your installed version of JuMP. As a " *
-            "temporary fix, install a compatible version with " *
-            "`import Pkg; Pkg.pkg\"add JuMP@1.1\"`, then restart Julia for " *
-            "the changes to take effect. In addition, you should open a " *
-            "GitHub issue for the package you are using so that the issue " *
-            "can be fixed for future users.",
+            """
+            The internal field `.nlp_data` was removed from `Model` in JuMP v1.2.0.
+
+            If you encountered this message without accessing `model.nlp_data` directly, \
+            it means you are using a package that is incompatible with your installed \
+            version of JuMP. As a temporary fix, install a compatible version with \
+            `import Pkg; Pkg.pkg"add JuMP@1.1"`, then restart Julia for the changes to \
+            take effect. You should also open a GitHub issue for the package you are \
+            using so that it can be fixed for future users.
+            """,
         )
     end
     return getfield(model, name)
@@ -229,7 +275,7 @@ in mind the following implications of creating models using this *direct* mode:
   situations can be dealt with by storing the modifications in a cache and
   loading them into the optimizer when `optimize!` is called.
 * No constraint bridging is supported by default.
-* The optimizer used cannot be changed the model is constructed.
+* The optimizer used cannot be changed after the model is constructed.
 * The model created cannot be copied.
 """
 function direct_generic_model(
@@ -251,6 +297,7 @@ function direct_generic_model(
         Dict{Any,MOI.ConstraintIndex}(),
         false,
         Dict{Tuple{LineNumberNode,String},Float64}(),
+        WeakKeyDict{Any,MOI.ScalarNonlinearFunction}(),
     )
 end
 
@@ -310,7 +357,7 @@ end
 
 Create a new instance of a JuMP model.
 
-If `optimizer_factory` is provided, the model is initialized with thhe optimizer
+If `optimizer_factory` is provided, the model is initialized with the optimizer
 returned by `MOI.instantiate(optimizer_factory)`.
 
 If `optimizer_factory` is not provided, use [`set_optimizer`](@ref) to set the
@@ -358,7 +405,7 @@ in mind the following implications of creating models using this *direct* mode:
   situations can be dealt with by storing the modifications in a cache and
   loading them into the optimizer when `optimize!` is called.
 * No constraint bridging is supported by default.
-* The optimizer used cannot be changed the model is constructed.
+* The optimizer used cannot be changed after the model is constructed.
 * The model created cannot be copied.
 """
 direct_model(backend::MOI.ModelLike) = direct_generic_model(Float64, backend)
@@ -570,8 +617,13 @@ unsafe_backend(model::GenericModel) = unsafe_backend(backend(model))
 function unsafe_backend(model::MOIU.CachingOptimizer)
     if MOIU.state(model) == MOIU.NO_OPTIMIZER
         error(
-            "Unable to get backend optimizer because CachingOptimizer is " *
-            "in state `NO_OPTIMIZER`. Call [`set_optimizer`](@ref) first.",
+            """
+            Unable to get the backend optimizer because the `CachingOptimizer` is in \
+            state `NO_OPTIMIZER`.
+
+            Call `set_optimizer(model, optimizer)` to attach an optimizer before \
+            calling `unsafe_backend`.
+            """,
         )
     end
     return unsafe_backend(model.optimizer)
@@ -692,8 +744,13 @@ _moi_call_bridge_function(::Function, ::Nothing, args...) = nothing
 
 function _moi_call_bridge_function(::Function, ::MOI.ModelLike, args...)
     return error(
-        "Cannot use bridge if `add_bridges` was set to `false` in the `Model` ",
-        "constructor.",
+        """
+        Cannot use bridge functions because `add_bridges` was set to `false` in \
+        the `Model` constructor.
+
+        Recreate the model without setting `add_bridges = false`, or avoid calling \
+        functions that require bridges.
+        """,
     )
 end
 
@@ -910,6 +967,29 @@ attributes but not optimizer attributes. Always return the argument.
 
 Note: removes extensions data.
 
+## Caution
+
+Use this function with caution. References to variables and constraints are not
+deleted, and after `empty!` they may refer to different variables in the new
+model. For example:
+```jldoctest
+julia> model = Model();
+
+julia> @variable(model, x >= 0)
+x
+
+julia> empty!(model);
+
+julia> @variable(model, y >= 2)
+y
+
+julia> lower_bound(x)
+2.0
+
+julia> x == y
+true
+```
+
 ## Example
 
 ```jldoctest
@@ -938,21 +1018,30 @@ true
 """
 function Base.empty!(model::GenericModel)::GenericModel
     # The method changes the Model object to, basically, the state it was when
-    # created (if the optimizer was already pre-configured). The exceptions
-    # are:
-    # * optimize_hook: it is basically an optimizer attribute and we promise
-    #   to leave them alone (as do MOI.empty!).
-    # * bridge_types: for consistency with MOI.empty! for
-    #   MOI.Bridges.LazyBridgeOptimizer.
-    # * operator_counter: it is just a counter for a single-time warning
-    #   message (so keeping it helps to discover inefficiencies).
+    # created (if the optimizer was already pre-configured).
     MOI.empty!(model.moi_backend)
     empty!(model.shapes)
+    # .bridge_types                     # Skip
+    #   For consistency with MOI.empty! for MOI.Bridges.LazyBridgeOptimizer.
+    # .optimize_hook                    # Skip
+    #   This is basically an optimizer attribute, and we promise to leave them
+    #   alone (as does MOI.empty!).
     model.nlp_model = nothing
     empty!(model.obj_dict)
-    empty!(model.ext)
-    empty!(model.macro_times)
+    # .operator_counter                 # Skip
+    #   This is just a counter for a single-time warning message (so keeping it
+    #   helps to discover inefficiencies).
     model.is_model_dirty = false
+    empty!(model.ext)
+    # .set_string_names_on_creation     # Skip
+    #   This is basically an optimizer attribute, and we promise to leave them
+    #   alone (as does MOI.empty!).
+    empty!(model.variable_in_set_ref)
+    # .enable_macro_timing              # Skip
+    #   This is basically an optimizer attribute, and we promise to leave them
+    #   alone (as does MOI.empty!).
+    empty!(model.macro_times)
+    empty!(model.subexpressions)
     return model
 end
 
@@ -1034,14 +1123,11 @@ julia> @variable(model, x)
 x
 
 julia> @variable(model, x)
-ERROR: An object of name x is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, for example,
-    `x = @variable(model, [1:N], ...)` where the name of the object does
-    not appear inside the macro.
+ERROR: An object of name `:x` is already registered in this model.
 
-    Alternatively, use `unregister(model, :x)` to first unregister
-    the existing name from the model. Note that this will not delete the
-    object; it will just remove the reference at `model[:x]`.
+Consider instead using the anonymous construction syntax, for example, `x = @variable(model, [1:N], ...)` where the name of the object does not appear inside the macro.
+
+Alternatively, use `unregister(model, :x)` to first unregister the existing name from the model. Note that this will not delete the object from the model; it will just remove the reference at `model[:x]`.
 
 Stacktrace:
 [...]
@@ -1156,8 +1242,8 @@ function _get_index_keyword_indexing_error()
         """
         Indexing an `Array` with keyword arguments is not supported.
 
-        Indexing with keyword arguments _is_ supported for `Container.DenseAxisArray`
-        (and `Container.SparseAxisArray`).
+        Indexing with keyword arguments _is_ supported for `Containers.DenseAxisArray`
+        (and `Containers.SparseAxisArray`).
 
         Force the container type by passing `container = DenseAxisArray` to any of
         the JuMP macros. For example:
@@ -1304,6 +1390,7 @@ include("complement.jl")
 include("copy.jl")
 include("feasibility_checker.jl")
 include("file_formats.jl")
+include("jump_moi_function.jl")
 include("lp_matrix_data.jl")
 include("lp_sensitivity2.jl")
 include("indicator.jl")

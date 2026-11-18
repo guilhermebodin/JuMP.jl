@@ -117,10 +117,9 @@ function solution_summary(
 end
 
 """
-    Base.show([io::IO], summary::SolutionSummary; verbose::Bool = false)
+    Base.show(io::IO, summary::_SolutionSummary)
 
-Write a summary of the solution results to `io` (or to `stdout` if `io` is not
-given).
+Write a summary of the solution results to `io`.
 """
 function Base.show(io::IO, summary::_SolutionSummary)
     branches = Pair{String,Any}[
@@ -160,11 +159,12 @@ function Base.show(io::IO, summary::_SolutionSummary)
         push!(last(branches[3]), "value" => primal_solution)
     end
     if summary.verbose && summary.has_duals
+        dual_solution_dict = summary.dual_solution::Dict{String,Any}
         dual_solution = Pair{String,Any}[
             "$name : " => coalesce(
-                summary.dual_solution[name],
+                dual_solution_dict[name],
                 "multiple constraints with the same name",
-            ) for name in sort(collect(keys(summary.dual_solution)))
+            ) for name in sort(collect(keys(dual_solution_dict)))
         ]
         push!(last(branches[3]), "dual" => dual_solution)
     end

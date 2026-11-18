@@ -8,12 +8,22 @@
 # **This tutorial was originally contributed by Yury Dvorkin and Miles Lubin.**
 
 # This tutorial demonstrates how to formulate basic power systems engineering
-# models in JuMP.
+# models in JuMP, covering economic dispatch and unit commitment without taking
+# into account transmission constraints. It also shows how to embed
+# piecewise-quadratic cost functions as user-defined operators to formulate a
+# nonlinear economic dispatch problem.
+#
+# **Learning intentions:**
+# * Formulate and solve economic dispatch as a linear program, then run a
+#   parametric study by modifying the objective in-place rather than rebuilding the model
+# * Extend economic dispatch to unit commitment by adding binary on/off
+#   variables and big-M constraints that couple them to generator output bounds
+# * Register a user-defined nonlinear cost function with [`@operator`](@ref)
+#   to formulate a nonlinear economic dispatch problem
 
-# We will consider basic "economic dispatch" and "unit commitment" models
-# without taking into account transmission constraints.
+# ## Required packages
 
-# For this tutorial, we use the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import DataFrames
@@ -34,7 +44,7 @@ import StatsPlots
 # \min \sum_{i \in I} c^g_{i} \cdot g_{i} + c^w \cdot w,
 # ```
 
-# where $c_{i}$ and $g_{i}$ are the incremental cost (\$/MWh) and power
+# where $c^g_{i}$ and $g_{i}$ are the incremental cost (\$/MWh) and power
 # output (MW) of the $i^{th}$ generator, respectively, and $c^w$ and $w$ are the
 # incremental cost (\$/MWh) and wind power injection (MW), respectively.
 
@@ -180,7 +190,7 @@ c_g_scale_df
 # at every iteration of the internal loop, which incurs an additional
 # computational burden. This burden can be alleviated if instead of re-building
 # the entire model, we modify the constraints or objective
-# function, as it shown in the example below.
+# function, as is shown in the example below.
 
 # Compare the computing time in case of the above and below models.
 
@@ -259,7 +269,7 @@ inplace_df
 # injection must be zero, that is, all available wind generation is spilled, to meet
 # the minimum power output constraints on generators.
 
-# In the following example, we adjust the total demand and observed how it
+# In the following example, we adjust the total demand and observe how it
 # affects wind spillage.
 
 demand_scale_df = DataFrames.DataFrame(;
@@ -346,7 +356,7 @@ Plots.plot(dispatch_plot, wind_plot)
 # constraints of the ED model as follows:
 
 # ```math
-# g^{\min}_{i} \cdot u_{t,i} \leq g_{i} \leq g^{\max}_{i} \cdot u_{t,i},
+# g^{\min}_{i} \cdot u_{i} \leq g_{i} \leq g^{\max}_{i} \cdot u_{i},
 # ```
 # where $u_{i} \in \{0,1\}.$ In this constraint, if $u_{i} = 0$, then
 # $g_{i}  = 0$. On the other hand, if $u_{i} = 1$, then

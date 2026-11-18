@@ -11,7 +11,19 @@ using Test
 function test_no_solution()
     model = Model()
     @variable(model, x, Bin)
-    @test_throws ErrorException primal_feasibility_report(model)
+    @test_throws(
+        ErrorException(
+            """
+            Unable to call the single-argument version of `primal_feasibility_report`
+            because the model does not have a primal solution available.
+
+            Either solve the model first, or pass a `point` dictionary as the
+            second argument to `primal_feasibility_report`.
+            """,
+        ),
+        primal_feasibility_report(model),
+    )
+    return
 end
 
 function test_primal_solution()
@@ -19,11 +31,13 @@ function test_primal_solution()
     @variable(model, x, Bin)
     optimize!(model)
     mock = unsafe_backend(model)
+    MOI.set(mock, MOI.ResultCount(), 1)
     MOI.set(mock, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock, MOI.PrimalStatus(), MOI.FEASIBLE_POINT)
     MOI.set(mock, MOI.VariablePrimal(), optimizer_index(x), 1.0)
     report = primal_feasibility_report(model)
     @test isempty(report)
+    return
 end
 
 function test_primal_solution_func()
@@ -31,6 +45,7 @@ function test_primal_solution_func()
     @variable(model, x, Bin)
     optimize!(model)
     mock = unsafe_backend(model)
+    MOI.set(mock, MOI.ResultCount(), 1)
     MOI.set(mock, MOI.TerminationStatus(), MOI.OPTIMAL)
     MOI.set(mock, MOI.PrimalStatus(), MOI.FEASIBLE_POINT)
     MOI.set(mock, MOI.VariablePrimal(), optimizer_index(x), 1.0)
@@ -50,6 +65,7 @@ function test_feasible()
     report =
         primal_feasibility_report(model, Dict(x => 0.0, y => 0.0, z => 0.5))
     @test isempty(report)
+    return
 end
 
 function test_missing()
@@ -62,6 +78,7 @@ function test_missing()
         primal_feasibility_report(model, Dict(z => 0.0); skip_missing = true)
     @test report[FixRef(z)] == 0.5
     @test length(report) == 1
+    return
 end
 
 function test_missing_error()
@@ -69,11 +86,18 @@ function test_missing_error()
     @variable(model, x, Bin)
     @variable(model, 0 <= y <= 2, Int)
     point = Dict(x => 0.1)
-    err = ErrorException(
-        "point does not contain a value for variable $(y). Provide a value, " *
-        "or pass `skip_missing = true`.",
+    @test_throws(
+        ErrorException(
+            """
+            The `point` dictionary does not contain a value for the variable `$y`.
+
+            Provide a value, or pass `; skip_missing = true` as a keyword
+            argument to `primal_feasibility_report`.
+            """,
+        ),
+        primal_feasibility_report(model, point),
     )
-    @test_throws err primal_feasibility_report(model, point)
+    return
 end
 
 function test_bounds()
@@ -88,6 +112,7 @@ function test_bounds()
     @test report[IntegerRef(y)] ≈ 0.1
     @test report[FixRef(z)] ≈ 0.5
     @test length(report) == 4
+    return
 end
 
 function test_scalar_affine()
@@ -103,6 +128,7 @@ function test_scalar_affine()
     @test report[c3] ≈ 0.1
     @test report[c4] ≈ 0.5
     @test length(report) == 4
+    return
 end
 
 function test_scalar_affine_func()
@@ -136,6 +162,7 @@ function test_scalar_quadratic()
     @test report[c3] ≈ 0.9
     @test report[c4] ≈ 1.5
     @test length(report) == 4
+    return
 end
 
 function test_vector()
@@ -152,6 +179,7 @@ function test_vector()
     @test !haskey(report, c3)
     @test report[c4] ≈ sqrt(2)
     @test length(report) == 3
+    return
 end
 
 function test_vector_affine()
@@ -168,6 +196,7 @@ function test_vector_affine()
     @test !haskey(report, c3)
     @test report[c4] ≈ sqrt(8)
     @test length(report) == 3
+    return
 end
 
 function test_nonlinear()
@@ -182,6 +211,7 @@ function test_nonlinear()
     @test !haskey(report, c2)
     @test report[c3] ≈ 2 - exp(0.5)
     @test report[c4] ≈ 0.125
+    return
 end
 
 function test_nonlinear_missing()
@@ -190,11 +220,19 @@ function test_nonlinear_missing()
     @NLconstraint(model, c1, sin(x) <= 0.0)
     @test_throws(
         ErrorException(
-            "`skip_missing = true` is not allowed when nonlinear constraints " *
-            "are present.",
+            """
+            The keyword argument `; skip_missing = true` cannot be used when
+            legacy nonlinear constraints (added via `@NLconstraint`) are present,
+            because the legacy nonlinear evaluator requires all variables to
+            have a finite value.
+
+            Ensure all variables in `point` have values, or remove the nonlinear
+            constraints.
+            """,
         ),
         primal_feasibility_report(model, Dict(x => 0.5); skip_missing = true)
     )
+    return
 end
 
 function test_nonlinear_Float32()
@@ -212,6 +250,66 @@ function test_nonlinear_Float32()
     @test report[c3] === 1.0f0 - cos(2.0f0)
     @test report[c4] === sqrt(2.0f0) - 1.0f0
     @test report[c5] === 2.0f0 - sqrt(2.0f0)
+    return
+end
+
+function test_nonlinear_expr_missing()
+    model = Model()
+    @variable(model, x[1:3] >= 0)
+    @constraint(model, c1, sin(x[1]) == 0.0)
+    @constraint(model, c2, sin(x[2]) == 0.0)
+    @constraint(model, c3, log(1 + x[2]) == 0.0)
+    @constraint(model, c4, log(1 + x[3]) == 0.0)
+    solution = Dict(x[1] => 1.0, x[3] => 1.0)
+    report = primal_feasibility_report(model, solution; skip_missing = true)
+    @test haskey(report, c1)
+    @test !haskey(report, c2)
+    @test !haskey(report, c3)
+    @test haskey(report, c4)
+    @test_throws(
+        ErrorException(
+            """
+            The `point` dictionary does not contain a value for the variable `$(x[2])`.
+
+            Provide a value, or pass `; skip_missing = true` as a keyword
+            argument to `primal_feasibility_report`.
+            """,
+        ),
+        primal_feasibility_report(model, solution),
+    )
+    return
+end
+
+function test_skip_missing_in_vector()
+    model = Model()
+    @variable(model, x[1:2])
+    @constraint(model, c, x in Nonnegatives())
+    point = Dict(x[1] => 1.0)
+    @test isempty(primal_feasibility_report(model, point; skip_missing = true))
+    return
+end
+
+function test_complex_primal_feasibility_report_scalar()
+    model = Model()
+    @variable(model, x in ComplexPlane(), start = 1 + 2im)
+    @constraint(model, c, x == 1 + 2im)
+    @test isempty(primal_feasibility_report(start_value, model))
+    set_start_value(real(x), 2)
+    set_start_value(imag(x), 3)
+    ret = primal_feasibility_report(start_value, model)
+    @test isapprox(ret[c], sqrt(2))
+    return
+end
+
+function test_complex_primal_feasibility_report_vector()
+    model = Model()
+    @variable(model, x in ComplexPlane(), start = 1 + 2im)
+    @constraint(model, c, [x - (1 + 2im)] in Zeros())
+    @test isempty(primal_feasibility_report(start_value, model))
+    set_start_value(real(x), 2)
+    set_start_value(imag(x), 3)
+    ret = primal_feasibility_report(start_value, model)
+    @test isapprox(ret[c], sqrt(2))
     return
 end
 

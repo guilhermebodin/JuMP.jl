@@ -3,20 +3,10 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-function _last_primal_solution(model::GenericModel)
-    if !has_values(model)
-        error(
-            "No primal solution is available. You must provide a point at " *
-            "which to check feasibility.",
-        )
-    end
-    return Dict(v => value(v) for v in all_variables(model))
-end
-
 """
     primal_feasibility_report(
         model::GenericModel{T},
-        point::AbstractDict{GenericVariableRef{T},T} = _last_primal_solution(model),
+        [point::AbstractDict{GenericVariableRef{T},T}];
         atol::T = zero(T),
         skip_missing::Bool = false,
     )::Dict{Any,T}
@@ -51,7 +41,7 @@ Dict{Any, Float64} with 1 entry:
 """
 function primal_feasibility_report(
     model::GenericModel{T},
-    point::AbstractDict{GenericVariableRef{T},T} = _last_primal_solution(model);
+    point::AbstractDict{GenericVariableRef{T},T};
     atol::T = zero(T),
     skip_missing::Bool = false,
 ) where {T}
@@ -63,12 +53,32 @@ function primal_feasibility_report(
         fx = get(point, x, missing)
         if ismissing(fx) && !skip_missing
             error(
-                "point does not contain a value for variable $x. Provide a " *
-                "value, or pass `skip_missing = true`.",
+                """
+                The `point` dictionary does not contain a value for the variable `$x`.
+
+                Provide a value, or pass `; skip_missing = true` as a keyword
+                argument to `primal_feasibility_report`.
+                """,
             )
         end
         return fx
     end
+end
+
+function primal_feasibility_report(model::GenericModel{T}; kwargs...) where {T}
+    if !has_values(model)
+        error(
+            """
+            Unable to call the single-argument version of `primal_feasibility_report`
+            because the model does not have a primal solution available.
+
+            Either solve the model first, or pass a `point` dictionary as the
+            second argument to `primal_feasibility_report`.
+            """,
+        )
+    end
+    point = Dict(v => value(v) for v in all_variables(model))
+    return primal_feasibility_report(model, point; kwargs...)
 end
 
 """
@@ -102,6 +112,19 @@ function primal_feasibility_report(
     atol::T = zero(T),
     skip_missing::Bool = false,
 ) where {T}
+    if skip_missing && num_nonlinear_constraints(model) > 0
+        error(
+            """
+            The keyword argument `; skip_missing = true` cannot be used when
+            legacy nonlinear constraints (added via `@NLconstraint`) are present,
+            because the legacy nonlinear evaluator requires all variables to
+            have a finite value.
+
+            Ensure all variables in `point` have values, or remove the nonlinear
+            constraints.
+            """,
+        )
+    end
     violated_constraints = Dict{Any,T}()
     for (F, S) in list_of_constraint_types(model)
         _add_infeasible_constraints(
@@ -114,12 +137,6 @@ function primal_feasibility_report(
         )
     end
     if num_nonlinear_constraints(model) > 0
-        if skip_missing
-            error(
-                "`skip_missing = true` is not allowed when nonlinear " *
-                "constraints are present.",
-            )
-        end
         _add_infeasible_nonlinear_constraints(
             model,
             violated_constraints,
@@ -140,50 +157,7 @@ function _add_infeasible_constraints(
 ) where {T,F,S}
     for con in all_constraints(model, F, S)
         obj = constraint_object(con)
-        d = _distance_to_set(value.(point_f, obj.func), obj.set, T)
-        if d > atol
-            violated_constraints[con] = d
-        end
-    end
-    return
-end
-
-function _add_infeasible_constraints(
-    model::GenericModel{T},
-    ::Type{F},
-    ::Type{S},
-    violated_constraints::Dict{Any,T},
-    point_f::Function,
-    atol::T,
-) where {T,F<:GenericNonlinearExpr,S}
-    for con in all_constraints(model, F, S)
-        obj = constraint_object(con)
-        # value(::GenericNonlinearExpr) returns `Float64`. Convert it to `T` for
-        # the case where the model is a different number type.
-        fn_value = convert(T, value(point_f, obj.func))
-        d = _distance_to_set(fn_value, obj.set, T)
-        if d > atol
-            violated_constraints[con] = d
-        end
-    end
-    return
-end
-
-function _add_infeasible_constraints(
-    model::GenericModel{T},
-    ::Type{F},
-    ::Type{S},
-    violated_constraints::Dict{Any,T},
-    point_f::Function,
-    atol::T,
-) where {T,F<:Vector{<:GenericNonlinearExpr},S}
-    for con in all_constraints(model, F, S)
-        obj = constraint_object(con)
-        # value(::GenericNonlinearExpr) returns `Float64`. Convert it to `T` for
-        # the case where the model is a different number type.
-        fn_value = convert(Vector{T}, value.(point_f, obj.func))
-        d = _distance_to_set(fn_value, obj.set, T)
-        if d > atol
+        if (d = _distance_to_set(point_f, obj.func, obj.set, T)) > atol
             violated_constraints[con] = d
         end
     end
@@ -198,11 +172,10 @@ function _add_infeasible_nonlinear_constraints(
 ) where {T}
     evaluator = NLPEvaluator(model)
     MOI.initialize(evaluator, Symbol[])
-    g = zeros(num_nonlinear_constraints(model))
+    g = zeros(T, num_nonlinear_constraints(model))
     MOI.eval_constraint(evaluator, g, point_f.(all_variables(model)))
     for (i, (index, constraint)) in enumerate(evaluator.model.constraints)
-        d = _distance_to_set(g[i], constraint.set, T)
-        if d > atol
+        if (d = MOI.Utilities.distance_to_set(g[i], constraint.set)) > atol
             cref = ConstraintRef(model, index, ScalarShape())
             violated_constraints[cref] = d
         end
@@ -210,5 +183,35 @@ function _add_infeasible_nonlinear_constraints(
     return
 end
 
-_distance_to_set(::Missing, set, ::Type{T}) where {T} = zero(T)
-_distance_to_set(point, set, ::Type) = MOI.Utilities.distance_to_set(point, set)
+_eltype(::Real, ::Type{T}) where {T} = T
+_eltype(::Complex, ::Type{T}) where {T} = Complex{T}
+
+function _distance_to_set(
+    point_f::F,
+    func,
+    set::MOI.AbstractScalarSet,
+    ::Type{T},
+) where {F,T}
+    ret = value(point_f, func)
+    if ismissing(ret)
+        return zero(T)
+    end
+    return MOI.Utilities.distance_to_set(convert(_eltype(ret, T), ret), set)
+end
+
+_eltype(::AbstractVector{<:Real}, ::Type{T}) where {T} = T
+_eltype(::AbstractVector{<:Complex}, ::Type{T}) where {T} = Complex{T}
+
+function _distance_to_set(
+    point_f::F,
+    func::AbstractVector,
+    set::MOI.AbstractVectorSet,
+    ::Type{T},
+) where {F,T}
+    ret = value.(point_f, func)
+    if any(ismissing, ret)
+        return zero(T)
+    end
+    point = convert(Vector{_eltype(ret, T)}, ret)
+    return MOI.Utilities.distance_to_set(point, set)
+end

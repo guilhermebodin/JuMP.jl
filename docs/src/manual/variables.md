@@ -243,14 +243,13 @@ julia> @variable(model, x)
 x
 
 julia> @variable(model, x)
-ERROR: An object of name x is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, for example,
-    `x = @variable(model, [1:N], ...)` where the name of the object does
-    not appear inside the macro.
+ERROR: An object of name `:x` is already registered in this model.
 
-    Alternatively, use `unregister(model, :x)` to first unregister
-    the existing name from the model. Note that this will not delete the
-    object; it will just remove the reference at `model[:x]`.
+Consider instead using the anonymous construction syntax, for example, `x = @variable(model, [1:N], ...)` where the name of the object does not appear inside the macro.
+
+Alternatively, use `unregister(model, :x)` to first unregister the existing name from the model. Note that this will not delete the object from the model; it will just remove the reference at `model[:x]`.
+
+Stacktrace:
 [...]
 ```
 
@@ -536,8 +535,12 @@ julia> @variable(model, x >= 1)
 x
 
 julia> fix(x, 2)
-ERROR: Unable to fix x to 2 because it has existing variable bounds. Consider calling `JuMP.fix(variable, value; force=true)` which will delete existing bounds before fixing the variable.
+ERROR: Unable to fix x to 2 because it has existing variable bounds.
 
+Call `JuMP.fix(variable, value; force = true)` to delete existing bounds before fixing the variable.
+
+Stacktrace:
+[...]
 julia> fix(x, 2; force = true)
 
 
@@ -767,14 +770,13 @@ Deleting a variable does not unregister the corresponding name from the model.
 Therefore, creating a new variable of the same name will throw an error:
 ```jldoctest variables_delete
 julia> @variable(model, x)
-ERROR: An object of name x is already attached to this model. If this
-    is intended, consider using the anonymous construction syntax, for example,
-    `x = @variable(model, [1:N], ...)` where the name of the object does
-    not appear inside the macro.
+ERROR: An object of name `:x` is already registered in this model.
 
-    Alternatively, use `unregister(model, :x)` to first unregister
-    the existing name from the model. Note that this will not delete the
-    object; it will just remove the reference at `model[:x]`.
+Consider instead using the anonymous construction syntax, for example, `x = @variable(model, [1:N], ...)` where the name of the object does not appear inside the macro.
+
+Alternatively, use `unregister(model, :x)` to first unregister the existing name from the model. Note that this will not delete the object from the model; it will just remove the reference at `model[:x]`.
+
+Stacktrace:
 [...]
 ```
 
@@ -1026,7 +1028,7 @@ julia> @variable(model, y[A], container=Array)
  y[1]
  y[2]
 ```
-JuMP now creates a `Vector` of JuMP variables instead of a [`Containers.DenseAxisArray](@ref).
+JuMP now creates a `Vector` of JuMP variables instead of a [`Containers.DenseAxisArray`](@ref).
 Choosing an invalid container type will throw an error.
 
 ### User-defined containers
@@ -1146,9 +1148,14 @@ julia> type = :PSD
 :PSD
 
 julia> @variable(model, x[1:2, 1:2], type)
-ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`: Unrecognized positional arguments: (:PSD,). (You may have passed it as a positional argument, or as a keyword value to `variable_type`.)
+ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`:
+
+Unrecognized positional arguments: (:PSD,).
+
+You may have passed an unrecognized type or a keyword value to `variable_type`.
 
 If you're trying to create a JuMP extension, you need to implement `build_variable`. Read the docstring for more details.
+
 Stacktrace:
 [...]
 ```
@@ -1210,9 +1217,14 @@ julia> type = :Symmetric
 :Symmetric
 
 julia> @variable(model, x[1:2, 1:2], type)
-ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`: Unrecognized positional arguments: (:Symmetric,). (You may have passed it as a positional argument, or as a keyword value to `variable_type`.)
+ERROR: At none:1: `@variable(model, x[1:2, 1:2], type)`:
+
+Unrecognized positional arguments: (:Symmetric,).
+
+You may have passed an unrecognized type or a keyword value to `variable_type`.
 
 If you're trying to create a JuMP extension, you need to implement `build_variable`. Read the docstring for more details.
+
 Stacktrace:
 [...]
 ```
@@ -1340,10 +1352,6 @@ julia> x = @variable(model, [1:3], set = SecondOrderCone())
  _[3]
 ```
 
-!!! note
-    You cannot delete the constraint associated with a variable constrained on
-    creation.
-
 To check if a variable was constrained on creation, use [`is_variable_in_set`](@ref),
 and use [`VariableInSetRef`](@ref) to obtain the associated constraint reference:
 
@@ -1375,7 +1383,7 @@ julia> is_variable_in_set(z)
 true
 
 julia> c_z = VariableInSetRef(z)
-z ∈ MathOptInterface.Semicontinuous{Int64}(1, 2)
+z ∈ MathOptInterface.Semicontinuous{Float64}(1.0, 2.0)
 ```
 
 ### Example: positive semidefinite variables

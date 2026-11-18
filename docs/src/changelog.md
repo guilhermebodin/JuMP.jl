@@ -7,6 +7,161 @@ CurrentModule = JuMP
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Version v1.32.1 (October 7, 2026)
+
+### Fixed
+
+ - Fixed irrational numbers in `VariableInfo` (#4266)
+ - Fixed performance of [`flatten!`](@ref) for large summations (#4264)
+
+### Other
+
+ - Added PENNON and PENSDP to Penopt solver installation row (#4265)
+
+## Version v1.32.0 (September 30, 2026)
+
+### Added
+
+ - Re-enabled the subexpression caching that was added in v1.31.0 but reverted
+   in v1.31.1. This time, we use `Base.WeakKeyDict` for the subexpression
+   dictionary (#4207)
+ - Fused `check_belongs_to_model` with the two-argument `moi_function` (#4254)
+
+### Fixed
+
+ - Fixed a `DimensionMismatch` bug in [`set_normalized_coefficient`](@ref)
+   (#4230)
+ - Fixed a string indexing error in [`print_macro_timing_summary`](@ref) (#4233)
+ - Fixed a variety of incorrect docstrings and doctests (#4234)
+ - Fixed complementarity constraints with mis-matched LHS and RHS (#4236)
+ - Fixed [`primal_feasibility_report`](@ref) with `skip_missing` in a vector
+   (#4235)
+ - Fixed `Base.empty!(::GenericModel)` and documented its troublesome behavior
+   (#4237)
+ - Fixed keyword indexing of `DenseAxisArray` with wrong number of kwargs
+   (#4238)
+ - Fixed `Base.similar` for `DenseAxisArray` (#4239)
+ - Fixed the incorrect `Base.imag(::GenericQuadExpr{<:Real})` (#4242)
+ - Removed unneeded `Containers.parse_ref_sets` in [`@NLexpression`](@ref) macro
+   (#4245)
+ - Fixed `is_model_dirty` for some modifications (#4251)
+ - Fixed setting bounds and starting values to non-finite values (#4252) (#4258)
+ - Fixed [`reduced_cost`](@ref) for non-Float64 `GenericVariableRef` (#4253)
+ - Fixed [`fix_discrete_variables`](@ref) when a discrete variable is already
+   fixed (#4255)
+ - Fixed missing error when some functions are called on `AffExpr` with non-zero
+   constant (#4256)
+ - Fixed `test_assert_is_solved_and_feasible` to not depend on printing (#4257)
+ - Fixed querying DualObjectiveValue in `test_generate_solve_QCQP` (#4259)
+ - Fixed converting sets to the model's `value_type` (#4249)
+
+### Other
+
+ - Added Algencan, CCOpt, ConicIP to solvers (#4218), (#4228), (#4229)
+ - Fixed support for HTTP@2 in the documentation (#4227)
+ - Fixed various things in the tests and documentation (#4240), (#4241),
+   (#4246), (#4247), (#4250)
+ - Added [DiffOpt.jl](@ref) to the [Nested optimization problems](@ref) tutorial
+   (#4248)
+ - Clarified behavior of deleting `VariableInSetRef` (#4261)
+
+## Version v1.31.2 (August 18, 2026)
+
+### Fixed
+
+ - Fixed a test of `MOI.UnsupportedConstraint` to use type instead of value
+   (#4209)
+ - Fixed the error when indexing [`Containers.DenseAxisArray`](@ref) with the
+   wrong number of arguments (#4215)
+
+### Other
+
+ - Fixed various formatting issues (#4208), (#4211)
+ - Documentation updates (#4214), (#4216), (#4217), (#4219), (#4220), (#4221),
+   (#4223), (#4226)
+ - Relaxed `depwarn=error` to `depwarn=yes` on Julia nightly (#4222)
+ - Added support for OrderedCollections@2 (#4224)
+
+## Version v1.31.1 (July 23, 2026)
+
+### Fixed
+
+ - Temporarily revert the subexpression caching introduced in v1.31.0 because it
+   is subject to hash collisions. The two-argument [`moi_function`](@ref) is
+   maintained, and we hope to re-introduce the subexpression caching once we
+   work out the hashing issue. (#4205)
+
+## Version v1.31.0 (July 21, 2026)
+
+### Added
+
+ - As part of our long term goal to support vector-valued nonlinear expressions,
+   we added experimental support for `AbstractArray` in nonlinear expressions.
+   You can now build nonlinear expressions containing arrays, although there is
+   no corresponding support for this via solvers like Ipopt. We hope to change
+   this in future releases. (#3451)
+ - Common subexpressions are now cached when building
+   `MOI.ScalarNonlinearExpression`. This can result in a large speed-up for some
+   models, but we are also concerned about the potential for increased memory
+   usage in some models. If you notice changes (positive or negative), please
+   tell us via a GitHub issue. Related to this change, [`moi_function`](@ref)
+   now accepts a `model` as the first argument. Existing single-argument methods
+   will still work, but future callers should switch to the two-argument
+   version. (#4032), (#4189), (#4190), (#4200)
+ - We added various features to help AI agents understand JuMP (and also help
+   non-AI-assisted humans):
+    - We improved the `JuMP` module docstring so that `? JuMP` now describes
+      where to find the documentation and how to ask for help (#4174)
+    - We rewrote error messages to be clearer and include an actionable next
+      step. This may break tests if you relied on checking the exact string of
+      an error message (#4172), (#4176), (#4177), (#4178), (#4180), (#4182)
+    - We added learning intentions to all of the tutorials in the documentation
+      (#4170)
+    - We added an `AGENTS.md` (and `CLAUDE.md`), and added requests in multiple
+      parts of the documentation for users to report issues to the maintainers
+      (#4184), (#4185)
+
+### Fixed
+
+ - Fixed a bug with `BridgeableConstraint` and `model_convert` (#4183)
+ - Fixed a failing test on Julia nightly (#4173)
+ - Fixed a bug hashing DenseAxisArray (#4192)
+ - Fixed a bug so that we maintain the order of expression arguments when
+   calling [`flatten!`](@ref) (#4196)
+ - Fixed a bug where `0.0` is added to `GenericNonlinearExpr` in operators like
+   `sum` (#4197)
+ - Fixed the error messages when Hermitian variables are passed invalid data to
+   explain what data was incorrect (#4198)
+ - Fixed checking if problem is an LP in [`lp_sensitivity_report`](@ref) (#4199)
+ - Removed some unnecessary parentheses when printing nonlinear expressions (#4201)
+
+### Other
+
+ - Updated various parts of the documentation (#4158), (#4159), (#4164),
+   (#4165), (#4167), (#4179), (#4186), (#4187), (#4193), (#4195)
+ - Re-enabled `depwarn=error` in tests (#4161)
+ - Added a new [Sport scheduling](@ref) tutorial (#4160) (#4162)
+ - Updated various GitHub action versions (#4168), (#4181)
+ - Fixed formatting for new JuliaFormatter release (#4169)
+
+## Version v1.30.1 (April 24, 2026)
+
+### Fixed
+
+ - Fixed [`primal_feasibility_report`](@ref) with [`NonlinearExpr`](@ref) and
+   `skip_missing=true` (#4153)
+
+### Other
+
+ - Documentation updates (#4130), (#4137), (#4141), (#4143), (#4146), (#4152),
+   (#4155), (#4156)
+ - Updated versions for GitHub actions (#4131), (#4145)
+ - Added a CI test for PackageCompiler.jl (#4135)
+ - Updated `CODE_OF_CONDUCT` to the NumFOCUS CoC (#4136), (#4140)
+ - Remove outdated sentence from LICENSE.md (#4142)
+ - Added [AI Policy](@ref), a policy for AI assisted contributions (#4138)
+ - Fixed various issues identified by JET (#4148), (#4149)
+
 ## Version 1.30.0 (March 4, 2026)
 
 This release is a minor release because we are changing the Julia compat bounds.
@@ -264,7 +419,7 @@ There are no new features.
 ### Other
 
  - Various minor improvements to the documentation (#3855) (#3860)
- - Added [MathOptAI.jl](@ref) and [MathOptSymbolicAD.jl](@ref) to the list of extensions in the documentation (#3858)
+ - Added [MathOptAI.jl](@ref) and `MathOptSymbolicAD.jl` to the list of extensions in the documentation (#3858)
  - Clarified [`add_to_expression!`](@ref) can add two expressions (#3859)
  - Added `SHOT` to the installation table (#3853)
  - Improvements to test coverage (#3867) (#3868) (#3869) (#3870) (#3871) (#3872)

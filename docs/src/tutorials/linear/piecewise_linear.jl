@@ -5,8 +5,22 @@
 
 # # Approximating nonlinear functions
 
-# The purpose of this tutorial is to explain how to approximate nonlinear functions
-# with a mixed-integer linear program.
+# This tutorial explains how to approximate nonlinear functions within a
+# mixed-integer linear program using outer approximation, inner (convex
+# combination) approximation, and SOS2-enforced piecewise linear approximation.
+# Each approach applies under different convexity assumptions and optimisation
+# directions.
+#
+# **Learning intentions:**
+# * Approximate a nonlinear function within an LP using tangent-plane (outer)
+#   constraints, and recognize when this is valid based on convexity and
+#   optimisation direction
+# * Build an inner (convex combination) approximation using auxiliary weight
+#   variables, and understand why it fails for non-convex functions
+# * Add an [`SOS2`](@ref) constraint on the weight vector to enforce a true
+#   piecewise linear approximation for non-convex functions
+
+# ## Required packages
 
 # This tutorial uses the following packages:
 
@@ -137,7 +151,7 @@ plot
 # x = \sum\limits_{k=1}^K \lambda_k x_k \\
 # y = \sum\limits_{k=1}^K \lambda_k y_k \\
 # \sum\limits_{k=1}^K \lambda_k = 1 \\
-# \lambda_k \ge 0, k=1,\ldots,k \\
+# \lambda_k \ge 0, k=1,\ldots,K \\
 # \end{aligned}
 # ```
 
@@ -181,7 +195,7 @@ for x̄ in range(; start = -2, stop = 2, length = 15)
 end
 plot
 
-# ## Maximizing a convex function (inner approximation)
+# ## Maximizing a concave function (inner approximation)
 
 # The inner approximation also works if we want to maximize "up" into a concave
 # function.
@@ -226,9 +240,9 @@ plot
 
 # ## Piecewise linear approximation
 
-# If the model is non-convex (or non-concave), then we cannot use an outer
+# If the function is neither convex nor concave, then we cannot use an outer
 # approximation, and the inner approximation allows a solution far from the true
-# function. For example, for $f(x) = sin(x)$, we have:
+# function. For example, for $f(x) = \sin(x)$, we have:
 
 f(x) = sin(x)
 plot = Plots.plot(f, 0:0.01:2π; label = false)

@@ -20,15 +20,18 @@
 
 # # [Debugging](@id tutorial_debugging)
 
-# Dealing with bugs is an unavoidable part of coding optimization models in
-# any framework, including JuMP. Sources of bugs include not only generic coding
-# errors (method errors, typos, off-by-one issues), but also semantic mistakes
-# in the formulation of an optimization problem and the incorrect use of a
-# solver.
-
-# This tutorial explains some common sources of bugs and modeling issues that
-# you might encounter when writing models in JuMP, and it suggests a variety of
-# strategies to deal with them.
+# Dealing with bugs is an unavoidable part of coding optimization models, and
+# JuMP is no exception. This tutorial explains common sources of errors—
+# from coding mistakes and formulation bugs to solver misuse—and demonstrates
+# strategies for diagnosing and fixing them.
+#
+# **Learning intentions:**
+# * Identify the difference between coding errors, formulation mistakes, and
+#   solver misuse, and apply appropriate debugging strategies to each
+# * Use `print`, [`compute_conflict!`](@ref), [`copy_conflict`](@ref), and
+#   [`relax_with_penalty!`](@ref) to locate model errors
+# * Interpret infeasibility and unboundedness statuses and use
+#   [`set_macro_timing`](@ref) to diagnose slow model construction
 
 # !!! tip
 #     This tutorial is more advanced than the other "Getting started" tutorials.
@@ -84,7 +87,7 @@ import HiGHS
 0.1 * 3 == 0.3
 
 # !!! tip
-#     Read the [Guidelines for numerical issues](https://www.gurobi.com/documentation/9.5/refman/guidelines_for_numerical_i.html)
+#     Read the [Guidelines for numerical issues](https://docs.gurobi.com/projects/optimizer/en/current/concepts/numericguide.html)
 #     section of the Gurobi documentation, along with the
 #     [Debugging numerical problems](https://yalmip.github.io/inside/debuggingnumerics/)
 #     section of the YALMIP documentation.
@@ -182,7 +185,7 @@ termination_status(model)
 # or [`LOCALLY_INFEASIBLE`](@ref).
 
 # A termination status of [`INFEASIBLE_OR_UNBOUNDED`](@ref) means that the
-# solver could not prove if the solver was infeasible or unbounded, only that
+# solver could not prove if the model was infeasible or unbounded, only that
 # the model does not have a finite feasible optimal solution.
 
 # Nonlinear optimizers such as Ipopt may return the status [`LOCALLY_INFEASIBLE`](@ref).
@@ -349,8 +352,8 @@ termination_status(model)
 # If there are too many variables to add bounds to, or there are too many terms
 # to examine by hand, another strategy is to create a new variable with a large
 # upper bound (if maximizing, lower bound if minimizing) and a constraint that
-# the variable must be less-than or equal to the expression of the objective
-# function. For example:
+# the variable must be less-than or equal to (if maximizing, greater-than or
+# equal to if minimizing) the expression of the objective function. For example:
 
 model = Model(HiGHS.Optimizer);
 set_silent(model)
@@ -384,7 +387,7 @@ end
 #    is no easy fix for this, other than choosing a different solver or
 #    reformulating your model.
 # 2. JuMP builds the problem slowly, and even if you wait a while, the solver
-#    may ever start running or displaying output.
+#    may never start running or displaying output.
 
 # This section explains how to debug the second case.
 
@@ -426,7 +429,7 @@ begin
     print_macro_timing_summary(model)
 end
 
-# In this case, you can see that the `@constraint` call dominates the runtime.
+# In this case, you can see that the [`@constraint`](@ref) call dominates the runtime.
 # If it isn't obvious why that is, read the [Performance problems with sum-if formulations](@ref)
 # tutorial.
 

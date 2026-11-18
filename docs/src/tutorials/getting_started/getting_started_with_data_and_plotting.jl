@@ -20,11 +20,17 @@
 
 # # Getting started with data and plotting
 
-# In this tutorial we will learn how to read tabular data into Julia, and some
-# of the basics of plotting.
-
-# If you're new to Julia, start by reading [Getting started with Julia](@ref)
-# and [Getting started with JuMP](@ref) first.
+# This tutorial introduces reading tabular data into Julia using DataFrames.jl
+# and covers the basics of plotting results. If you're new to Julia, start by
+# reading [Getting started with Julia](@ref) and [Getting started with JuMP](@ref)
+# first.
+#
+# **Learning intentions:**
+# * Read tabular data from CSV and other delimited formats into Julia using
+#   DataFrames.jl and handle missing values during parsing
+# * Group, filter, and aggregate a DataFrame to prepare data for use in a
+#   JuMP model
+# * Visualize data and optimization results using Plots.jl
 
 # !!! note
 #     There are multiple ways to read the same kind of data into Julia. This
@@ -78,7 +84,7 @@ import DataFrames
 
 import Plots
 
-# ### CSV .jl
+# ### CSV.jl
 
 # CSV and other delimited text files can be read by the CSV.jl package.
 
@@ -246,7 +252,7 @@ csv_df[1, :] # This produces a DataFrameRow.
 
 # We can change the values just as we normally assign values.
 
-# Assign a range to scalar:
+# Assign a scalar to a range:
 
 csv_df[1:3, :Height] .= 1.83
 
@@ -324,7 +330,7 @@ end
 # Since we wish to visit all the countries, for every country, we must own at
 # least one passport that lets us travel to that country visa free. For one
 # destination, this can be mathematically represented as
-# $\sum_{c \in C} a_{c,d} \cdot x_{d} \geq 1$, where $a$ is the `passport_data`
+# $\sum_{c \in C} a_{c,d} \cdot x_{c} \geq 1$, where $a$ is the `passport_data`
 # dataframe.
 
 # Thus, we can represent this problem using the following model:

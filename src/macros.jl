@@ -323,10 +323,16 @@ function model_convert(model::AbstractModel, α::Number)
 end
 
 function model_convert(model::AbstractModel, con::BridgeableConstraint)
+    # The bridge `coefficient_type` is set by `build_constraint` which does not
+    # have access to the model. We convert it to the value type of the model
+    # (keeping the same real/complex flavor) just like we convert the
+    # coefficients of the function. This is needed so that, for example, the
+    # bridges registered for a `GenericModel{T}` with `T != Float64` use `T`.
+    C = _complex_convert_type(value_type(typeof(model)), con.coefficient_type)
     return BridgeableConstraint(
         model_convert(model, con.constraint),
         con.bridge_type;
-        con.coefficient_type,
+        coefficient_type = C,
     )
 end
 
@@ -359,10 +365,27 @@ function model_convert(
     return model_convert.(model, x)
 end
 
+function model_convert(
+    model::AbstractModel,
+    variable::VariablesConstrainedOnCreation,
+)
+    return VariablesConstrainedOnCreation(
+        variable.scalar_variables,
+        model_convert(model, variable.set),
+        variable.shape,
+    )
+end
+
 _valid_model(::AbstractModel, ::Any) = nothing
 
 function _valid_model(m::M, name) where {M}
-    return error("Expected $name to be a JuMP model, but it has type $M")
+    return error(
+        """
+        Expected $name to be a JuMP model, but it has type $M.
+
+        The first argument to a JuMP macro must be a subtype of `AbstractModel`.
+        """,
+    )
 end
 
 """
@@ -442,15 +465,18 @@ function _error_if_cannot_register(model::AbstractModel, name::Symbol)
     obj_dict = object_dictionary(model)
     if haskey(obj_dict, name)
         error(
-            """An object of name $name is already attached to this model. If this
-          is intended, consider using the anonymous construction syntax, for example,
-          `x = @variable(model, [1:N], ...)` where the name of the object does
-          not appear inside the macro.
+            """
+            An object of name `:$name` is already registered in this model.
 
-          Alternatively, use `unregister(model, :$(name))` to first unregister
-          the existing name from the model. Note that this will not delete the
-          object; it will just remove the reference at `model[:$(name)]`.
-      """,
+            Consider instead using the anonymous construction syntax, for \
+            example, `x = @variable(model, [1:N], ...)` where the name of the \
+            object does not appear inside the macro.
+
+            Alternatively, use `unregister(model, :$(name))` to first \
+            unregister the existing name from the model. Note that this will \
+            not delete the object from the model; it will just remove the \
+            reference at `model[:$(name)]`.
+            """,
         )
     end
     return
@@ -467,11 +493,16 @@ _replace_zero(::AbstractModel, x::Any) = x
 
 function _plural_macro_code(model, block, macro_sym)
     if !Meta.isexpr(block, :block)
-        error(
-            "Invalid syntax for $(macro_sym)s. The second argument must be a " *
-            "`begin end` block. For example:\n" *
-            "```julia\n$(macro_sym)s(model, begin\n    # ... lines here ...\nend)\n```.",
-        )
+        error("""
+              Invalid syntax for $(macro_sym)s.
+
+              The second argument must be a `begin end` block. For example:
+              ```julia
+              $(macro_sym)s(model, begin
+                  # ... lines here ...
+              end)
+              ```
+              """)
     end
     @assert block.args[1] isa LineNumberNode
     last_line = block.args[1]
@@ -539,7 +570,8 @@ function _string_summary(x)
     if length(x) <= 75
         return x
     end
-    return x[1:32] * " [...] " * x[(end-31):end]
+    # Don't use `x[1:32]` type indexing here because it's not safe with unicode.
+    return first(x, 32) * " [...] " * last(x, 32)
 end
 
 _format_time(x::Float64) = string(_format(x), " seconds")

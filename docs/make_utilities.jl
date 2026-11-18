@@ -5,13 +5,13 @@
 
 import Documenter
 import DocumenterCitations
+import DocumenterCodeBlocks
 import Downloads
 import Gurobi
 import Literate
 import MathOptInterface
 import Pkg
 import TOML
-import tectonic_jll
 import Test
 
 using JuMP
@@ -111,6 +111,7 @@ function literate_tutorials()
         joinpath("getting_started", "performance_tips.md"),
         joinpath("linear", "tips_and_tricks.md"),
         joinpath("linear", "typed_indices.md"),
+        joinpath("algorithms", "parallelism.md"),
     ]
         filename = joinpath(@__DIR__, "src", "tutorials", file)
         content = read(filename, String)
@@ -185,11 +186,13 @@ function add_solver_readmes()
         filename = get(data, "filename", "README.md")
         out_filename = joinpath(@__DIR__, "src", "packages", "$solver.md")
         user_repo = string(user, "/", solver, get(data, "ext", ".jl"))
-        Downloads.download(
-            "https://raw.githubusercontent.com/$user_repo/$tag/$filename",
-            out_filename;
-            headers = Dict("Authorization" => "token " * ENV["GITHUB_TOKEN"]),
-        )
+        url = "https://raw.githubusercontent.com/$user_repo/$tag/$filename"
+        if haskey(ENV, "GITHUB_TOKEN")
+            headers = Dict("Authorization" => "token " * ENV["GITHUB_TOKEN"])
+            Downloads.download(url, out_filename; headers)
+        else
+            Downloads.download(url, out_filename)
+        end
         _add_edit_url(
             out_filename,
             "https://github.com/$user_repo/blob/$tag/$filename",
@@ -344,15 +347,6 @@ function add_moi_pages()
             r"^# Infeasibility certificates$"m => "# [Infeasibility certificates](@id moi_infeasibility_certificates)",
         ],
         "reference/models.md" => ["# ResultStatusCode" => "# Result Status"],
-        # This can be removed once we support JSON@1 in the documentation
-        "submodules/FileFormats/overview.md" => ["JSON.Object" => "Dict"],
-        # These can be removed once we support MOI@1.48.1 or later
-        "reference/models.md" => ["# ResultStatusCode" => "# Result Status"],
-        "submodules/Nonlinear/SymbolicAD.md" => [
-            "# `simplify`" => "# [`simplify`](@id symbolic_ad_manual_simplify)",
-            "# `variables`" => "# [`variables`](@id symbolic_ad_manual_variables)",
-            "# `derivative`" => "# [`derivative`](@id symbolic_ad_manual_derivative)",
-        ],
     ]
         filename = joinpath(moi_dir, filename)
         write(filename, replace(read(filename, String), replacements...))
@@ -438,19 +432,18 @@ end
 function list_of_solvers_and_extensions()
     _LIST_OF_SOLVERS = Pair{String,String}[]
     _LIST_OF_EXTENSIONS =
-        Pair{String,String}["rafaqz/DimensionalData.jl"=>"extensions/DimensionalData.md",]
+        Pair{String,String}["DimensionalData.jl"=>"extensions/DimensionalData.md",]
     for (solver, data) in TOML.parsefile(joinpath(@__DIR__, "packages.toml"))
-        user = get(data, "user", "jump-dev")
-        user_repo = string(user, "/", solver, get(data, "ext", ".jl"))
+        repo = string(solver, get(data, "ext", ".jl"))
         if get(data, "extension", false)
-            push!(_LIST_OF_EXTENSIONS, user_repo => "packages/$solver.md")
+            push!(_LIST_OF_EXTENSIONS, repo => "packages/$solver.md")
         else
-            push!(_LIST_OF_SOLVERS, user_repo => "packages/$solver.md")
+            push!(_LIST_OF_SOLVERS, repo => "packages/$solver.md")
         end
     end
     # Sort, with jump-dev repos at the start.
-    sort!(_LIST_OF_SOLVERS; by = x -> (!startswith(x[1], "jump-dev/"), x[1]))
-    sort!(_LIST_OF_EXTENSIONS; by = x -> (!startswith(x[1], "jump-dev/"), x[1]))
+    sort!(_LIST_OF_SOLVERS; by = first)
+    sort!(_LIST_OF_EXTENSIONS; by = first)
     pushfirst!(_LIST_OF_SOLVERS, "Introduction" => "packages/solvers.md")
     pushfirst!(
         _LIST_OF_EXTENSIONS,
@@ -579,6 +572,7 @@ function documentation_structure()
                 "tutorials/linear/multi_objective_project_planning.md",
                 "tutorials/linear/sudoku.md",
                 "tutorials/linear/n-queens.md",
+                "tutorials/linear/sports_scheduling.md",
                 "tutorials/linear/constraint_programming.md",
                 "tutorials/linear/callbacks.md",
                 "tutorials/linear/lp_sensitivity.md",
@@ -652,6 +646,7 @@ function documentation_structure()
         ],
         "Developer Docs" => [
             "Contributing" => "developers/contributing.md",
+            "AI Policy" => "developers/ai_policy.md",
             "Extensions" => "developers/extensions.md",
             "Custom binaries" => "developers/custom_solver_binaries.md",
             "Style Guide" => "developers/style.md",
@@ -718,6 +713,7 @@ function make_html()
                 joinpath(@__DIR__, "src", "references.bib");
                 style = :authoryear,
             ),
+            DocumenterCodeBlocks.CodeBlocks(; line_counter = :named),
         ],
     )
     return
@@ -760,10 +756,7 @@ function make_latex()
     Documenter.makedocs(;
         sitename = "JuMP",
         authors = "The JuMP core developers and contributors",
-        format = Documenter.LaTeX(;
-            platform = "tectonic",
-            tectonic = tectonic_jll.tectonic(),
-        ),
+        format = Documenter.LaTeX(; platform = "docker"),
         source = joinpath(@__DIR__, "latex_src"),
         build = joinpath(@__DIR__, "latex_build"),
         pages,

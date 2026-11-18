@@ -327,7 +327,7 @@ function _try_get_solver_name(model_like)
 end
 
 """
-    solver_name(model::GenericModel)
+    solver_name(model::GenericModel)::String
 
 If available, returns the [`MOI.SolverName`](@ref) property of the underlying
 optimizer.
@@ -383,14 +383,23 @@ julia> import HiGHS
 julia> model = direct_model(HiGHS.Optimizer());
 
 julia> error_if_direct_mode(model, :foo)
-ERROR: The `foo` function is not supported in DIRECT mode.
+ERROR: The `foo` function is not supported for models created with `direct_model`.
+
+Use `Model(optimizer)` instead of `direct_model(optimizer)`.
+
 Stacktrace:
 [...]
 ```
 """
 function error_if_direct_mode(model::GenericModel, func::Symbol)
     if mode(model) == DIRECT
-        error("The `$func` function is not supported in DIRECT mode.")
+        error(
+            """
+            The `$func` function is not supported for models created with `direct_model`.
+
+            Use `Model(optimizer)` instead of `direct_model(optimizer)`.
+            """,
+        )
     end
     return
 end
@@ -570,10 +579,13 @@ function optimize!(
     if nlp !== nothing
         if _uses_new_nonlinear_interface(model)
             error(
-                "Cannot optimize a model which contains the features from " *
-                "both the legacy (macros beginning with `@NL`) and new " *
-                "(`NonlinearExpr`) nonlinear interfaces. You must use one or " *
-                "the other.",
+                """
+                Cannot optimize a model that uses both the legacy (`@NL` macros) \
+                and the new (`NonlinearExpr`) nonlinear interfaces simultaneously.
+
+                Use one nonlinear interface throughout the model. Migrate legacy \
+                `@NL` macros to the new interface, or remove all `NonlinearExpr` expressions.
+                """,
             )
         end
         evaluator = MOI.Nonlinear.Evaluator(
@@ -591,7 +603,13 @@ function optimize!(
     end
     if !isempty(kwargs)
         error(
-            "Unrecognized keyword arguments: $(join([k[1] for k in kwargs], ", "))",
+            """
+            Unrecognized keyword arguments: $(join([k[1] for k in kwargs], ", ")).
+
+            Only keyword arguments accepted by the optimize hook are \
+            supported. To pass parameters to the solver, use \
+            `set_attribute(model, key, value)` before calling `optimize!`.
+            """,
         )
     end
     if mode(model) != DIRECT && MOIU.state(backend(model)) == MOIU.NO_OPTIMIZER
@@ -600,10 +618,15 @@ function optimize!(
     optimizer = unsafe_backend(model)
     if !(optimizer isa MOI.AbstractOptimizer)
         error(
-            "Cannot call `optimize!` because the provided optimizer is not " *
-            "a subtype of `MOI.AbstractOptimizer`.\n\nThe optimizer is:\n\n" *
-            sprint(show, optimizer) *
-            "\n",
+            """
+            Cannot call `optimize!` because the provided optimizer is not a subtype of `MOI.AbstractOptimizer`.
+
+            The optimizer provided was:
+
+            $(sprint(show, optimizer))
+
+            Ensure the optimizer passed to `Model()` implements the MOI interface.
+            """,
         )
     end
     try
@@ -622,8 +645,13 @@ _rethrow_moi_error(err) = rethrow(err)
 
 function _rethrow_moi_error(::MOI.UnsupportedAttribute{MOI.NLPBlock})
     return error(
-        "The solver does not support nonlinear problems " *
-        "(that is, NLobjective and NLconstraint).",
+        """
+        The solver does not support nonlinear problems (that is, \
+        `@NLobjective` and `@NLconstraint`).
+
+        Use a solver that supports nonlinear optimization, or reformulate \
+        the problem as a linear or quadratic model.
+        """,
     )
 end
 
@@ -733,10 +761,15 @@ function compute_conflict!(model::GenericModel)
 end
 
 """
-    termination_status(model::GenericModel)
+    termination_status(model::GenericModel)::MOI.TerminationStatusCode
 
-Return a [`MOI.TerminationStatusCode`](@ref) describing why the solver stopped
-(that is, the [`MOI.TerminationStatus`](@ref) attribute).
+Return a [`MOI.TerminationStatusCode`](@ref) describing why the solver stopped.
+
+This function is equivalent to querying the [`MOI.TerminationStatus`](@ref)
+attribute.
+
+See [`MOI.TerminationStatusCode`](@ref) for a list of all possible statuses and
+their meanings.
 
 ## Example
 
@@ -761,10 +794,13 @@ function MOI.get(model::GenericModel, attr::MOI.TerminationStatus)
 end
 
 """
-    result_count(model::GenericModel)
+    result_count(model::GenericModel)::Int
 
 Return the number of results available to query after a call to
 [`optimize!`](@ref).
+
+This function is equivalent to querying the [`MOI.ResultCount`](@ref)
+attribute.
 
 ## Example
 
@@ -785,10 +821,12 @@ function result_count(model::GenericModel)::Int
 end
 
 """
-    raw_status(model::GenericModel)
+    raw_status(model::GenericModel)::String
 
-Return the reason why the solver stopped in its own words (that is, the
-MathOptInterface model attribute [`MOI.RawStatusString`](@ref)).
+Return a `String` explaining why the solver stopped in its own words.
+
+This function is equivalent to querying the [`MOI.RawStatusString`](@ref)
+attribute.
 
 ## Example
 
@@ -819,11 +857,16 @@ function MOI.get(
 end
 
 """
-    primal_status(model::GenericModel; result::Int = 1)
+    primal_status(model::GenericModel; result::Int = 1)::MOI.ResultStatusCode
 
 Return a [`MOI.ResultStatusCode`](@ref) describing the status of the most recent
-primal solution of the solver (that is, the [`MOI.PrimalStatus`](@ref) attribute)
-associated with the result index `result`.
+primal solution of the solver associated with the result index `result`.
+
+See [`MOI.ResultStatusCode`](@ref) for a list of all possible statuses and their
+meanings.
+
+This function is equivalent to querying the [`MOI.PrimalStatus`](@ref)
+attribute.
 
 See also: [`result_count`](@ref).
 
@@ -843,11 +886,15 @@ function primal_status(model::GenericModel; result::Int = 1)
 end
 
 """
-    dual_status(model::GenericModel; result::Int = 1)
+    dual_status(model::GenericModel; result::Int = 1)::MOI.ResultStatusCode
 
 Return a [`MOI.ResultStatusCode`](@ref) describing the status of the most recent
-dual solution of the solver (that is, the [`MOI.DualStatus`](@ref) attribute)
-associated with the result index `result`.
+dual solution of the solver associated with the result index `result`.
+
+See [`MOI.ResultStatusCode`](@ref) for a list of all possible statuses and their
+meanings.
+
+This function is equivalent to querying the [`MOI.DualStatus`](@ref) attribute.
 
 See also: [`result_count`](@ref).
 
@@ -1019,10 +1066,13 @@ function assert_is_solved_and_feasible(
 end
 
 """
-    solve_time(model::GenericModel)
+    solve_time(model::GenericModel)::Float64
 
 If available, returns the solve time in wall-clock seconds reported by the
-solver (the [`MOI.SolveTimeSec`](@ref) attribute).
+solver.
+
+This function is equivalent to querying the [`MOI.SolveTimeSec`](@ref)
+attribute.
 
 Throws a `MOI.GetAttributeNotAllowed` error if the attribute is not implemented
 by the solver.
@@ -1047,10 +1097,13 @@ function solve_time(model::GenericModel)
 end
 
 """
-    simplex_iterations(model::GenericModel)
+    simplex_iterations(model::GenericModel)::Int64
 
 If available, returns the cumulative number of simplex iterations during the
-most-recent optimization (the [`MOI.SimplexIterations`](@ref) attribute).
+most-recent optimization.
+
+This function is equivalent to querying the [`MOI.SimplexIterations`](@ref)
+attribute.
 
 Throws a `MOI.GetAttributeNotAllowed` error if the attribute is not implemented
 by the solver.
@@ -1075,10 +1128,13 @@ function simplex_iterations(model::GenericModel)
 end
 
 """
-    barrier_iterations(model::GenericModel)
+    barrier_iterations(model::GenericModel)::Int64
 
 If available, returns the cumulative number of barrier iterations during the
-most-recent optimization (the [`MOI.BarrierIterations`](@ref) attribute).
+most-recent optimization.
+
+This function is equivalent to querying the [`MOI.BarrierIterations`](@ref)
+attribute.
 
 Throws a `MOI.GetAttributeNotAllowed` error if the attribute is not implemented
 by the solver.
@@ -1103,11 +1159,12 @@ function barrier_iterations(model::GenericModel)
 end
 
 """
-    node_count(model::GenericModel)
+    node_count(model::GenericModel)::Int64
 
 If available, returns the total number of branch-and-bound nodes explored during
-the most recent optimization in a Mixed Integer Program (the
-[`MOI.NodeCount`](@ref) attribute).
+the most recent optimization in a Mixed Integer Program.
+
+This function is equivalent to querying the [`MOI.NodeCount`](@ref) attribute.
 
 Throws a `MOI.GetAttributeNotAllowed` error if the attribute is not implemented
 by the solver.
@@ -1596,9 +1653,11 @@ function _moi_optimizer_index(model::MOIU.CachingOptimizer, index::MOI.Index)
         throw(NoOptimizer())
     elseif MOIU.state(model) == MOIU.EMPTY_OPTIMIZER
         error(
-            "There is no `optimizer_index` as the optimizer is not ",
-            "synchronized with the cached model. Call ",
-            "`MOIU.attach_optimizer(model)` to synchronize it.",
+            """
+            There is no `optimizer_index` because the optimizer is not synchronized with the cached model.
+
+            Call `MOIU.attach_optimizer(model)` to synchronize, or use `optimize!(model)` which updates the optimizer automatically.
+            """,
         )
     end
     @assert MOIU.state(model) == MOIU.ATTACHED_OPTIMIZER
@@ -1614,8 +1673,14 @@ function _moi_optimizer_index(
 )
     if index isa MOI.ConstraintIndex && MOI.Bridges.is_bridged(model, index)
         error(
-            "There is no `optimizer_index` for $(typeof(index)) constraints",
-            " because they are bridged.",
+            """
+            There is no `optimizer_index` for `$(typeof(index))` constraints \
+            because they are bridged.
+
+            Bridged constraints do not have a direct optimizer index. Use \
+            `add_bridges = false` in `Model()` to disable bridges if the \
+            solver supports the constraint type directly.
+            """,
         )
     end
     return _moi_optimizer_index(model.model, index)

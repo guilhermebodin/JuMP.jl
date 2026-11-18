@@ -5,12 +5,19 @@
 
 # # The knapsack problem example
 
-# The purpose of this tutorial is to demonstrate how to formulate and solve a
-# simple optimization problem.
+# This tutorial demonstrates how to formulate and solve a simple optimization
+# problem using JuMP. It uses the classical knapsack problem as a worked example.
+#
+# **Learning intentions:**
+# * Translate a real-world selection problem into a binary integer linear
+#   program with decision variables, a capacity constraint, and a
+#   value-maximising objective
+# * Follow the complete JuMP workflow—build, solve, and extract a solution—
+#   and encapsulate it in a reusable, validated function
 
 # ## Required packages
 
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
@@ -60,7 +67,7 @@ n = 5;
 
 capacity = 10.0;
 
-# and the profit and cost data:
+# and the profit and weight data:
 
 profit = [5.0, 3.0, 2.0, 7.0, 4.0];
 weight = [2.0, 8.0, 4.0, 2.0, 5.0];

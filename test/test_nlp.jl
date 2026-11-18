@@ -22,6 +22,7 @@ function test_univariate_error()
     model = Model()
     @variable(model, x >= 0)
     @test_throws ErrorException @NLobjective(model, Min, g_doesnotexist(x))
+    return
 end
 
 function test_univariate_error_existing()
@@ -29,6 +30,7 @@ function test_univariate_error_existing()
     @variable(model, x >= 0)
     @NLexpression(model, ex, x^2)
     @test_throws ErrorException @NLobjective(model, Min, g_doestnotexist(ex))
+    return
 end
 
 function test_univariate()
@@ -40,6 +42,7 @@ function test_univariate()
     MOI.initialize(d, Symbol[])
     x = [2.0]
     @test MOI.eval_objective(d, x) == 4.0
+    return
 end
 
 function test_univariate_register_twice()
@@ -54,6 +57,7 @@ function test_univariate_register_twice()
     y = [NaN]
     MOI.eval_constraint(d, y, x)
     @test y == [3.0]
+    return
 end
 
 function test_univariate_register_twice_error()
@@ -63,6 +67,7 @@ function test_univariate_register_twice_error()
     g(x, y) = x^2 + x^2
     @test_logs (:warn,) @NLobjective(model, Min, g(x))
     @test_throws ErrorException @NLconstraint(model, g(x, x) <= 1)
+    return
 end
 
 function test_univariate_existing_nlpdata()
@@ -75,6 +80,7 @@ function test_univariate_existing_nlpdata()
     MOI.initialize(d, Symbol[])
     x = [2.0]
     @test MOI.eval_objective(d, x) == 16.0
+    return
 end
 
 function test_univariate_redefine()
@@ -90,12 +96,14 @@ function test_univariate_redefine()
 
     g = (x) -> 2x^2
     @test MOI.eval_objective(d, x) == 4.0
+    return
 end
 
 function test_multivariate_error()
     model = Model()
     @variable(model, x >= 0)
     @test_throws ErrorException @NLobjective(model, Min, g_doesnotexist(x, x))
+    return
 end
 
 function test_multivariate_error_existing()
@@ -103,6 +111,7 @@ function test_multivariate_error_existing()
     @variable(model, x >= 0)
     @NLexpression(model, ex, x^2)
     @test_throws ErrorException @NLobjective(model, Min, g_doestnotexist(ex, x))
+    return
 end
 
 function test_multivariate()
@@ -114,6 +123,7 @@ function test_multivariate()
     MOI.initialize(d, Symbol[])
     x = [2.0]
     @test MOI.eval_objective(d, x) == 8.0
+    return
 end
 
 function test_multivariate_register_warn()
@@ -125,6 +135,7 @@ function test_multivariate_register_warn()
         return
     end
     @test_logs (:warn,) register(model, :g, 2, g, ∇g; autodiff = true)
+    return
 end
 
 function test_multivariate_existing_nlpdata()
@@ -137,6 +148,7 @@ function test_multivariate_existing_nlpdata()
     MOI.initialize(d, Symbol[])
     x = [2.0]
     @test MOI.eval_objective(d, x) == 20.0
+    return
 end
 
 function test_multivariate_redefine()
@@ -152,6 +164,7 @@ function test_multivariate_redefine()
 
     g = (x, y) -> x^2 + y
     @test MOI.eval_objective(d, x) == 20.0
+    return
 end
 
 function test_multivariate_register_splat()
@@ -171,6 +184,7 @@ function test_multivariate_register_splat()
         ```
         """)
     @test_throws err @NLexpression(model, ex, f(x...))
+    return
 end
 
 function test_multivariate_register_splat_existing()
@@ -191,6 +205,7 @@ function test_multivariate_register_splat_existing()
         ```
         """)
     @test_throws err @NLexpression(model, ex, f(x...))
+    return
 end
 
 function test_multivariate_max()
@@ -1047,9 +1062,12 @@ function test_user_defined_function_with_variable_closure_after_register()
     d = NLPEvaluator(model)
     MOI.initialize(d, [:Grad])
     err = ErrorException(
-        "Expected return type of Float64 from a user-defined function, " *
-        "but got $(typeof(1.0 + x)). Make sure your user-defined " *
-        "function only depends on variables passed as arguments.",
+        """
+        Expected return type `Float64` from a user-defined function, but got `$(typeof(1.0 + x))`.
+
+        Ensure that your user-defined function only depends on variables \
+        passed as arguments, and does not close over any JuMP variables.
+        """,
     )
     @test_throws(err, MOI.eval_objective(d, [2.0]))
     return
@@ -1064,8 +1082,7 @@ function test_user_defined_function_returning_bad_type_after_register()
     d = NLPEvaluator(model)
     MOI.initialize(d, [:Grad])
     err = ErrorException(
-        "Expected return type of Float64 from a user-defined function, " *
-        "but got String.",
+        "Expected return type of Float64 from a user-defined function, but got String.",
     )
     @test_throws(err, MOI.eval_objective(d, [2.0]))
     return
@@ -1214,9 +1231,13 @@ struct MyModel <: AbstractModel end
 function test_JuMP_extensions()
     model = MyModel()
     err = ErrorException(
-        "Encountered an error parsing nonlinear expression: we don't support " *
-        "models of type $(typeof(model)). In general, JuMP's nonlinear features " *
-        "don't work with JuMP-extensions.",
+        """
+        Encountered an error parsing a nonlinear expression because JuMP's \
+        legacy nonlinear interface does not support models of type `$(typeof(model))`.
+
+        In general, JuMP's nonlinear features do not work with JuMP \
+        extensions. Use a standard `JuMP.Model` instead.
+        """,
     )
     @test_throws err JuMP._init_NLP(model)
     return
@@ -1274,9 +1295,12 @@ function test_interval_errors()
     model = Model()
     @variable(model, x)
     err = ErrorException(
-        "Interval constraint contains non-constant left- or right-hand " *
-        "sides. Reformulate as two separate constraints, or move all " *
-        "variables into the central term.",
+        """
+        Interval constraint contains non-constant left- or right-hand sides.
+
+        Reformulate as two separate constraints, or move all variables into \
+        the central term.
+        """,
     )
     @test_throws err add_nonlinear_constraint(model, :($x <= $x <= 2 * $x))
     return
@@ -1406,13 +1430,25 @@ function test_register_error_autdiff_false()
     f′(x) = 2 * x
     f′′(::Any) = 2
     err = ErrorException(
-        "If only the function is provided, must set autodiff=true",
+        """
+        Cannot register a user-defined function without providing a \
+        gradient unless `autodiff = true`.
+
+        Either set `autodiff = true` to compute derivatives \
+        automatically, or provide derivative functions as additional \
+        arguments.
+        """,
     )
     @test_throws err register(model, :f, 1, f)
     @test_throws err register(model, :f, 1, f; autodiff = false)
     err = ErrorException(
-        "Currently must provide 2nd order derivatives of univariate " *
-        "functions. Try setting autodiff=true.",
+        """
+        Registering a univariate user-defined function with a \
+        gradient requires also providing a second-order derivative.
+
+        Either provide a Hessian function as a third argument, or \
+        set `autodiff = true` to compute derivatives automatically.
+        """,
     )
     @test_throws err register(model, :f, 1, f, f′)
     @test_throws err register(model, :f, 1, f, f′; autodiff = false)
@@ -1692,19 +1728,37 @@ function test_NL_too_many_arguments_errors()
     model = Model()
     @test_throws_parsetime(
         ErrorException(
-            "In `@NLexpression()`: To few arguments (0); must pass the model and nonlinear expression as arguments.",
+            """
+            In `@NLexpression()`:
+
+            Too few arguments (0) were passed to `@NLexpression`.
+
+            The correct syntax is `@NLexpression(model, [ref,] expr)`. For example, `@NLexpression(model, ex, x^2 + 1)`.
+            """,
         ),
         @NLexpression(),
     )
     @test_throws_parsetime(
         ErrorException(
-            "In `@NLexpression(model, ex, 1, 2)`: To many arguments (4).",
+            """
+            In `@NLexpression(model, ex, 1, 2)`:
+
+            Too many arguments (4) were passed to `@NLexpression`.
+
+            The correct syntax is `@NLexpression(model, [ref,] expr)`. For example, `@NLexpression(model, ex, x^2 + 1)`.
+            """,
         ),
         @NLexpression(model, ex, 1, 2),
     )
     @test_throws_parsetime(
         ErrorException(
-            "In `@NLconstraint(model, ex, 1, 2)`: too many arguments.",
+            """
+            In `@NLconstraint(model, ex, 1, 2)`:
+
+            Too many arguments were passed to `@NLconstraint`.
+
+            The correct syntax is `@NLconstraint(model, [ref,] expr)`. For example, `@NLconstraint(model, x^2 <= 1)`.
+            """,
         ),
         @NLconstraint(model, ex, 1, 2),
     )

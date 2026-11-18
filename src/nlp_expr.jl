@@ -77,7 +77,8 @@ julia> f = GenericNonlinearExpr{VariableRef}(
 sin(x) ^ 2
 ```
 """
-struct GenericNonlinearExpr{V<:AbstractVariableRef} <: AbstractJuMPScalar
+mutable struct GenericNonlinearExpr{V<:AbstractVariableRef} <:
+               AbstractJuMPScalar
     head::Symbol
     args::Vector{Any}
 
@@ -112,6 +113,13 @@ function variable_ref_type(::Type{GenericNonlinearExpr}, x::AbstractJuMPScalar)
     return variable_ref_type(x)
 end
 
+function variable_ref_type(
+    ::Type{GenericNonlinearExpr},
+    ::AbstractArray{T},
+) where {T<:AbstractJuMPScalar}
+    return variable_ref_type(T)
+end
+
 value_type(::Type{GenericNonlinearExpr{V}}) where {V} = value_type(V)
 
 function _has_variable_ref_type(a)
@@ -124,8 +132,18 @@ function _variable_ref_type(head, args)
         return V::Type{<:AbstractVariableRef}
     end
     return error(
-        "Unable to create a nonlinear expression because it did not contain " *
-        "any JuMP scalars. head = `:$head`, args = `$args`.",
+        """
+        Unable to create a nonlinear expression because it did not contain any \
+        JuMP scalars.
+
+        Ensure that at least one argument is a JuMP variable or expression, \
+        not a plain Julia value.
+
+        The expression was:
+
+            head = `:$head`
+            args = `$args`
+        """,
     )
 end
 
@@ -150,9 +168,16 @@ variable_ref_type(::Type{GenericNonlinearExpr{V}}) where {V} = V
 const _PREFIX_OPERATORS =
     (:+, :-, :*, :/, :^, :||, :&&, :>, :<, :(<=), :(>=), :(==))
 
-_needs_parentheses(::Union{Number,AbstractVariableRef}) = false
-_needs_parentheses(::Any) = true
-function _needs_parentheses(x::GenericNonlinearExpr)
+_needs_parentheses(::Any, ::Union{Number,AbstractVariableRef}) = false
+
+_needs_parentheses(::Any, ::Any) = true
+
+function _needs_parentheses(head, x::GenericNonlinearExpr)
+    if head in (:+, :-) && x.head in (:*, :/, :^)
+        # A simplification. By all variations of BEDMAS rules, ^, /, and *
+        # apply with higher precedence than + and -.
+        return false
+    end
     return x.head in _PREFIX_OPERATORS && length(x.args) > 1
 end
 
@@ -214,7 +239,7 @@ function function_string(mime::MIME, x::GenericNonlinearExpr)
                             push!(stack, " $op $p_open")
                         end
                         continue
-                    elseif _needs_parentheses(arg.args[i])
+                    elseif _needs_parentheses(arg.head, arg.args[i])
                         push!(stack, p_right)
                         push!(stack, arg.args[i])
                         push!(stack, p_left)
@@ -318,6 +343,10 @@ function Base.zero(::Type{GenericNonlinearExpr{V}}) where {V}
     return GenericNonlinearExpr{V}(:+, 0.0)
 end
 
+function Base.iszero(x::GenericNonlinearExpr)
+    return x.head == :+ && length(x.args) == 1 && iszero(only(x.args))
+end
+
 function Base.one(::Type{GenericNonlinearExpr{V}}) where {V}
     return GenericNonlinearExpr{V}(:+, 1.0)
 end
@@ -330,20 +359,26 @@ Base.isreal(::GenericNonlinearExpr) = true
 
 # Univariate operators
 
-_is_real(::Any) = false
-_is_real(::Real) = true
-_is_real(::AbstractVariableRef) = true
-_is_real(::GenericAffExpr{<:Real}) = true
-_is_real(::GenericQuadExpr{<:Real}) = true
-_is_real(::GenericNonlinearExpr) = true
-_is_real(::NonlinearExpression) = true
-_is_real(::NonlinearParameter) = true
+_is_real(::Type) = false
+_is_real(::Type{<:Real}) = true
+_is_real(::Type{<:AbstractVariableRef}) = true
+_is_real(::Type{<:GenericAffExpr{<:Real}}) = true
+_is_real(::Type{<:GenericQuadExpr{<:Real}}) = true
+_is_real(::Type{<:GenericNonlinearExpr}) = true
+_is_real(::Type{<:NonlinearExpression}) = true
+_is_real(::Type{<:NonlinearParameter}) = true
+_is_real(::Type{<:AbstractArray{T}}) where {T} = _is_real(T)
+_is_real(x) = _is_real(typeof(x))
 
 function _throw_if_not_real(x)
     if !_is_real(x)
         error(
-            "Cannot build `GenericNonlinearExpr` because a term is " *
-            "complex-valued: `($x)::$(typeof(x))`",
+            """
+            Cannot build `GenericNonlinearExpr` because a term is complex-valued: `($x)::$(typeof(x))`.
+
+            JuMP does not support complex-valued nonlinear expressions. Remove \
+            or replace the complex-valued term.
+            """,
         )
     end
     return
@@ -382,7 +417,7 @@ end
 
 # We need only very generic fallbacks for these, because all other cases are
 # caught with more specific methods.
-for f in (:+, :-, :*, :^, :/, :atan, :min, :max)
+for f in (:-, :*, :^, :/, :atan, :min, :max)
     op = Meta.quot(f)
     @eval begin
         function Base.$(f)(x::AbstractJuMPScalar, y::_Constant)
@@ -403,6 +438,37 @@ for f in (:+, :-, :*, :^, :/, :atan, :min, :max)
             return GenericNonlinearExpr{variable_ref_type(x)}($op, x, y)
         end
     end
+end
+
+function Base.:+(x::AbstractJuMPScalar, y::_Constant)
+    _throw_if_not_real(x)
+    _throw_if_not_real(y)
+    rhs = convert(Float64, _constant_to_number(y))
+    if iszero(rhs)
+        return x
+    end
+    return GenericNonlinearExpr{variable_ref_type(x)}(:+, x, rhs)
+end
+
+function Base.:+(x::_Constant, y::AbstractJuMPScalar)
+    _throw_if_not_real(x)
+    _throw_if_not_real(y)
+    lhs = convert(Float64, _constant_to_number(x))
+    if iszero(lhs)
+        return y
+    end
+    return GenericNonlinearExpr{variable_ref_type(y)}(:+, lhs, y)
+end
+
+function Base.:+(x::AbstractJuMPScalar, y::AbstractJuMPScalar)
+    _throw_if_not_real(x)
+    _throw_if_not_real(y)
+    if iszero(x)
+        return y
+    elseif iszero(y)
+        return x
+    end
+    return GenericNonlinearExpr{variable_ref_type(x)}(:+, x, y)
 end
 
 function Base.:^(::Irrational{:ℯ}, y::AbstractJuMPScalar)
@@ -453,7 +519,7 @@ a single n-ary operation.
 
 Nonlinear expressions created using operator overloading can be deeply nested
 and unbalanced. For example, `prod(x for i in 1:4)` creates
-`*(x, *(x, *(x, x)))` instead of the more preferable `*(x, x, x, x)`.
+`*(*(*(x, x), x, x)` instead of the more preferable `*(x, x, x, x)`.
 
 ## Example
 
@@ -477,30 +543,24 @@ function flatten!(expr::GenericNonlinearExpr{V}) where {V}
     if !any(Base.Fix1(_needs_flatten, expr), expr.args)
         return expr
     end
-    stack = Tuple{GenericNonlinearExpr{V},Int,GenericNonlinearExpr{V}}[]
-    for i in length(expr.args):-1:1
-        if _needs_flatten(expr, expr.args[i])
-            push!(stack, (expr, i, expr.args[i]))
-        end
-    end
+    stack, substack = GenericNonlinearExpr{V}[expr], Any[]
     while !isempty(stack)
-        parent, i, arg = pop!(stack)
-        if parent.head in (:+, :*) && arg.head == parent.head
-            n = length(parent.args)
-            resize!(parent.args, n + length(arg.args) - 1)
-            for j in length(arg.args):-1:1
-                parent_index = j == 1 ? i : n + j - 1
-                if _needs_flatten(parent, arg.args[j])
-                    push!(stack, (parent, parent_index, arg.args[j]))
+        parent = pop!(stack)
+        if parent.head in (:+, :*)
+            append!(substack, Iterators.reverse(parent.args))
+            empty!(parent.args)
+            while !isempty(substack)
+                arg = pop!(substack)
+                if _needs_flatten(parent, arg)
+                    append!(substack, Iterators.reverse(arg.args))
                 else
-                    parent.args[parent_index] = arg.args[j]
+                    push!(parent.args, arg)
                 end
             end
         else
-            parent.args[i] = arg
-            for j in length(arg.args):-1:1
-                if _needs_flatten(arg, arg.args[j])
-                    push!(stack, (arg, j, arg.args[j]))
+            for arg in parent.args
+                if _needs_flatten(parent, arg)
+                    push!(stack, arg)
                 end
             end
         end
@@ -549,121 +609,10 @@ function owner_model(expr::GenericNonlinearExpr)
     return nothing
 end
 
-function check_belongs_to_model(
-    expr::GenericNonlinearExpr,
-    model::AbstractModel,
-)
-    stack = Any[expr]
-    while !isempty(stack)
-        child = pop!(stack)
-        if child isa GenericNonlinearExpr
-            for arg in child.args
-                push!(stack, arg)
-            end
-        elseif child isa AbstractJuMPScalar
-            check_belongs_to_model(child, model)
-        end
-    end
-    return
-end
-
-moi_function(x::Number) = x
-
-function moi_function(f::GenericNonlinearExpr{V}) where {V}
-    ret = MOI.ScalarNonlinearFunction(f.head, similar(f.args))
-    stack = Tuple{MOI.ScalarNonlinearFunction,Int,GenericNonlinearExpr{V}}[]
-    for i in length(f.args):-1:1
-        if f.args[i] isa GenericNonlinearExpr{V}
-            push!(stack, (ret, i, f.args[i]))
-        else
-            ret.args[i] = moi_function(f.args[i])
-        end
-    end
-    while !isempty(stack)
-        parent, i, arg = pop!(stack)
-        child = MOI.ScalarNonlinearFunction(arg.head, similar(arg.args))
-        parent.args[i] = child
-        for j in length(arg.args):-1:1
-            if arg.args[j] isa GenericNonlinearExpr{V}
-                push!(stack, (child, j, arg.args[j]))
-            else
-                child.args[j] = moi_function(arg.args[j])
-            end
-        end
-    end
-    return ret
-end
-
-jump_function(::GenericModel{T}, x::Number) where {T} = convert(T, x)
-
-function jump_function(model::GenericModel, f::MOI.ScalarNonlinearFunction)
-    V = variable_ref_type(typeof(model))
-    ret = GenericNonlinearExpr{V}(f.head, Any[])
-    stack = Tuple{GenericNonlinearExpr,Any}[]
-    for arg in reverse(f.args)
-        push!(stack, (ret, arg))
-    end
-    while !isempty(stack)
-        parent, arg = pop!(stack)
-        if arg isa MOI.ScalarNonlinearFunction
-            new_ret = GenericNonlinearExpr{V}(arg.head, Any[])
-            push!(parent.args, new_ret)
-            for child in reverse(arg.args)
-                push!(stack, (new_ret, child))
-            end
-        else
-            push!(parent.args, jump_function(model, arg))
-        end
-    end
-    return ret
-end
-
-function jump_function_type(
-    model::GenericModel,
-    ::Type{<:MOI.ScalarNonlinearFunction},
-)
-    return GenericNonlinearExpr{variable_ref_type(typeof(model))}
-end
-
-moi_function_type(::Type{<:GenericNonlinearExpr}) = MOI.ScalarNonlinearFunction
-
 function constraint_object(c::NonlinearConstraintRef)
     nlp = nonlinear_model(c.model)::MOI.Nonlinear.Model
     data = nlp.constraints[index(c)]
     return ScalarConstraint(jump_function(c.model, data.expression), data.set)
-end
-
-function jump_function(model::GenericModel, expr::MOI.Nonlinear.Expression)
-    V = variable_ref_type(typeof(model))
-    nlp = nonlinear_model(model)::MOI.Nonlinear.Model
-    parsed = Vector{Any}(undef, length(expr.nodes))
-    adj = MOI.Nonlinear.adjacency_matrix(expr.nodes)
-    rowvals = SparseArrays.rowvals(adj)
-    for i in length(expr.nodes):-1:1
-        node = expr.nodes[i]
-        parsed[i] = if node.type == MOI.Nonlinear.NODE_CALL_UNIVARIATE
-            GenericNonlinearExpr{V}(
-                nlp.operators.univariate_operators[node.index],
-                parsed[rowvals[SparseArrays.nzrange(adj, i)[1]]],
-            )
-        elseif node.type == MOI.Nonlinear.NODE_CALL_MULTIVARIATE
-            GenericNonlinearExpr{V}(
-                nlp.operators.multivariate_operators[node.index],
-                Any[parsed[rowvals[j]] for j in SparseArrays.nzrange(adj, i)],
-            )
-        elseif node.type == MOI.Nonlinear.NODE_MOI_VARIABLE
-            V(model, MOI.VariableIndex(node.index))
-        elseif node.type == MOI.Nonlinear.NODE_VALUE
-            expr.values[node.index]
-        else
-            # node.type == MOI.Nonlinear.NODE_COMPARISON
-            # node.type == MOI.Nonlinear.NODE_LOGIC
-            # node.type == MOI.Nonlinear.NODE_PARAMETER
-            # node.type == MOI.Nonlinear.NODE_SUBEXPRESSION
-            error("Unsupported node")
-        end
-    end
-    return parsed[1]
 end
 
 function value(f::Function, expr::GenericNonlinearExpr)
@@ -716,8 +665,15 @@ function _evaluate_expr(
                 udf = MOI.get(model, MOI.UserDefinedFunction(op, nargs))
                 if udf === nothing
                     return error(
-                        "Unable to evaluate nonlinear operator $op because " *
-                        "it was not added as an operator.",
+                        """
+                        Unable to evaluate nonlinear operator `$op` because \
+                        it was not added as an operator.
+
+                        Add the operator to the model using \
+                        `@operator(model, $op, n, f)`, where `n` is the \
+                        number of arguments and `f` is the implementing \
+                        function.
+                        """,
                     )
                 end
                 first(udf)((pop!(result_stack) for _ in 1:nargs)...)
@@ -741,7 +697,11 @@ function _evaluate_expr(
             end
             push!(result_stack, result)
         else
-            push!(result_stack, _evaluate_expr(registry, f, arg))
+            ret = _evaluate_expr(registry, f, arg)
+            if ismissing(ret)
+                return missing
+            end
+            push!(result_stack, ret)
         end
     end
     return only(result_stack)
@@ -857,7 +817,13 @@ function _MA.promote_operation(
     ::Type{GenericNonlinearExpr{V}},
 ) where {U<:AbstractVariableRef,V<:AbstractVariableRef}
     return error(
-        "Unable to promote two different types of nonlinear expression",
+        """
+        Unable to promote two different types of nonlinear expression: \
+        `$(GenericNonlinearExpr{U})` and `$(GenericNonlinearExpr{V})`.
+
+        Ensure that all variables in the expression belong to the same \
+        model and have the same variable reference type.
+        """,
     )
 end
 
@@ -1001,10 +967,13 @@ function add_nonlinear_operator(
     nargs = 1 + N
     if !(1 <= nargs <= 3)
         error(
-            "Unable to add operator $name: invalid number of functions " *
-            "provided. Got $nargs, but expected 1 (if function only), 2 (if " *
-            "function and gradient), or 3 (if function, gradient, and " *
-            "hesssian provided)",
+            """
+            Unable to add operator `$name`: invalid number of functions provided.
+
+            Got $nargs, but expected 1 (function only), 2 (function and gradient), or 3 (function, gradient, and Hessian).
+
+            Pass 1, 2, or 3 functions as positional arguments after the operator dimension.
+            """,
         )
     end
     # TODO(odow): we could add other checks here, but we won't for now because
@@ -1017,31 +986,32 @@ end
 
 function _catch_redefinition_constant_error(op::Symbol, f::Function, args...)
     if op == Symbol(f)
-        error("""
-        Unable to add the nonlinear operator `:$op` with the same name as
-        an existing function.
+        error(
+            """
+            Unable to add the nonlinear operator `:$op` with the same name as an existing function.
 
-        For example, this code will error:
-        ```julia
-        model = Model()
-        f(x) = x^2
-        @operator(model, f, 1, f)
-        ```
-        because it is equivalent to:
-        ```julia
-        model = Model()
-        f(x) = x^2
-        f = add_nonlinear_operator(model, 1, f; name = :f)
-        ```
+            For example, this code will error:
+            ```julia
+            model = Model()
+            f(x) = x^2
+            @operator(model, f, 1, f)
+            ```
+            because it is equivalent to:
+            ```julia
+            model = Model()
+            f(x) = x^2
+            f = add_nonlinear_operator(model, 1, f; name = :f)
+            ```
 
-        To fix, use a unique name, like `op_$op`:
-        ```julia
-        model = Model()
-        f(x) = x^2
-        @operator(model, op_f, 1, f)
-        @expression(model, op_f(x))
-        ```
-        """)
+            To fix, use a unique name, like `op_$op`:
+            ```julia
+            model = Model()
+            f(x) = x^2
+            @operator(model, op_f, 1, f)
+            @expression(model, op_f(x))
+            ```
+            """,
+        )
     end
     return
 end
@@ -1158,32 +1128,11 @@ macro operator(model, op, dim, f, args...)
     )
 end
 
-function jump_function_type(
-    ::GenericModel{T},
-    ::Type{MOI.VectorNonlinearFunction},
-) where {T}
-    return Vector{GenericNonlinearExpr{GenericVariableRef{T}}}
-end
-
-function jump_function(
-    model::GenericModel{T},
-    f::MOI.VectorNonlinearFunction,
-) where {T}
-    return GenericNonlinearExpr{GenericVariableRef{T}}[
-        jump_function(model, fi) for fi in MOI.Utilities.eachscalar(f)
-    ]
-end
-
-function moi_function_type(::Type{<:AbstractVector{<:GenericNonlinearExpr}})
-    return MOI.VectorNonlinearFunction
-end
-
-function moi_function(f::AbstractVector{<:GenericNonlinearExpr})
-    return MOI.VectorNonlinearFunction(f)
-end
-
 function MOI.VectorNonlinearFunction(f::Vector{<:AbstractJuMPScalar})
-    return MOI.VectorNonlinearFunction(map(moi_function, f))
+    rows = MOI.ScalarNonlinearFunction[
+        moi_function(owner_model(fi), fi) for fi in f
+    ]
+    return MOI.VectorNonlinearFunction(rows)
 end
 
 """
@@ -1229,7 +1178,7 @@ x
 ```
 """
 function simplify(model::GenericModel, f::AbstractJuMPScalar)
-    g = MOI.Nonlinear.SymbolicAD.simplify(moi_function(f))
+    g = MOI.Nonlinear.SymbolicAD.simplify(moi_function(model, f))
     return jump_function(model, g)
 end
 
@@ -1280,7 +1229,8 @@ function derivative(
     f::AbstractJuMPScalar,
     x::GenericVariableRef{T},
 ) where {T}
-    df_dx = MOI.Nonlinear.SymbolicAD.derivative(moi_function(f), index(x))
+    df_dx =
+        MOI.Nonlinear.SymbolicAD.derivative(moi_function(model, f), index(x))
     return jump_function(model, MOI.Nonlinear.SymbolicAD.simplify!(df_dx))
 end
 
@@ -1325,7 +1275,7 @@ julia> ∇f[y]
 ```
 """
 function gradient(model::GenericModel{T}, f::AbstractJuMPScalar) where {T}
-    g = moi_function(f)
+    g = moi_function(model, f)
     ∇f = Dict{GenericVariableRef{T},Any}()
     for xi in MOI.Nonlinear.SymbolicAD.variables(g)
         df_dx = MOI.Nonlinear.SymbolicAD.simplify!(

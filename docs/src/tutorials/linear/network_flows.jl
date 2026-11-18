@@ -22,22 +22,22 @@
 
 # **This tutorial was originally contributed by Arpit Bhatia.**
 
-# In graph theory, a flow network (also known as a transportation network) is a
-# directed graph where each edge has a capacity and each edge receives a flow.
-# The amount of flow on an edge cannot exceed the capacity of the edge.
+# This tutorial formulates three classical network flow problems—shortest path,
+# assignment, and maximum flow—as binary or continuous linear programs in JuMP.
+# Flow networks model many real-world systems such as transport, communications,
+# and electrical circuits.
+#
+# **Learning intentions:**
+# * Formulate the shortest path, assignment, and maximum flow problems as linear
+#   programs, and recognize their shared flow-conservation structure
+# * Distinguish source and sink nodes by their balance values in a
+#   flow-conservation constraint, and use this pattern across all three problems
+# * Choose binary arc variables when a path or matching must be discrete, and
+#   continuous flow variables when fractional flow is permissible
 
-# Often in operations research, a directed graph is called a network, the
-# vertices are called nodes and the edges are called arcs.
+# ## Required packages
 
-# A flow must satisfy the restriction that the amount of flow into a node equals
-# the amount of flow out of it,  unless it is a source, which has only outgoing
-# flow, or sink, which has only incoming flow.
-
-# A network can be used to model traffic in a computer network, circulation with
-# demands, fluids in pipes,  currents in an electrical circuit, or anything
-# similar in which something travels through a network of nodes.
-
-# This tutorial requires the following packages:
+# This tutorial uses the following packages:
 
 using JuMP
 import HiGHS
@@ -73,7 +73,7 @@ b = [1, -1, 0, 0, 0]
 shortest_path = Model(HiGHS.Optimizer)
 set_silent(shortest_path)
 @variable(shortest_path, x[1:n, 1:n], Bin)
-## Arcs with zero cost are not a part of the path as they do no exist
+## Arcs with zero cost are not a part of the path as they do not exist
 @constraint(shortest_path, [i = 1:n, j = 1:n; G[i, j] == 0], x[i, j] == 0)
 ## Flow conservation constraint
 @constraint(shortest_path, [i = 1:n], sum(x[i, :]) - sum(x[:, i]) == b[i])
@@ -96,15 +96,15 @@ value.(x)
 
 # Mathematically, we want to find a set of person-object pairs
 # $(1, j_{1}),..., (n, j_{n})$ from $A$ such that the objects $j_{1},...,j_{n}$
-# are all distinct, and the total benefit $\sum_{i=1}^{y} a_{ij_{i}}$ is
+# are all distinct, and the total benefit $\sum_{i=1}^{n} a_{ij_{i}}$ is
 # maximized.
 
 # ```math
 # \begin{aligned}
 # \max && \sum_{(i,j) \in A} a_{i,j} \times y_{i,j} \\
-# s.t. && \sum_{\{j|(i,j) \in A\}} y_{i,j} = 1 && \forall i = \{1,2....n\} \\
-# && \sum_{\{i|(i,j) \in A\}} y_{i,j} = 1 && \forall j = \{1,2....n\} \\
-# && y_{i,j} \in \{0,1\} && \forall (i,j) \in \{1,2...k\}
+# s.t. && \sum_{\{j|(i,j) \in A\}} y_{i,j} = 1 && \forall i \in \{1,2....n\} \\
+# && \sum_{\{i|(i,j) \in A\}} y_{i,j} = 1 && \forall j \in \{1,2....n\} \\
+# && y_{i,j} \in \{0,1\} && \forall (i,j) \in A
 # \end{aligned}
 # ```
 
@@ -119,9 +119,9 @@ assignment = Model(HiGHS.Optimizer)
 set_silent(assignment)
 @variable(assignment, y[1:n, 1:n], Bin)
 ## One person can only be assigned to one object
-@constraint(assignment, [i = 1:n], sum(y[:, i]) == 1)
+@constraint(assignment, [i = 1:n], sum(y[i, :]) == 1)
 ## One object can only be assigned to one person
-@constraint(assignment, [j = 1:n], sum(y[j, :]) == 1)
+@constraint(assignment, [j = 1:n], sum(y[:, j]) == 1)
 @objective(assignment, Max, sum(G .* y))
 optimize!(assignment)
 assert_is_solved_and_feasible(assignment)
